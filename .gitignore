@@ -1,0 +1,12 @@
+# Claude Code — personal, per-machine overrides
+.claude/settings.local.json
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# TODO: add stack-specific ignores (node_modules, build output, etc.)
