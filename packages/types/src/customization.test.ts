@@ -40,6 +40,13 @@ describe("customTextSchema", () => {
 });
 
 describe("artworkReferenceSchema", () => {
+  it("pins the minimum DPI at the 150 the print contract assumes", () => {
+    // Both DPI cases below derive their fixtures from this constant, so they
+    // would keep passing if it drifted. Storefront and backend validation
+    // share it, so the value itself is the contract.
+    expect(MIN_ARTWORK_DPI).toBe(150);
+  });
+
   it("accepts a well-formed reference", () => {
     expect(artworkReferenceSchema.safeParse(validArtwork).success).toBe(true);
   });

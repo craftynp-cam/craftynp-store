@@ -20,7 +20,7 @@
     "test": "turbo test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "services:up": "docker compose up -d",
+    "services:up": "docker compose up -d --wait",
     "services:down": "docker compose down",
     "db:migrate": "npm run db:migrate --workspace=apps/medusa",
     "db:seed": "npm run seed --workspace=apps/medusa"

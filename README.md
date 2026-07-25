@@ -37,8 +37,9 @@ of it exists in the repo today.
 
 ### Prerequisites
 
-- **Node 22.** Pinned in `.nvmrc`; `engines` enforces `>=22 <23`, so a newer
-  default Node will be rejected by `npm install`.
+- **Node 22.** Pinned in `.nvmrc`; `engines` declares `>=22 <23` and the root
+  `.npmrc` sets `engine-strict=true`, so a newer default Node is rejected by
+  `npm install` rather than merely warned about.
 - **npm 10+** (ships with Node 22).
 - **Docker Desktop**, running — Postgres and Redis come from
   `docker-compose.yml`.

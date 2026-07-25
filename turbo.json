@@ -1,11 +1,16 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalDependencies": ["tsconfig.base.json", ".prettierrc"],
+  "globalDependencies": [
+    "tsconfig.base.json",
+    ".prettierrc",
+    "eslint.config.mjs"
+  ],
   "globalEnv": ["NODE_ENV"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["NEXT_PUBLIC_*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", ".medusa/**"]
     },
     "dev": {

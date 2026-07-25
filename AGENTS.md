@@ -24,7 +24,8 @@ Jest, npm workspaces + Turborepo, Prettier + ESLint flat config.
 
 ## Setup
 
-Requires **Node 22** (pinned in `.nvmrc`, enforced by `engines: >=22 <23`), npm
+Requires **Node 22** (pinned in `.nvmrc`, enforced by `engines: >=22 <23` plus
+`engine-strict=true` in the root `.npmrc`), npm
 10+, and Docker Desktop running. nvm is not required — any version manager, or
 Homebrew's keg-only `node@22`, works as long as `node -v` reports v22.
 
@@ -218,10 +219,15 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
 - A test must be able to fail. Write it so you have seen it fail for the right
   reason before you make it pass; a test that passes against a broken
   implementation is worse than no test.
-- Async React server components are **not** covered with React Testing Library —
-  RTL cannot render them. They are covered by HTTP-level checks against the
-  running app instead.
-- Current suite: **28 tests** across the three workspaces (types 16, medusa 9,
+- **There is no component-rendering setup yet, deliberately.** React Testing
+  Library is not installed. npm hoists Medusa's React 18 to the root while the
+  storefront's React 19 stays nested in `apps/storefront/node_modules`, so a
+  root-hoisted RTL renders React 19 elements through React 18's reconciler and
+  fails with "Objects are not valid as a React child". Adding component tests
+  means resolving that duplication first — not just reinstalling RTL. The one
+  storefront app page is an async server component, which RTL cannot render
+  anyway; cover it with HTTP-level checks against the running app.
+- Current suite: **29 tests** across the three workspaces (types 17, medusa 9,
   storefront 3). A smaller number after your change means something was dropped.
 
 ## Guidance for agents
