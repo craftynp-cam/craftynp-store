@@ -110,7 +110,7 @@ The storefront needs a publishable API key, and that key is created by the seed,
 so it cannot exist before you migrate. `db:migrate` prints it in its own output:
 
 ```
-info:    Publishable API key: pk_10df4037e3b671e98593f8622eacaa24...
+info:    Publishable API key: pk_01ab23cd45ef67ab89cd01ef23ab45cd...
 ```
 
 Copy that value into `apps/storefront/.env.local`:
