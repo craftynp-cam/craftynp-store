@@ -24,6 +24,9 @@ out/
 .medusa/
 build/
 
+# Test output
+coverage/
+
 # Caches
 .turbo/
 *.tsbuildinfo
