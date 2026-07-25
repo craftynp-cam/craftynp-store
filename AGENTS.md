@@ -55,8 +55,10 @@ sequence is in [README.md](README.md) — follow it there rather than improvisin
 
 Note that `dev` is `services:up && turbo dev`, so a Docker failure aborts it
 before either app starts, surfacing only a raw Docker error. `docker-compose.yml`
-hardcodes `container_name`, so a second checkout of this repo on the same machine
-will hit exactly that. See the README's "Known papercuts".
+sets no `container_name`, so the containers get project-scoped names
+(`craftynp-store-postgres-1`, `craftynp-store-redis-1`) — reach them via
+`docker compose logs postgres` / `docker compose exec postgres …`, not by
+hardcoded name. See the README's "Known papercuts".
 
 **Always use the root scripts.** `pnpm --filter <package> run <task>` bypasses
 Turborepo's `dependsOn: ["^build"]` ordering, and the storefront's tsconfig

@@ -200,15 +200,17 @@ build.
 
 ## Known papercuts
 
-- **`docker-compose.yml` hardcodes `container_name`** (`craftynp-postgres`,
-  `craftynp-redis`), so a _second_ checkout of this repo on the same machine
-  cannot start its own services — compose fails with a container-name conflict
-  and leaves stray `<dir>_default` networks and `<dir>_*_data` volumes behind.
-  One checkout per machine is fine.
 - **`pnpm run dev` is `services:up && turbo dev`**, an `&&` chain. Any Docker
-  failure — including the one above — aborts the whole command with a raw Docker
-  error before either app starts. If that happens and the containers are already
-  healthy, `pnpm exec turbo dev` runs the second half on its own.
+  failure aborts the whole command with a raw Docker error before either app
+  starts. If that happens and the containers are already healthy,
+  `pnpm exec turbo dev` runs the second half on its own.
+- **Container names are project-scoped** (`craftynp-store-postgres-1`,
+  `craftynp-store-redis-1`) because `docker-compose.yml` sets no
+  `container_name`. Address them through compose — `docker compose logs postgres`,
+  `docker compose exec postgres psql -U medusa -d craftynp_store` — rather than
+  by hardcoded name. A second checkout in a differently-named directory gets its
+  own containers, but still binds the same host ports, so only one checkout's
+  services can run at a time.
 - **Postgres is on host port 5433**, not the default 5432, because an unrelated
   project's container owns 5432 on the machine this was built on. Redis is on 6379.
 - `pnpm install` prints deprecation warnings for transitive dependencies, and
