@@ -3,17 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "description": "The Crafty NP storefront monorepo",
-  "packageManager": "npm@10.9.8",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22 <23",
-    "npm": ">=10"
+    "pnpm": ">=10"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
-    "dev": "npm run services:up && turbo dev",
+    "dev": "pnpm run services:up && turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
@@ -22,8 +18,8 @@
     "format:check": "prettier --check .",
     "services:up": "docker compose up -d --wait",
     "services:down": "docker compose down",
-    "db:migrate": "npm run db:migrate --workspace=apps/medusa",
-    "db:seed": "npm run seed --workspace=apps/medusa"
+    "db:migrate": "pnpm --filter apps-medusa run db:migrate",
+    "db:seed": "pnpm --filter apps-medusa run seed"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

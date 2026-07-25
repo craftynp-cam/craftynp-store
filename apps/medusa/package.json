@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@craftynp/types": "*",
+    "@craftynp/types": "workspace:*",
     "@medusajs/admin-sdk": "2.18.0",
     "@medusajs/admin-shared": "2.18.0",
     "@medusajs/caching": "2.18.0",

@@ -3,4 +3,4 @@ dist
 .next
 .medusa
 .turbo
-package-lock.json
+pnpm-lock.yaml

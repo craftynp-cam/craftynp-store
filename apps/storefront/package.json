@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@craftynp/types": "*",
+    "@craftynp/types": "workspace:*",
     "@medusajs/js-sdk": "^2.18.0",
     "next": "16.2.11",
     "react": "19.2.4",
