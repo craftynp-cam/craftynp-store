@@ -25,7 +25,7 @@ artwork storage are wired in later stories (CNP-16/17/20).
 | Database       | Postgres 15 (Docker)                                       |
 | Cache / events | Redis 7 (Docker; provisioned, not yet wired into Medusa)   |
 | Tests          | Jest                                                       |
-| Monorepo       | npm workspaces + Turborepo                                 |
+| Monorepo       | pnpm workspaces + Turborepo                                |
 | Formatting     | Prettier (root), ESLint flat config (extended per app)     |
 
 **Deployment targets — planned, not yet provisioned:** Vercel (storefront),
@@ -38,9 +38,18 @@ of it exists in the repo today.
 ### Prerequisites
 
 - **Node 22.** Pinned in `.nvmrc`; `engines` declares `>=22 <23` and the root
-  `.npmrc` sets `engine-strict=true`, so a newer default Node is rejected by
-  `npm install` rather than merely warned about.
-- **npm 10+** (ships with Node 22).
+  `.npmrc` sets `engine-strict=true` — pnpm reads `.npmrc` too, so a newer
+  default Node is rejected by `pnpm install` rather than merely warned about.
+- **pnpm 10+.** Unlike npm, pnpm does **not** ship with Node, so install it
+  separately. `packageManager` pins `pnpm@10.33.0` and `engines.pnpm` requires
+  `>=10`.
+
+  ```bash
+  corepack enable && corepack prepare pnpm@10.33.0 --activate   # or:
+  brew install pnpm                                             # or:
+  npm install -g pnpm
+  ```
+
 - **Docker Desktop**, running — Postgres and Redis come from
   `docker-compose.yml`.
 
@@ -62,11 +71,33 @@ node -v   # must print v22.x
 ```bash
 git clone git@github.com:craftynp-cam/craftynp-store.git
 cd craftynp-store
-npm install
+pnpm install
 ```
 
-Run `npm install` **once at the repo root**, not per app — npm workspaces
-installs and links all three packages from there.
+Run `pnpm install` **once at the repo root**, not per app — pnpm workspaces
+installs and links all three packages from there. The workspace set is declared
+in `pnpm-workspace.yaml` (`apps/*`, `packages/*`), not in the root
+`package.json`. pnpm symlinks every dependency from a content-addressed store
+and does **not** hoist to the root `node_modules`, so each app resolves only
+what it declares — which is why the storefront's React 19 and the Medusa
+admin's React 18 can coexist.
+
+#### `onlyBuiltDependencies`
+
+pnpm refuses to run dependency lifecycle scripts unless a package is
+allowlisted. `pnpm-workspace.yaml` lists the six that genuinely need one —
+`@swc/core`, `esbuild`, `msgpackr-extract`, `protobufjs`, `sharp`, and
+`unrs-resolver` — each of which ships native binaries or generated code that
+only exists after its postinstall runs. `@medusajs/telemetry` is deliberately
+left out; its postinstall only phones home. A fresh install therefore prints
+
+```
+Ignored build scripts: @medusajs/telemetry@2.18.0.
+```
+
+**on purpose** — that warning is not a defect. If you add a dependency whose
+build is silently skipped, add it to `onlyBuiltDependencies` rather than
+disabling the check.
 
 ### Configuration
 
@@ -92,11 +123,11 @@ does not exist until the database is migrated. See the next section. The
 ### First run
 
 ```bash
-npm run services:up   # Postgres on host port 5433, Redis on 6379
-npm run db:migrate    # applies migrations AND seeds the initial data
+pnpm run services:up   # Postgres on host port 5433, Redis on 6379
+pnpm run db:migrate    # applies migrations AND seeds the initial data
 ```
 
-**Do not run `npm run db:seed` after this.** In Medusa 2.18 the seed is itself a
+**Do not run `pnpm run db:seed` after this.** In Medusa 2.18 the seed is itself a
 migration script (`apps/medusa/src/migration-scripts/initial-data-seed.ts`), so
 `db:migrate` already runs it and the migration ledger keeps it from running
 twice. `db:seed` executes that same script _outside_ the ledger against
@@ -131,7 +162,7 @@ account to log in with until you make it:
 
 ```bash
 cd apps/medusa
-npx medusa user -e you@example.com -p yourpassword
+npx medusa user -e you@example.com -p yourpassword   # or: pnpm exec medusa user …
 ```
 
 Flags on the Medusa 2.18 CLI are `-e/--email`, `-p/--password`, `-i/--id`, and
@@ -143,7 +174,7 @@ from the working directory. The database must already be migrated.
 ### Running locally
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 | Service    | URL                       |
@@ -155,14 +186,14 @@ npm run dev
 The storefront port is fixed at 8000 because Medusa's `STORE_CORS` allows only
 that origin.
 
-**Use the root scripts.** Do not run `npm run <task> --workspace=...`. The
+**Use the root scripts.** Do not run `pnpm --filter <package> run <task>`. The
 storefront's tsconfig aliases `@craftynp/types` to the package's **built**
 `dist/index.js` (Turbopack cannot resolve NodeNext `.js` specifiers in source),
 and only root invocations go through Turborepo's `dependsOn: ["^build"]`
 ordering that produces that `dist`. A workspace-scoped call bypasses turbo and
 fails on a clone that has never been built.
 
-For the same reason, run `npm run build` before `npm run typecheck` on a clone
+For the same reason, run `pnpm run build` before `pnpm run typecheck` on a clone
 you have never built: `next-env.d.ts` is generated by the build and gitignored,
 and it carries the `globals.css` module declaration. It self-heals after any
 build.
@@ -174,14 +205,16 @@ build.
   cannot start its own services — compose fails with a container-name conflict
   and leaves stray `<dir>_default` networks and `<dir>_*_data` volumes behind.
   One checkout per machine is fine.
-- **`npm run dev` is `services:up && turbo dev`**, an `&&` chain. Any Docker
+- **`pnpm run dev` is `services:up && turbo dev`**, an `&&` chain. Any Docker
   failure — including the one above — aborts the whole command with a raw Docker
   error before either app starts. If that happens and the containers are already
-  healthy, `npx turbo dev` runs the second half on its own.
+  healthy, `pnpm exec turbo dev` runs the second half on its own.
 - **Postgres is on host port 5433**, not the default 5432, because an unrelated
   project's container owns 5432 on the machine this was built on. Redis is on 6379.
-- `npm install` reports transitive vulnerability advisories, almost all through
-  the Medusa dependency tree. Out of scope for the scaffold.
+- `pnpm install` prints deprecation warnings for transitive dependencies, and
+  `pnpm audit` reports vulnerability advisories — almost all through the Medusa
+  dependency tree. (Unlike `npm install`, pnpm does not print an audit summary
+  during install.) Out of scope for the scaffold.
 
 ## Project structure
 
@@ -195,6 +228,7 @@ packages/
   types/        @craftynp/types — zod schemas and TypeScript types shared by
                 both apps. Built to dist/ and consumed from there.
 docker-compose.yml   Local Postgres 15 and Redis 7.
+pnpm-workspace.yaml  Workspace globs, plus the onlyBuiltDependencies allowlist.
 turbo.json           Task graph; every task depends on ^build.
 ```
 
@@ -202,18 +236,18 @@ turbo.json           Task graph; every task depends on ^build.
 
 All are run from the repo root.
 
-| Task             | Command                                         |
-| ---------------- | ----------------------------------------------- |
-| Install          | `npm install`                                   |
-| Dev server       | `npm run dev`                                   |
-| Build            | `npm run build`                                 |
-| Test             | `npm run test`                                  |
-| Lint             | `npm run lint`                                  |
-| Typecheck        | `npm run typecheck`                             |
-| Format           | `npm run format` / `npm run format:check`       |
-| DB migrate       | `npm run db:migrate`                            |
-| DB seed          | `npm run db:seed` (re-seed a reset DB only)     |
-| Services up/down | `npm run services:up` / `npm run services:down` |
+| Task             | Command                                           |
+| ---------------- | ------------------------------------------------- |
+| Install          | `pnpm install`                                    |
+| Dev server       | `pnpm run dev`                                    |
+| Build            | `pnpm run build`                                  |
+| Test             | `pnpm run test`                                   |
+| Lint             | `pnpm run lint`                                   |
+| Typecheck        | `pnpm run typecheck`                              |
+| Format           | `pnpm run format` / `pnpm run format:check`       |
+| DB migrate       | `pnpm run db:migrate`                             |
+| DB seed          | `pnpm run db:seed` (re-seed a reset DB only)      |
+| Services up/down | `pnpm run services:up` / `pnpm run services:down` |
 
 ## Deployment
 
@@ -238,7 +272,7 @@ Work flows in one direction: `feature/*` → `dev` → `qa` → `main`.
 - `dev`, `qa`, and `main` are permanent: they cannot be deleted or force-pushed
   by anyone, including admins.
 
-Run `npm run lint`, `npm run typecheck`, and `npm run test` before opening a pull
+Run `pnpm run lint`, `pnpm run typecheck`, and `pnpm run test` before opening a pull
 request.
 
 Full details, including the GitHub rulesets that enforce this, are in
