@@ -19,7 +19,12 @@ export type CustomText = z.infer<typeof customTextSchema>;
 export const artworkReferenceSchema = z.object({
   storageKey: z.string().min(1),
   fileName: z.string().min(1),
-  mimeType: z.enum(["image/png", "image/jpeg", "image/svg+xml", "application/pdf"]),
+  mimeType: z.enum([
+    "image/png",
+    "image/jpeg",
+    "image/svg+xml",
+    "application/pdf",
+  ]),
   sizeBytes: z.number().int().positive(),
   widthPx: z.number().int().positive(),
   heightPx: z.number().int().positive(),

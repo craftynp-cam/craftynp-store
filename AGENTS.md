@@ -29,15 +29,15 @@ this too — everything here applies to both.
 
 <!-- TODO: fill in as the project takes shape. -->
 
-| Task | Command |
-| --- | --- |
-| Install | `TODO` |
-| Dev server | `TODO` |
-| Build | `TODO` |
-| Test | `TODO` |
-| Lint | `TODO` |
-| Typecheck | `TODO` |
-| DB migrate | `TODO` |
+| Task       | Command |
+| ---------- | ------- |
+| Install    | `TODO`  |
+| Dev server | `TODO`  |
+| Build      | `TODO`  |
+| Test       | `TODO`  |
+| Lint       | `TODO`  |
+| Typecheck  | `TODO`  |
+| DB migrate | `TODO`  |
 
 Run lint, typecheck, and tests before opening a pull request.
 
@@ -49,12 +49,12 @@ Work flows in one direction only:
 feature/* ──▶ dev ──▶ qa ──▶ main
 ```
 
-| Branch | Purpose | Deployed to |
-| --- | --- | --- |
-| `main` | Production. Always releasable. | <!-- TODO --> |
-| `qa` | Release candidate under test. | <!-- TODO --> |
-| `dev` | Integration branch. Default branch and PR target. | <!-- TODO --> |
-| `feature/*` | Short-lived work branches. | — |
+| Branch      | Purpose                                           | Deployed to   |
+| ----------- | ------------------------------------------------- | ------------- |
+| `main`      | Production. Always releasable.                    | <!-- TODO --> |
+| `qa`        | Release candidate under test.                     | <!-- TODO --> |
+| `dev`       | Integration branch. Default branch and PR target. | <!-- TODO --> |
+| `feature/*` | Short-lived work branches.                        | —             |
 
 ### Rules
 
@@ -104,11 +104,11 @@ lost on the next promotion.
 
 Configured on GitHub; listed here so the intent is discoverable from the repo.
 
-| Ruleset | Branches | Rules | Bypass |
-| --- | --- | --- | --- |
-| `branch-integrity` | `dev`, `qa`, `main` | no deletion, no force-push | none |
-| `protected-branches` | `dev` | PR required; **squash only** | repo admin |
-| `promotion-branches` | `qa`, `main` | PR required; **merge commit only** | repo admin |
+| Ruleset              | Branches            | Rules                              | Bypass     |
+| -------------------- | ------------------- | ---------------------------------- | ---------- |
+| `branch-integrity`   | `dev`, `qa`, `main` | no deletion, no force-push         | none       |
+| `protected-branches` | `dev`               | PR required; **squash only**       | repo admin |
+| `promotion-branches` | `qa`, `main`        | PR required; **merge commit only** | repo admin |
 
 Pull requests require zero approvals, so a solo maintainer can self-merge.
 Repository admins can push directly to `dev`, `qa`, and `main`, but should use

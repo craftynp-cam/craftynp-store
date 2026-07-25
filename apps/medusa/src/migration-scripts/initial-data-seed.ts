@@ -42,14 +42,14 @@ export default async function initial_data_seed({
   const link = container.resolve(ContainerRegistrationKeys.LINK);
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const fulfillmentModuleService = container.resolve(
-    ModuleRegistrationName.FULFILLMENT
+    ModuleRegistrationName.FULFILLMENT,
   );
 
   const countries = ["gb", "de", "dk", "se", "fr", "es", "it"];
 
   logger.info("Seeding store data...");
   const { result: salesChannelResult } = await createSalesChannelsWorkflow(
-    container
+    container,
   ).run({
     input: {
       salesChannelsData: [
@@ -62,7 +62,7 @@ export default async function initial_data_seed({
   });
   const defaultSalesChannel = required(
     salesChannelResult[0],
-    "default sales channel"
+    "default sales channel",
   );
 
   const { result: apiKeyResult } = await createApiKeysWorkflow(container).run({
@@ -78,7 +78,7 @@ export default async function initial_data_seed({
   });
   const publishableApiKey = required(
     apiKeyResult[0],
-    "default publishable API key"
+    "default publishable API key",
   );
   logger.info(`Publishable API key: ${publishableApiKey.token}`);
 
@@ -137,7 +137,7 @@ export default async function initial_data_seed({
 
   logger.info("Seeding stock location data...");
   const { result: stockLocationResult } = await createStockLocationsWorkflow(
-    container
+    container,
   ).run({
     input: {
       locations: [
@@ -171,7 +171,7 @@ export default async function initial_data_seed({
   });
   const shippingProfile = required(
     shippingProfileResult[0],
-    "default shipping profile"
+    "default shipping profile",
   );
 
   const fulfillmentSet = await fulfillmentModuleService.createFulfillmentSets({
@@ -225,7 +225,7 @@ export default async function initial_data_seed({
 
   const serviceZone = required(
     fulfillmentSet.service_zones[0],
-    "fulfillment service zone"
+    "fulfillment service zone",
   );
 
   await createShippingOptionsWorkflow(container).run({
@@ -321,7 +321,7 @@ export default async function initial_data_seed({
   logger.info("Seeding product data...");
 
   const { result: categoryResult } = await createProductCategoriesWorkflow(
-    container
+    container,
   ).run({
     input: {
       product_categories: [
@@ -346,7 +346,7 @@ export default async function initial_data_seed({
   });
 
   const { result: productOptionsResult } = await createProductOptionsWorkflow(
-    container
+    container,
   ).run({
     input: {
       product_options: [
@@ -392,10 +392,7 @@ export default async function initial_data_seed({
               url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-white-back.png",
             },
           ],
-          options: [
-            { id: sizeOption.id },
-            { id: colorOption.id },
-          ],
+          options: [{ id: sizeOption.id }, { id: colorOption.id }],
           variants: [
             {
               title: "S / Black",
