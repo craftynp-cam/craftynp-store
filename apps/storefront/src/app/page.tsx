@@ -1,4 +1,5 @@
 import { lineItemCustomizationSchema } from "@craftynp/types";
+import { ProductListItem } from "@/components/product-list-item";
 import { sdk } from "@/lib/medusa";
 
 export default async function Home() {
@@ -17,9 +18,7 @@ export default async function Home() {
       </p>
       <ul className="mt-6 space-y-2">
         {products.map((product) => (
-          <li key={product.id} className="rounded border p-3">
-            {product.title}
-          </li>
+          <ProductListItem key={product.id} title={product.title} />
         ))}
       </ul>
     </main>
