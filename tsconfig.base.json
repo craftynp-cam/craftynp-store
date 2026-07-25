@@ -15,11 +15,7 @@
     "isolatedModules": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true,
-    "baseUrl": ".",
-    "paths": {
-      "@craftynp/types": ["packages/types/src/index.ts"]
-    }
+    "sourceMap": true
   },
   "exclude": ["node_modules", "dist", ".next", ".medusa"]
 }
