@@ -10,7 +10,6 @@
     "incremental": true,
     "moduleResolution": "Bundler",
     "plugins": [{ "name": "next" }],
-    "baseUrl": ".",
     // `@craftynp/types` points at the package's build output, not its source:
     // the source uses NodeNext `./customization.js` specifiers that Turbopack's
     // Bundler-mode resolver cannot follow. Turbo builds the package first
