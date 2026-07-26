@@ -1,7 +1,6 @@
 import { MedusaError } from "@medusajs/framework/utils";
 import { validateCustomization } from "./validate-customization.js";
 
-/** Low-DPI artwork — the cheapest payload that trips the artwork rules. */
 const lowDpiArtwork = {
   artwork: {
     storageKey: "artwork/a.png",
@@ -14,7 +13,6 @@ const lowDpiArtwork = {
   },
 };
 
-/** Runs `fn`, returning whatever it threw. Fails the test if it throws nothing. */
 function captureThrown(fn: () => unknown): unknown {
   try {
     fn();

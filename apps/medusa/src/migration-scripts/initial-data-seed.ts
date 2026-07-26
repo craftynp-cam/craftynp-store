@@ -21,10 +21,6 @@ import {
   linkSalesChannelsToStockLocationWorkflow,
 } from "@medusajs/medusa/core-flows";
 
-/**
- * Narrows a value the workflows are known to return but that TypeScript sees as
- * possibly undefined under the repo-wide `noUncheckedIndexedAccess` setting.
- */
 function required<T>(value: T | undefined, name: string): T {
   if (!value) {
     throw new Error(`Seed failed: expected ${name} to be created.`);

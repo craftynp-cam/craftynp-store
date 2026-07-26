@@ -127,7 +127,7 @@ feature/* ──▶ dev ──▶ qa ──▶ main
 | ----------- | ------------------------------------------------- | ---------------------- |
 | `main`      | Production. Always releasable.                    | Production _(planned)_ |
 | `qa`        | Release candidate under test.                     | Staging _(planned)_    |
-| `dev`       | Integration branch. Default branch and PR target. | Preview _(planned)_    |
+| `dev`       | Integration branch. Default branch and PR target. | -                      |
 | `feature/*` | Short-lived work branches.                        | —                      |
 
 Every environment above is **planned, not live.** Nothing is deployed yet. The
@@ -269,3 +269,4 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
 - Keep this file true. When your change makes a statement here wrong — a command,
   a port, a version, a test count — update it as part of the same change rather
   than leaving it stale.
+- Keep comments to a minimum. Never add comments for the sake of it. Do not add JSDoc comments throughout the code.

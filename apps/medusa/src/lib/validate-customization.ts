@@ -4,13 +4,6 @@ import {
   type LineItemCustomization,
 } from "@craftynp/types";
 
-/**
- * Validates a line item customization payload received from the storefront.
- * The storefront validates too, but a client can send anything — the backend is
- * the boundary that matters.
- *
- * @throws MedusaError with type INVALID_DATA when the payload does not conform.
- */
 export function validateCustomization(input: unknown): LineItemCustomization {
   const result = lineItemCustomizationSchema.safeParse(input);
 

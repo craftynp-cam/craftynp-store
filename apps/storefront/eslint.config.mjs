@@ -3,7 +3,6 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import base from "../../eslint.config.mjs";
 
-/** Shared monorepo rules first, then the Next.js presets, then app overrides. */
 const eslintConfig = defineConfig([
   ...base,
   ...nextVitals,

@@ -29,5 +29,10 @@
     "turbo": "^2.10.6",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.0.0"
+  },
+  "dependencies": {
+    "@medusajs/auth": "^2.18.0",
+    "@medusajs/auth-google": "^2.18.0",
+    "medusa": "^0.0.3"
   }
 }

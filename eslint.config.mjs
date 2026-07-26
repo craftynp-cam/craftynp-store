@@ -2,7 +2,6 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
-/** Base rules shared by every workspace. Apps import this and append their own. */
 export default tseslint.config(
   {
     ignores: [
