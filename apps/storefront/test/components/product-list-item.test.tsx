@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 
-import { ProductListItem } from ".";
+import { ProductListItem } from "@/components";
 
 describe("ProductListItem", () => {
   it("renders the product title", () => {

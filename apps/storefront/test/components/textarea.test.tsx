@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 
-import { Textarea } from ".";
+import { Textarea } from "@/components";
 
 describe("Textarea", () => {
   it("associates the label with the control", () => {

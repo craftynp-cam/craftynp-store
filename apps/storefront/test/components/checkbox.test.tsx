@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { Checkbox } from ".";
+import { Checkbox } from "@/components";
 
 describe("Checkbox", () => {
   it("exposes its label as the accessible name", () => {

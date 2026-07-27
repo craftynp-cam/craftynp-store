@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { ThemeToggle } from ".";
+import { ThemeToggle } from "@/components";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 describe("ThemeToggle", () => {
