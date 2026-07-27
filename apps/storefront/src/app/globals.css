@@ -6,13 +6,16 @@
  * rounded-lg, text-2xl) — never raw hex.
  *
  * Three layers:
- *   1. @theme          — the fixed brand palette and the type/spacing/radius scales.
- *   2. @theme inline   — semantic aliases, which point at the --t-* variables.
- *   3. :root + @media  — the light and dark values of those --t-* variables.
+ *   1. @theme        — the fixed brand palette and the type/spacing/radius scales.
+ *   2. @theme inline — semantic aliases, which point at the --t-* variables.
+ *   3. :root         — both modes of each --t-* variable, via light-dark().
  *
  * Both modes are built from the same seven brand colours: light composites
  * ink navy over off-white, dark composites off-white over ink navy. No hue
- * exists in one mode that does not exist in the other.
+ * exists in one mode that does not exist in the other. Ink navy is the
+ * darkest brand colour, so it becomes the dark page and surfaces lift away
+ * from it. Muted black is deliberately unused in dark mode — it sits within
+ * 1.1:1 of ink navy, so as a layer it would be invisible.
  *
  * Contrast: see /design for the measured ratio of every pairing in both modes.
  */
@@ -90,102 +93,70 @@
   --color-danger-foreground: var(--t-danger-foreground);
 }
 
-/* Light: ink navy composited over off-white. */
+/*
+ * The two modes, declared together. light-dark() picks its first value when
+ * the used color-scheme is light and its second when it is dark, so each
+ * token states both modes on one line and there is no second block to keep
+ * in sync. Tokens whose value does not change are written plainly.
+ *
+ * `color-scheme: light dark` means the page follows the OS by default; the
+ * [data-theme] rules below let the toggle pin it. Because the modes hang off
+ * color-scheme rather than a media query, pinning also fixes form controls,
+ * scrollbars, and caret colour to match.
+ */
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
 
-  --t-background: var(--color-off-white);
-  --t-surface: var(--color-white);
-  --t-surface-soft: var(--color-blush);
-  --t-foreground: var(--color-ink);
-  --t-foreground-muted: color-mix(
-    in srgb,
-    var(--color-ink) 68%,
-    var(--color-off-white)
+  --t-background: light-dark(var(--color-off-white), var(--color-ink));
+  --t-surface: light-dark(
+    var(--color-white),
+    color-mix(in srgb, var(--color-off-white) 7%, var(--color-ink))
   );
-  --t-foreground-subtle: color-mix(
-    in srgb,
-    var(--color-ink) 40%,
-    var(--color-off-white)
+  --t-surface-soft: light-dark(
+    var(--color-blush),
+    color-mix(in srgb, var(--color-blush) 14%, var(--color-ink))
   );
-  --t-border: color-mix(in srgb, var(--color-ink) 16%, var(--color-off-white));
-  --t-border-strong: color-mix(
-    in srgb,
-    var(--color-ink) 32%,
-    var(--color-off-white)
+  --t-foreground: light-dark(var(--color-ink), var(--color-off-white));
+  --t-foreground-muted: light-dark(
+    color-mix(in srgb, var(--color-ink) 68%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 60%, var(--color-ink))
   );
-  --t-primary: var(--color-ink);
-  --t-on-primary: var(--color-off-white);
+  --t-foreground-subtle: light-dark(
+    color-mix(in srgb, var(--color-ink) 40%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 40%, var(--color-ink))
+  );
+  --t-border: light-dark(
+    color-mix(in srgb, var(--color-ink) 16%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 18%, var(--color-ink))
+  );
+  --t-border-strong: light-dark(
+    color-mix(in srgb, var(--color-ink) 32%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 36%, var(--color-ink))
+  );
+  --t-primary: light-dark(var(--color-ink), var(--color-off-white));
+  --t-on-primary: light-dark(var(--color-off-white), var(--color-ink));
   --t-accent: var(--color-gold);
   --t-on-accent: var(--color-ink);
   --t-success: var(--color-mint);
   --t-on-success: var(--color-ink);
   --t-danger: var(--color-alert);
   --t-on-danger: var(--color-off-white);
-  --t-danger-foreground: color-mix(
-    in srgb,
-    var(--color-ink) 20%,
-    var(--color-alert)
+  --t-danger-foreground: light-dark(
+    color-mix(in srgb, var(--color-ink) 20%, var(--color-alert)),
+    color-mix(in srgb, var(--color-off-white) 35%, var(--color-alert))
   );
 }
 
 /*
- * Dark: the same palette inverted — off-white composited over ink navy.
- * Ink navy is the darkest brand colour, so it becomes the page; surfaces lift
- * away from it rather than stacking a second near-black on top. Muted black
- * sits within 1.1:1 of ink navy and so is deliberately unused here — as a
- * layer it would be invisible.
+ * The toggle writes data-theme on <html> to pin a mode. Absent the attribute
+ * the page follows the OS.
  */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
+:root[data-theme="light"] {
+  color-scheme: light;
+}
 
-    --t-background: var(--color-ink);
-    --t-surface: color-mix(
-      in srgb,
-      var(--color-off-white) 7%,
-      var(--color-ink)
-    );
-    --t-surface-soft: color-mix(
-      in srgb,
-      var(--color-blush) 14%,
-      var(--color-ink)
-    );
-    --t-foreground: var(--color-off-white);
-    --t-foreground-muted: color-mix(
-      in srgb,
-      var(--color-off-white) 60%,
-      var(--color-ink)
-    );
-    --t-foreground-subtle: color-mix(
-      in srgb,
-      var(--color-off-white) 40%,
-      var(--color-ink)
-    );
-    --t-border: color-mix(
-      in srgb,
-      var(--color-off-white) 18%,
-      var(--color-ink)
-    );
-    --t-border-strong: color-mix(
-      in srgb,
-      var(--color-off-white) 36%,
-      var(--color-ink)
-    );
-    --t-primary: var(--color-off-white);
-    --t-on-primary: var(--color-ink);
-    --t-accent: var(--color-gold);
-    --t-on-accent: var(--color-ink);
-    --t-success: var(--color-mint);
-    --t-on-success: var(--color-ink);
-    --t-danger: var(--color-alert);
-    --t-on-danger: var(--color-off-white);
-    --t-danger-foreground: color-mix(
-      in srgb,
-      var(--color-off-white) 35%,
-      var(--color-alert)
-    );
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @layer base {

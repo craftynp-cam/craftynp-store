@@ -187,6 +187,18 @@ export const semanticTokens: readonly SemanticToken[] = [
   },
 ];
 
+/**
+ * The exact declaration globals.css should carry. Tokens whose value is the
+ * same in both modes are written plainly rather than as a light-dark() with
+ * two identical arms.
+ */
+export function tokenDeclaration(token: SemanticToken): string {
+  const light = cssValue(token.light);
+  const dark = cssValue(token.dark);
+
+  return light === dark ? light : `light-dark(${light}, ${dark})`;
+}
+
 const tokensByName = new Map(
   semanticTokens.map((token) => [token.token, token]),
 );

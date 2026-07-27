@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { ThemeToggle } from "@/components/theme-toggle";
 import { gradeContrast } from "@/lib/contrast";
 import {
   brandColors,
@@ -161,9 +162,17 @@ export default function DesignTokensPage() {
         <code className="rounded-xs bg-surface-soft px-1 py-0.5 font-mono text-base">
           src/app/globals.css
         </code>
-        ; components reference the generated utilities, never raw hex. This page
-        follows your system colour mode, and shows both.
+        ; components reference the generated utilities, never raw hex.
       </p>
+
+      <div className="mt-6 flex flex-wrap items-center gap-4">
+        <ThemeToggle />
+        <p className="text-sm text-foreground-muted">
+          Switches the whole page, not just this section — every colour below
+          comes from a mode-aware token. <strong>System</strong> follows your
+          OS.
+        </p>
+      </div>
 
       <Section
         title="Palette"

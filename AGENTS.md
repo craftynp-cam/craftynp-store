@@ -231,8 +231,8 @@ The brand palette, type scale, spacing scale, and radii are declared once, in
 
 1. `@theme` — the seven fixed brand colours and the type/spacing/radius scales.
 2. `@theme inline` — semantic aliases, each pointing at a `--t-*` variable.
-3. `:root` and the `prefers-color-scheme: dark` block — the light and dark
-   values of those `--t-*` variables.
+3. `:root` — both modes of each `--t-*` variable, on one line, via
+   `light-dark()`.
 
 **Components use the generated utilities — `bg-surface`,
 `text-foreground-muted`, `rounded-lg`, `font-display` — and never a raw hex
@@ -261,9 +261,25 @@ every text-bearing pairing clears WCAG AA at 4.5:1 on every surface of its
 mode. Pairings below that threshold must be marked `decorative` with a note
 explaining why. Change a token in both files, or the suite will tell you.
 
-There is no manual theme switcher — the mode follows the OS. Adding a toggle
-means introducing a `data-theme` override alongside the media query; it is not
-wired up yet.
+**The modes hang off `color-scheme`, not a media query.** `light-dark()` reads
+the used `color-scheme`, so `:root` declares `color-scheme: light dark` (follow
+the OS) and `:root[data-theme="light"|"dark"]` pins it. One attribute therefore
+switches the tokens _and_ the native form controls, scrollbars, and caret. Do
+not reintroduce a `prefers-color-scheme` block — a test asserts its absence,
+because a second mechanism would have to be kept in sync with this one.
+
+`ThemeToggle` (`src/components/theme-toggle.tsx`) writes that attribute and
+persists to `localStorage`. Two things about it are load-bearing:
+
+- It reads the stored value through `useSyncExternalStore`, not `useState` in
+  an effect — the React 19 lint rule rejects the latter, and the store form
+  also keeps other tabs in step via the `storage` event.
+- `themeInitScript` runs as a **blocking inline script in `<head>`**, set in
+  `layout.tsx`. Without it a reader who pinned a mode gets a flash of the OS
+  mode before hydration. Do not move it into a component or defer it.
+
+The toggle currently only appears on `/design`. Putting it in the global header
+is a matter of rendering it there — the layout wiring is already done.
 
 ### Testing
 
@@ -296,8 +312,8 @@ wired up yet.
 - **Do not try to render `src/app/page.tsx`.** It is an async server component
   that fetches from a live backend; RTL cannot render it. Cover it with
   HTTP-level checks against the running app instead.
-- Current suite: **153 tests** across the three workspaces (types 17, medusa 9,
-  storefront 127). A smaller number after your change means something was
+- Current suite: **143 tests** across the three workspaces (types 17, medusa 9,
+  storefront 117). A smaller number after your change means something was
   dropped.
 
 ## Guidance for agents

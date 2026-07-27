@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
+import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
 
 const libreBaskerville = Libre_Baskerville({
@@ -31,6 +32,10 @@ export default function RootLayout({
       lang="en"
       className={`${libreBaskerville.variable} ${sourceSans3.variable} h-full antialiased`}
     >
+      <head>
+        {/* Blocking on purpose: a pinned theme must land on <html> before paint. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

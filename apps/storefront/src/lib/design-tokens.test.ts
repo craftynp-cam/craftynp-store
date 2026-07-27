@@ -3,16 +3,15 @@ import { join } from "node:path";
 
 import {
   brandColors,
-  cssValue,
   modes,
   pairingsFor,
   palette,
   radiusScale,
   semanticTokens,
   surfaceTokens,
+  tokenDeclaration,
   tokenHex,
   typeScale,
-  type Mode,
 } from "@/lib/design-tokens";
 
 const srcDir = join(__dirname, "..");
@@ -26,28 +25,21 @@ const globalsCss = normalise(
   readFileSync(join(srcDir, "app", "globals.css"), "utf8"),
 );
 
-/**
- * The light values live in `:root`, the dark ones inside the
- * prefers-color-scheme block. Slicing them apart stops a token that is only
- * declared for one mode from passing the drift check for both.
- */
-const darkBlockStart = globalsCss.indexOf(
-  "@media (prefers-color-scheme: dark)",
-);
-
-const cssByMode: Record<Mode, string> = {
-  light: globalsCss.slice(0, darkBlockStart),
-  dark: globalsCss.slice(darkBlockStart),
-};
-
 describe("globals.css", () => {
-  it("declares a dark block", () => {
-    expect(darkBlockStart).toBeGreaterThan(-1);
+  it("follows the OS by default", () => {
+    expect(globalsCss).toContain("color-scheme: light dark;");
   });
 
-  it("sets color-scheme for both modes", () => {
-    expect(cssByMode.light).toContain("color-scheme: light;");
-    expect(cssByMode.dark).toContain("color-scheme: dark;");
+  it.each(modes)("lets the toggle pin %s via data-theme", (mode) => {
+    expect(globalsCss).toContain(
+      `:root[data-theme="${mode}"] { color-scheme: ${mode}; }`,
+    );
+  });
+
+  it("drives the modes off color-scheme rather than a media query", () => {
+    // light-dark() reads color-scheme, which is what makes one data-theme
+    // attribute flip both the tokens and the native form controls.
+    expect(globalsCss).not.toContain("prefers-color-scheme");
   });
 });
 
@@ -75,12 +67,10 @@ describe("palette", () => {
 });
 
 describe("semantic tokens", () => {
-  const cases = modes.flatMap((mode) =>
-    semanticTokens.map((token) => [mode, token.token, cssValue(token[mode])]),
-  );
-
-  it.each(cases)("%s: --t-%s is declared as %s", (mode, token, value) => {
-    expect(cssByMode[mode as Mode]).toContain(`--t-${token}: ${value};`);
+  it.each(
+    semanticTokens.map((token) => [token.token, tokenDeclaration(token)]),
+  )("--t-%s is declared as %s", (token, declaration) => {
+    expect(globalsCss).toContain(`--t-${token}: ${declaration};`);
   });
 
   it.each(semanticTokens.map((token) => [token.token]))(
