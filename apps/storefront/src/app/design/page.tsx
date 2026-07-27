@@ -90,11 +90,13 @@ function Swatch({
 }) {
   return (
     <div>
+      {/* Without borderHex the swatch borders itself from the active mode's
+          token; the mode panes pass one because they show the other mode. */}
       <div
-        className="h-16 rounded-md"
+        className={`h-16 rounded-md border ${borderHex ? "" : "border-border-strong"}`}
         style={{
           backgroundColor: hex,
-          border: `1px solid ${borderHex ?? "currentColor"}`,
+          ...(borderHex ? { borderColor: borderHex } : {}),
         }}
       />
       <p className="mt-2 text-sm font-medium">{label}</p>
@@ -186,7 +188,6 @@ export default function DesignTokensPage() {
               caption={`${token.utility} · ${brandColors[token.utility]}`}
               hex={brandColors[token.utility]}
               usage={token.usage}
-              borderHex={tokenHex("border", "light")}
             />
           ))}
         </div>

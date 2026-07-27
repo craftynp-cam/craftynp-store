@@ -3,6 +3,10 @@
     "atlassian-mcp-server": {
       "url": "https://mcp.atlassian.com/v1/mcp/authv2",
       "type": "http"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
     }
   }
 }

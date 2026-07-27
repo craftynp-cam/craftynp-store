@@ -276,7 +276,11 @@ persists to `localStorage`. Two things about it are load-bearing:
   also keeps other tabs in step via the `storage` event.
 - `themeInitScript` runs as a **blocking inline script in `<head>`**, set in
   `layout.tsx`. Without it a reader who pinned a mode gets a flash of the OS
-  mode before hydration. Do not move it into a component or defer it.
+  mode before hydration. Do not move it into a component or defer it. Because
+  it writes `data-theme` to `<html>` before React hydrates, that element must
+  keep `suppressHydrationWarning` — otherwise every page logs a hydration
+  error. The suppression is scoped to `<html>`'s own attributes and does not
+  reach any child.
 
 The toggle currently only appears on `/design`. Putting it in the global header
 is a matter of rendering it there — the layout wiring is already done.
@@ -312,8 +316,8 @@ is a matter of rendering it there — the layout wiring is already done.
 - **Do not try to render `src/app/page.tsx`.** It is an async server component
   that fetches from a live backend; RTL cannot render it. Cover it with
   HTTP-level checks against the running app instead.
-- Current suite: **143 tests** across the three workspaces (types 17, medusa 9,
-  storefront 117). A smaller number after your change means something was
+- Current suite: **148 tests** across the three workspaces (types 17, medusa 9,
+  storefront 122). A smaller number after your change means something was
   dropped.
 
 ## Guidance for agents

@@ -28,8 +28,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // themeInitScript sets data-theme on this element before React hydrates,
+    // so the server markup cannot match. Suppression is scoped to <html>'s own
+    // attributes and does not reach any child.
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${libreBaskerville.variable} ${sourceSans3.variable} h-full antialiased`}
     >
       <head>

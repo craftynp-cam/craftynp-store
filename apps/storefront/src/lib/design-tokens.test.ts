@@ -112,6 +112,32 @@ describe("scales", () => {
   });
 });
 
+describe("layout", () => {
+  const layout = readFileSync(join(srcDir, "app", "layout.tsx"), "utf8");
+
+  it.each(["Libre_Baskerville", "Source_Sans_3"])("loads %s", (font) => {
+    expect(layout).toContain(font);
+  });
+
+  it("sets font-display: swap on both families", () => {
+    expect(layout.match(/display: "swap"/g)).toHaveLength(2);
+  });
+
+  it("runs the theme script in <head> so a pinned mode lands before paint", () => {
+    const head = layout.slice(
+      layout.indexOf("<head>"),
+      layout.indexOf("</head>"),
+    );
+    expect(head).toContain("themeInitScript");
+  });
+
+  it("suppresses the hydration warning that script necessarily causes", () => {
+    // The script sets data-theme on <html> before React hydrates, so the
+    // server markup cannot match. Without this, every page logs an error.
+    expect(layout).toMatch(/<html[\s\S]*?suppressHydrationWarning[\s\S]*?>/);
+  });
+});
+
 describe.each(modes)("contrast in %s mode", (mode) => {
   const pairings = pairingsFor(mode);
 
