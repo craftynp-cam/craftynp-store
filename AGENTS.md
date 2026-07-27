@@ -224,6 +224,67 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
   `public-hoist-pattern` to `.npmrc`: pnpm's non-hoisting default is what keeps
   the two React majors apart.
 
+### Design tokens
+
+The brand palette, type scale, spacing scale, and radii are declared once, in
+`apps/storefront/src/app/globals.css`, in three layers:
+
+1. `@theme` — the seven fixed brand colours and the type/spacing/radius scales.
+2. `@theme inline` — semantic aliases, each pointing at a `--t-*` variable.
+3. `:root` — both modes of each `--t-*` variable, on one line, via
+   `light-dark()`.
+
+**Components use the generated utilities — `bg-surface`,
+`text-foreground-muted`, `rounded-lg`, `font-display` — and never a raw hex
+value.** Prefer the semantic aliases (`background`, `surface`, `foreground`,
+`primary`, `danger`) over the raw brand names: they carry intent, and they are
+the only colours that follow the active mode.
+
+The `inline` on the second layer is load-bearing. It emits `var(--t-*)` into
+each utility, so the utility tracks the mode. A plain `@theme` would freeze
+every utility at its light value.
+
+**Both modes come from the same seven colours.** Light composites ink navy over
+off-white; dark composites off-white over ink navy. Do not introduce a hue that
+exists in only one mode, and do not introduce a new grey — greys are the two
+extremes composited at reduced opacity. Muted black is unused in dark mode on
+purpose: it sits within 1.1:1 of ink navy, so as a layer it would be invisible.
+
+Raw alert red is not legible enough for text in either mode (3.5:1 on the light
+blush surface, 3.8:1 on the dark page). Use `danger-foreground` for error text
+and `danger` only as a surface.
+
+`src/lib/design-tokens.ts` mirrors those values so the reference page at
+**`/design`** can render and measure every token in both modes;
+`design-tokens.test.ts` fails if the mirror and the CSS drift, and asserts that
+every text-bearing pairing clears WCAG AA at 4.5:1 on every surface of its
+mode. Pairings below that threshold must be marked `decorative` with a note
+explaining why. Change a token in both files, or the suite will tell you.
+
+**The modes hang off `color-scheme`, not a media query.** `light-dark()` reads
+the used `color-scheme`, so `:root` declares `color-scheme: light dark` (follow
+the OS) and `:root[data-theme="light"|"dark"]` pins it. One attribute therefore
+switches the tokens _and_ the native form controls, scrollbars, and caret. Do
+not reintroduce a `prefers-color-scheme` block — a test asserts its absence,
+because a second mechanism would have to be kept in sync with this one.
+
+`ThemeToggle` (`src/components/theme-toggle.tsx`) writes that attribute and
+persists to `localStorage`. Two things about it are load-bearing:
+
+- It reads the stored value through `useSyncExternalStore`, not `useState` in
+  an effect — the React 19 lint rule rejects the latter, and the store form
+  also keeps other tabs in step via the `storage` event.
+- `themeInitScript` runs as a **blocking inline script in `<head>`**, set in
+  `layout.tsx`. Without it a reader who pinned a mode gets a flash of the OS
+  mode before hydration. Do not move it into a component or defer it. Because
+  it writes `data-theme` to `<html>` before React hydrates, that element must
+  keep `suppressHydrationWarning` — otherwise every page logs a hydration
+  error. The suppression is scoped to `<html>`'s own attributes and does not
+  reach any child.
+
+The toggle currently only appears on `/design`. Putting it in the global header
+is a matter of rendering it there — the layout wiring is already done.
+
 ### Testing
 
 - **Jest**, with a **per-workspace config** rather than one root config, because
@@ -255,8 +316,9 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
 - **Do not try to render `src/app/page.tsx`.** It is an async server component
   that fetches from a live backend; RTL cannot render it. Cover it with
   HTTP-level checks against the running app instead.
-- Current suite: **30 tests** across the three workspaces (types 17, medusa 9,
-  storefront 4). A smaller number after your change means something was dropped.
+- Current suite: **148 tests** across the three workspaces (types 17, medusa 9,
+  storefront 122). A smaller number after your change means something was
+  dropped.
 
 ## Guidance for agents
 
