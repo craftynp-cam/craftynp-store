@@ -285,6 +285,58 @@ persists to `localStorage`. Two things about it are load-bearing:
 The toggle currently only appears on `/design`. Putting it in the global header
 is a matter of rendering it there — the layout wiring is already done.
 
+### HeroUI
+
+The shared primitives in `apps/storefront/src/components/ui` — button, text
+input, textarea, select, checkbox, radio group, badge — are thin wrappers over
+**HeroUI v3**, which is built on React Aria Components. Use them rather than
+reaching for HeroUI directly; they translate brand vocabulary into HeroUI's and
+are where the accessibility guarantees are tested.
+
+**HeroUI's component CSS is plain BEM** (`.button`, `.button--primary`), not
+generated utilities, so Tailwind does not need to `@source`-scan
+`node_modules`. `globals.css` bridges HeroUI's variables to the `--t-*` tokens
+and that is the whole integration.
+
+**HeroUI reads its colours two different ways, and this matters.** Some
+components take the bare variable — `button.css` is `--button-bg:
+var(--accent)` — while others take the Tailwind utility, as `radio.css` does
+with `@apply bg-accent`. The utility resolves through `--color-accent`, which
+our own `@theme inline` block also defines. **The bare variable and our
+`--color-*` alias of the same name must therefore agree**, or one component
+disagrees with another: bridging `--accent` to `--t-primary` while `bg-accent`
+stayed gold produced a navy button beside a gold radio in the same form. It is
+not enough to reason about this from the bare variables alone — check the
+rendered page.
+
+**So `accent` is gold on both sides**, and HeroUI's primary action is gold on
+ink navy, a pairing `design-tokens.test.ts` already holds to AA. The palette's
+`primary` (ink navy) still backs `bg-primary` and the focus ring.
+
+**The bridge is what keeps `system` mode working.** HeroUI's own theme has only
+two states, keyed off `.light`/`.dark`/`[data-theme]`, with no OS-following
+equivalent; left alone it paints light components on a dark page for a dark-OS
+reader who has not pinned a mode. Because every `--t-*` is a `light-dark()`,
+HeroUI's variables inherit `color-scheme` for free. The bridge block is
+**unlayered on purpose** — HeroUI declares its values inside a nested cascade
+layer, and unlayered declarations beat every layered one.
+
+**The focus ring is `primary`, not gold.** Gold is the brand's attention colour
+and the obvious choice, and it fails: 1.36–1.84:1 against the light-mode
+surfaces, well under the 3:1 WCAG 1.4.11 requires. `focus-ring.test.ts` holds
+the ring to 3:1 on every surface of both modes and records why gold is
+rejected.
+
+**`pnpm-workspace.yaml` declares `@types/react` as a peer** of HeroUI and the
+React Aria packages. They declare `react` but not its types, so pnpm links no
+type package into their subgraphs and their `.d.ts` files resolve `react` by
+walking up to pnpm's private hoist directory — which holds **18**, because the
+Medusa admin needs it. HeroUI's props then type against React 18 while the
+storefront is on 19, and anything crossing the boundary fails to typecheck. Do
+not solve this by hoisting (it removes the types entirely) or by adding
+`@types/react` to the root `package.json` (it makes React 19's types ambient
+for `apps/medusa`, which runs React 18).
+
 ### Testing
 
 - **Jest**, with a **per-workspace config** rather than one root config, because
@@ -316,8 +368,22 @@ is a matter of rendering it there — the layout wiring is already done.
 - **Do not try to render `src/app/page.tsx`.** It is an async server component
   that fetches from a live backend; RTL cannot render it. Cover it with
   HTTP-level checks against the running app instead.
-- Current suite: **148 tests** across the three workspaces (types 17, medusa 9,
-  storefront 122). A smaller number after your change means something was
+- **The storefront's Jest config carries three HeroUI accommodations**
+  (`apps/storefront/jest.config.mjs`). Each is load-bearing; removing any one
+  makes every test that imports a primitive fail to run.
+  - `moduleNameMapper` maps `@heroui/react/*` onto the package's `dist/` files.
+    HeroUI's exports map offers only `import` and `types` conditions, so Jest's
+    CommonJS resolver finds no candidate at all.
+  - `transformIgnorePatterns` is reduced to CSS modules, so `node_modules` gets
+    transformed. HeroUI and the React Aria packages under it ship untranspiled
+    ESM. An allowlist was tried first and does not hold — the transitive tail
+    keeps growing.
+  - `customExportConditions` is deliberately **not** set to include `import`.
+    It applies to every package, so any dependency listing `import` before
+    `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
+    classifies as native ESM and then cannot load.
+- Current suite: **202 tests** across the three workspaces (types 17, medusa 9,
+  storefront 176). A smaller number after your change means something was
   dropped.
 
 ## Guidance for agents
