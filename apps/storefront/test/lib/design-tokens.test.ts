@@ -58,6 +58,7 @@ describe("palette", () => {
       join(srcDir, "app", "page.tsx"),
       join(srcDir, "app", "design", "page.tsx"),
       join(srcDir, "components", "ui", "product-list-item.tsx"),
+      join(srcDir, "components", "cards", "product-card.tsx"),
     ];
 
     for (const source of componentSources) {
