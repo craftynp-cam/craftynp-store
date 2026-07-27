@@ -2,7 +2,7 @@ import type { NavCategory } from "@/lib/categories";
 
 import { ThemeToggle } from "../ui";
 import { AccountLink } from "./account-link";
-import { CartButton } from "./cart-button";
+import { CartDrawer } from "./cart-drawer";
 import { Logo } from "./logo";
 import { NavDrawer } from "./nav-drawer";
 import { NavSearch } from "./nav-search";
@@ -28,7 +28,7 @@ export function Navbar({ categories }: NavbarProps) {
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <ThemeToggle variant="compact" />
             <AccountLink />
-            <CartButton />
+            <CartDrawer />
           </div>
         </div>
       </header>

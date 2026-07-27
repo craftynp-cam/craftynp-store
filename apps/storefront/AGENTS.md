@@ -22,15 +22,18 @@ Layout:
 - `src/components/ui` — the HeroUI-backed primitives, re-exported through
   `src/components/index.ts`.
 - `src/components/cards` — higher-level, product-facing components built on
-  those primitives (`ProductCard`), re-exported through the same barrel.
+  those primitives (`ProductCard`, `CartCard`), re-exported through the same
+  barrel. `CartCard` (CNP-47) deliberately mirrors `ProductCard`'s badge and
+  missing-image treatment so a line in the cart drawer visibly matches the
+  card it came from.
 - `src/components/nav` — the global navbar (`Navbar`, CNP-24) and its parts
-  (menu button, logo, search, cart, account, and the nav drawer, CNP-25),
-  re-exported through the same barrel. Rendered once, in `layout.tsx`, above
-  `{children}`. There is no horizontal desktop nav — the drawer is the site's
-  only navigation at every breakpoint, so `Navbar` takes `categories` as a
-  required prop rather than fetching them itself: RTL cannot render an async
-  server component, so `layout.tsx` awaits `fetchNavCategories()` and passes
-  the result down.
+  (menu button, logo, search, account, and the two drawers — navigation,
+  CNP-25, and cart, CNP-47 — re-exported through the same barrel). Rendered
+  once, in `layout.tsx`, above `{children}`. There is no horizontal desktop
+  nav — the drawer is the site's only navigation at every breakpoint, so
+  `Navbar` takes `categories` as a required prop rather than fetching them
+  itself: RTL cannot render an async server component, so `layout.tsx` awaits
+  `fetchNavCategories()` and passes the result down.
 - `src/components/icons` — the only module that imports Phosphor
   (`@phosphor-icons/react`) directly; every icon used in the app is
   re-exported from here so the library stays swappable. Pulled from the
@@ -39,13 +42,23 @@ Layout:
   `aria-hidden` on the icon and put the accessible name on the surrounding
   control.
 - `src/lib` — the Medusa SDK client, the design-token mirror, contrast maths,
-  theme store, the cart-count store (`cart-count.ts` — a localStorage-backed
-  stand-in for the real cart until CNP-47), and `categories.ts` — the nav
-  drawer's category fetch, and the first data-fetch module in the repo. It
-  sets the convention: a narrow structural source type plus a pure mapper (the
-  same shape as `product-card.ts`), React's request-scoped `cache()` for
-  dedupe, and it never throws — the navbar renders on every page, so a Medusa
-  outage degrades to the drawer's empty state instead of taking the site down.
+  the theme store, `categories.ts` (the nav drawer's category fetch and the
+  first data-fetch module in the repo — a narrow structural source type plus a
+  pure mapper, the same shape as `product-card.ts`, React's request-scoped
+  `cache()` for dedupe, and it never throws, so a Medusa outage degrades to the
+  drawer's empty state instead of taking the site down), and the cart itself
+  (CNP-47): `cart.ts` is a localStorage-backed cart store — lines, quantities,
+  and the subtotal/line-count derivations — behind a narrow public surface
+  (`readCart`, `subscribeToCart`, `addCartLine`, `setCartLineQuantity`,
+  `removeCartLine`, `clearCart`) so a later story can swap the backing for
+  Medusa's `/store/carts` without touching any component. Its snapshot is
+  cached at module scope and only invalidated on a write or a cross-tab
+  `storage` event — `useSyncExternalStore` requires a referentially stable
+  snapshot, and a cart is an object, unlike the plain number the old
+  `cart-count.ts` returned. `cart-drawer.ts` is a separate, unpersisted
+  open/close store for the drawer itself — UI state and cart contents have
+  different lifetimes, and a reload must never leave the drawer open.
+  `openCartDrawer()` is the seam CNP-45 calls after a successful add-to-cart.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 ## Environment
@@ -296,5 +309,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **244** of the repo's 270 tests. A smaller number
+The storefront currently holds **283** of the repo's 309 tests. A smaller number
 after your change means something was dropped.
