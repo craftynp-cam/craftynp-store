@@ -15,6 +15,7 @@
     "@heroui/react": "^3.2.2",
     "@heroui/styles": "^3.2.2",
     "@medusajs/js-sdk": "^2.18.0",
+    "@phosphor-icons/react": "^2.1.10",
     "next": "16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4"
