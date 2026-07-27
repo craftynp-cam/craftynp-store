@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "jsx": "preserve",
+    "allowJs": true,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": true,
+    "moduleResolution": "Bundler",
+    "plugins": [{ "name": "next" }],
+    // `@craftynp/types` points at the package's build output, not its source:
+    // the source uses NodeNext `./customization.js` specifiers that Turbopack's
+    // Bundler-mode resolver cannot follow. Turbo builds the package first
+    // (`dependsOn: ["^build"]`), so `dist/` is always present. TypeScript picks
+    // up the adjacent `index.d.ts` for types.
+    "paths": {
+      "@/*": ["./src/*"],
+      "@craftynp/types": ["../../packages/types/dist/index.js"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.mts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

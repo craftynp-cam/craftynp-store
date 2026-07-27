@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm blocks dependency lifecycle scripts by default. These packages ship
+# native binaries or generated code that only exist after their postinstall
+# runs, so each is allowed explicitly. @medusajs/telemetry is deliberately
+# omitted — its postinstall only exists to phone home.
+onlyBuiltDependencies:
+  - "@swc/core"
+  - esbuild
+  - msgpackr-extract
+  - protobufjs
+  - sharp
+  - unrs-resolver
