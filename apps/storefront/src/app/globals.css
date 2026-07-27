@@ -241,6 +241,8 @@
   --field-border: var(--t-border);
   --field-border-width: 1px;
 
+  --backdrop: color-mix(in srgb, var(--color-ink) 55%, transparent);
+
   --radius: var(--radius-md);
 }
 

@@ -11,6 +11,7 @@
  * link, not the glyph.
  */
 export {
+  ArrowRight,
   List,
   MagnifyingGlass,
   UserCircle,
@@ -18,4 +19,5 @@ export {
   Monitor,
   Sun,
   Moon,
+  X,
 } from "@phosphor-icons/react/dist/ssr";

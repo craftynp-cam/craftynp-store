@@ -1,4 +1,5 @@
 import { Navbar } from "@/components";
+import { fetchNavCategories } from "@/lib/categories";
 import { themeInitScript } from "@/lib/theme";
 import type { Metadata } from "next";
 import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
@@ -23,11 +24,13 @@ export const metadata: Metadata = {
   description: "Handmade and personalised gifts by The Crafty NP.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const categories = await fetchNavCategories();
+
   return (
     // themeInitScript sets data-theme on this element before React hydrates,
     // so the server markup cannot match. Suppression is scoped to <html>'s own
@@ -42,7 +45,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex flex-col">
-        <Navbar />
+        <Navbar categories={categories} />
         <div className="flex-1">{children}</div>
       </body>
     </html>

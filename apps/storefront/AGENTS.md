@@ -24,8 +24,13 @@ Layout:
 - `src/components/cards` — higher-level, product-facing components built on
   those primitives (`ProductCard`), re-exported through the same barrel.
 - `src/components/nav` — the global navbar (`Navbar`, CNP-24) and its parts
-  (menu button, logo, search, cart, account), re-exported through the same
-  barrel. Rendered once, in `layout.tsx`, above `{children}`.
+  (menu button, logo, search, cart, account, and the nav drawer, CNP-25),
+  re-exported through the same barrel. Rendered once, in `layout.tsx`, above
+  `{children}`. There is no horizontal desktop nav — the drawer is the site's
+  only navigation at every breakpoint, so `Navbar` takes `categories` as a
+  required prop rather than fetching them itself: RTL cannot render an async
+  server component, so `layout.tsx` awaits `fetchNavCategories()` and passes
+  the result down.
 - `src/components/icons` — the only module that imports Phosphor
   (`@phosphor-icons/react`) directly; every icon used in the app is
   re-exported from here so the library stays swappable. Pulled from the
@@ -34,8 +39,13 @@ Layout:
   `aria-hidden` on the icon and put the accessible name on the surrounding
   control.
 - `src/lib` — the Medusa SDK client, the design-token mirror, contrast maths,
-  theme store, and the cart-count store (`cart-count.ts` — a
-  localStorage-backed stand-in for the real cart until CNP-47).
+  theme store, the cart-count store (`cart-count.ts` — a localStorage-backed
+  stand-in for the real cart until CNP-47), and `categories.ts` — the nav
+  drawer's category fetch, and the first data-fetch module in the repo. It
+  sets the convention: a narrow structural source type plus a pure mapper (the
+  same shape as `product-card.ts`), React's request-scoped `cache()` for
+  dedupe, and it never throws — the navbar renders on every page, so a Medusa
+  outage degrades to the drawer's empty state instead of taking the site down.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 ## Environment
@@ -76,6 +86,11 @@ Raw alert red is not legible enough for text in either mode (3.5:1 on the light
 blush surface, 3.8:1 on the dark page). Use `danger-foreground` for error text
 and `danger` only as a surface.
 
+The drawer's scrim bridges a `--backdrop` variable (in the unlayered HeroUI
+bridge block, alongside `--focus`/`--link`) keyed off ink navy rather than
+`foreground` — `foreground` inverts with the mode, and a backdrop has to dim
+the page in both light and dark, not flip to a light scrim in dark mode.
+
 `src/lib/design-tokens.ts` mirrors those values so the reference page at
 **`/design/tokens`** can render and measure every token in both modes;
 `design-tokens.test.ts` fails if the mirror and the CSS drift, and asserts that
@@ -112,10 +127,29 @@ what activating it switches to.
 ## HeroUI
 
 The shared primitives in `src/components/ui` — button, text input, textarea,
-select, checkbox, radio group, badge — are thin wrappers over **HeroUI v3**,
-which is built on React Aria Components. Use them rather than reaching for
-HeroUI directly; they translate brand vocabulary into HeroUI's and are where the
-accessibility guarantees are tested.
+select, checkbox, radio group, badge, drawer — are thin wrappers over **HeroUI
+v3**, which is built on React Aria Components. Use them rather than reaching
+for HeroUI directly; they translate brand vocabulary into HeroUI's and are
+where the accessibility guarantees are tested.
+
+Three non-obvious HeroUI facts the drawer wrapper (`ui/drawer.tsx`) exists
+because of:
+
+- **`DrawerCloseTrigger` falls back to its own `CloseIcon`, rendered without
+  `aria-hidden`, and hardcodes `aria-label="Close"`.** That breaks this repo's
+  rule that every glyph is decorative with the name on the surrounding
+  control, so `DrawerCloseButton` always supplies its own hidden icon and
+  requires a caller-provided `label`.
+- **Only `@heroui/react/<component>` subpaths resolve under Jest.** The
+  `moduleNameMapper` below points each one at `dist/components/$1/index.js`;
+  a non-component subpath like `@heroui/react/hooks/use-overlay-state` has no
+  matching directory and breaks every test that imports it. Use the render-prop
+  `close` a `Dialog`'s children function receives instead of HeroUI's
+  `useOverlayState`.
+- **Tailwind's `utilities` layer beats HeroUI's `components` layer.** Plain
+  token utilities passed as `className` — `bg-surface-soft`, `w-[31.25rem]` —
+  override HeroUI's BEM defaults with no specificity fights and no
+  `!important`. That's how the drawer panel gets its brand geometry.
 
 **HeroUI's component CSS is plain BEM** (`.button`, `.button--primary`), not
 generated utilities, so Tailwind does not need to `@source`-scan
@@ -234,7 +268,17 @@ is now structurally impossible. Do not add `node-linker=hoisted` or
 
 **Do not try to render `src/app/page.tsx`.** It is an async server component
 that fetches from a live backend; RTL cannot render it. Cover it with
-HTTP-level checks against the running app instead.
+HTTP-level checks against the running app instead. `Navbar` stays a sync
+component with a required `categories` prop for the same reason — see
+`src/components/nav` above.
+
+**The header search and the drawer's mobile search coexist in the DOM**, one
+hidden by CSS at each breakpoint. jsdom applies no CSS, so both are "visible"
+to a role query while the drawer is closed — scope with `within()` (or, once
+the drawer is open, query by `document`/`container` directly, since React
+Aria also marks the header `aria-hidden` while the drawer is open and its
+searchbox becomes unreachable by role). See `test/components/navbar.test.tsx`
+and `test/components/nav-drawer.test.tsx`.
 
 **The Jest config carries three HeroUI accommodations** (`jest.config.mjs`).
 Each is load-bearing; removing any one makes every test that imports a primitive
@@ -252,5 +296,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **215** of the repo's 241 tests. A smaller number
+The storefront currently holds **244** of the repo's 270 tests. A smaller number
 after your change means something was dropped.
