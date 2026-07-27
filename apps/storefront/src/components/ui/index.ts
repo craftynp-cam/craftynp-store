@@ -9,6 +9,7 @@ export {
   DrawerTrigger,
 } from "./drawer";
 export { ProductListItem } from "./product-list-item";
+export { QuantityStepper } from "./quantity-stepper";
 export { RadioGroup, type RadioOption } from "./radio-group";
 export { Select, type SelectOption } from "./select";
 export { TextInput, type FieldProps } from "./text-input";
