@@ -16,7 +16,7 @@ via the root scripts, never `pnpm --filter`.
 Layout:
 
 - `src/app` — routes, `layout.tsx`, `globals.css` (the token source of truth),
-  and the `/design` token reference page. Every route's `<main>` carries
+  and the `/design/tokens` token reference page. Every route's `<main>` carries
   `id="main-content" tabIndex={-1}` — that is what the navbar's skip link
   targets. Add both to any new page's `<main>`.
 - `src/components/ui` — the HeroUI-backed primitives, re-exported through
@@ -77,7 +77,7 @@ blush surface, 3.8:1 on the dark page). Use `danger-foreground` for error text
 and `danger` only as a surface.
 
 `src/lib/design-tokens.ts` mirrors those values so the reference page at
-**`/design`** can render and measure every token in both modes;
+**`/design/tokens`** can render and measure every token in both modes;
 `design-tokens.test.ts` fails if the mirror and the CSS drift, and asserts that
 every text-bearing pairing clears WCAG AA at 4.5:1 on every surface of its
 mode. Pairings below that threshold must be marked `decorative` with a note
