@@ -10,22 +10,6 @@ import { SkipLink } from "./skip-link";
 
 type NavbarProps = { categories: readonly NavCategory[] };
 
-/**
- * The persistent header: nav drawer trigger, logo, search, theme, account,
- * and cart, sticky at the top of every page. Tab order falls out of DOM
- * order — skip link, menu, logo, search, theme, account, cart — so nothing
- * here sets a positive tabIndex.
- *
- * There is no horizontal desktop nav — the drawer (CNP-25) is the site's
- * only navigation at every breakpoint. `categories` is a required prop
- * rather than fetched here, since RTL cannot render an async server
- * component; `layout.tsx` awaits `fetchNavCategories()` and passes it down.
- * The search field is duplicated into the drawer below `md`, so it's hidden
- * here at that breakpoint — see `NavDrawer`.
- *
- * `/search` (CNP-34) and the account/cart destinations themselves are still
- * out of scope; this renders their entry points only.
- */
 export function Navbar({ categories }: NavbarProps) {
   return (
     <>

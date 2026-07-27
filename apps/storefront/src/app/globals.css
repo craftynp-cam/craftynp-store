@@ -241,11 +241,6 @@
   --field-border: var(--t-border);
   --field-border-width: 1px;
 
-  /*
-   * The drawer's scrim. Keyed off ink navy rather than `foreground`, which
-   * inverts with the mode — a backdrop has to dim the page in both light and
-   * dark, not flip to a light scrim in dark mode.
-   */
   --backdrop: color-mix(in srgb, var(--color-ink) 55%, transparent);
 
   --radius: var(--radius-md);

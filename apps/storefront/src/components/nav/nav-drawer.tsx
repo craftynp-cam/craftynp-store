@@ -11,13 +11,6 @@ import { NavSearch } from "./nav-search";
 
 type NavDrawerProps = { categories: readonly NavCategory[] };
 
-/**
- * The site's only navigation (CNP-25) — there is no horizontal desktop nav,
- * so this is the primary way to reach any category at every breakpoint, not
- * a small-screen fallback. `close` is threaded onto every link: Next's
- * client navigation does not unmount the overlay portal on its own, so
- * without it the drawer would stay open over the destination page.
- */
 export function NavDrawer({ categories }: NavDrawerProps) {
   return (
     <Drawer>
@@ -51,10 +44,6 @@ export function NavDrawer({ categories }: NavDrawerProps) {
                     className="group flex items-center justify-between gap-4 border-b border-border px-6 py-4 text-lg font-bold text-primary transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
                   >
                     All Products
-                    {/* Decorative only: gold measures ~1.4-1.8:1 on the blush
-                        surface, well under any contrast threshold. The row is
-                        already a link with visible text, so the arrow adds no
-                        meaning — don't turn it into the row's affordance. */}
                     <ArrowRight
                       aria-hidden="true"
                       size={20}
