@@ -25,6 +25,8 @@
     "@craftynp/types": "workspace:*",
     "@medusajs/admin-sdk": "2.18.0",
     "@medusajs/admin-shared": "2.18.0",
+    "@medusajs/auth": "2.18.0",
+    "@medusajs/auth-google": "2.18.0",
     "@medusajs/caching": "2.18.0",
     "@medusajs/cli": "2.18.0",
     "@medusajs/dashboard": "2.18.0",
