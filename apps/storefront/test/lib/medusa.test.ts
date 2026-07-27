@@ -14,7 +14,7 @@ describe("medusa sdk client", () => {
     delete process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL;
     process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY = "pk_test";
 
-    await expect(import("./medusa")).rejects.toThrow(
+    await expect(import("../../src/lib/medusa")).rejects.toThrow(
       "NEXT_PUBLIC_MEDUSA_BACKEND_URL is not set",
     );
   });
@@ -23,7 +23,7 @@ describe("medusa sdk client", () => {
     process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL = "http://localhost:9000";
     delete process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY;
 
-    await expect(import("./medusa")).rejects.toThrow(
+    await expect(import("../../src/lib/medusa")).rejects.toThrow(
       "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY is not set",
     );
   });
@@ -32,7 +32,7 @@ describe("medusa sdk client", () => {
     process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL = "http://localhost:9000";
     process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY = "pk_test";
 
-    const { sdk } = await import("./medusa");
+    const { sdk } = await import("../../src/lib/medusa");
     expect(sdk.store).toBeDefined();
   });
 });

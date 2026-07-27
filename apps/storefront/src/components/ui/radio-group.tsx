@@ -6,7 +6,7 @@ import { Label } from "@heroui/react/label";
 import { Radio } from "@heroui/react/radio";
 import { RadioGroup as HeroRadioGroup } from "@heroui/react/radio-group";
 
-import type { FieldProps } from "./text-input";
+import type { FieldProps } from ".";
 
 export type RadioOption = {
   value: string;

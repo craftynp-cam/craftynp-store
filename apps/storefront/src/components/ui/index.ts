@@ -5,3 +5,5 @@ export { RadioGroup, type RadioOption } from "./radio-group";
 export { Select, type SelectOption } from "./select";
 export { TextInput, type FieldProps } from "./text-input";
 export { Textarea } from "./textarea";
+export { ProductListItem } from "./product-list-item";
+export { ThemeToggle } from "./theme-toggle";

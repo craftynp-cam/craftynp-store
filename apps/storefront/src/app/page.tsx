@@ -1,5 +1,5 @@
 import { lineItemCustomizationSchema } from "@craftynp/types";
-import { ProductListItem } from "@/components/product-list-item";
+import { ProductListItem } from "@/components";
 import { sdk } from "@/lib/medusa";
 
 export default async function Home() {

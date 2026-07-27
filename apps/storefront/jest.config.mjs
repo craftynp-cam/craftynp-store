@@ -7,7 +7,7 @@ const createJestConfig = nextJest({ dir: "./" });
 const config = {
   testEnvironment: "jsdom",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
-  roots: ["<rootDir>/src"],
+  roots: ["<rootDir>/test"],
   // Deliberately NOT setting customExportConditions to include "import".
   // Doing so applies to every package, so any dependency whose exports map
   // lists "import" before "require" (dedent, via tailwind-variants) resolves

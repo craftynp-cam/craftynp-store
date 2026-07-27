@@ -278,7 +278,9 @@ Run `pnpm run lint`, `pnpm run typecheck`, and `pnpm run test` before opening a 
 request.
 
 Full details, including the GitHub rulesets that enforce this, are in
-[AGENTS.md](AGENTS.md).
+[AGENTS.md](AGENTS.md). Conventions specific to one app live alongside it, in
+[apps/storefront/AGENTS.md](apps/storefront/AGENTS.md) and
+[apps/medusa/AGENTS.md](apps/medusa/AGENTS.md).
 
 ## License
 

@@ -6,7 +6,7 @@ import { Label } from "@heroui/react/label";
 import { ListBox } from "@heroui/react/list-box";
 import { Select as HeroSelect } from "@heroui/react/select";
 
-import type { FieldProps } from "./text-input";
+import type { FieldProps } from ".";
 
 export type SelectOption = {
   /** Submitted value, and the React key. */

@@ -17,7 +17,10 @@ const MINIMUM_RATIO = 3;
 /** The token globals.css assigns to HeroUI's --focus. */
 const RING_TOKEN = "primary";
 
-const css = readFileSync(join(__dirname, "..", "app", "globals.css"), "utf8");
+const css = readFileSync(
+  join(__dirname, "..", "..", "src", "app", "globals.css"),
+  "utf8",
+);
 
 describe("focus ring", () => {
   it("is wired to the token this suite measures", () => {

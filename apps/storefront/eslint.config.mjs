@@ -22,7 +22,7 @@ const eslintConfig = defineConfig([
     settings: { react: { version: "19.2" } },
   },
   {
-    files: ["src/**/*.ts", "src/**/*.tsx"],
+    files: ["{src,test}/**/*.ts", "{src,test}/**/*.tsx"],
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
     },
