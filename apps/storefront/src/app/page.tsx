@@ -12,8 +12,8 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-2xl p-8">
-      <h1 className="text-2xl font-semibold">The Crafty NP</h1>
-      <p className="mt-2 text-sm text-gray-600">
+      <h1 className="font-display text-2xl">The Crafty NP</h1>
+      <p className="mt-2 text-sm text-foreground-muted">
         Scaffold check. Shared types contract: {contractOk ? "ok" : "failed"}.
       </p>
       <ul className="mt-6 space-y-2">

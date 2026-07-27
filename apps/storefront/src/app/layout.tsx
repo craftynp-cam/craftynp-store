@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const libreBaskerville = Libre_Baskerville({
+  variable: "--font-libre-baskerville",
   subsets: ["latin"],
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const sourceSans3 = Source_Sans_3({
+  variable: "--font-source-sans-3",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -25,7 +29,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${libreBaskerville.variable} ${sourceSans3.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -224,6 +224,26 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
   `public-hoist-pattern` to `.npmrc`: pnpm's non-hoisting default is what keeps
   the two React majors apart.
 
+### Design tokens
+
+The brand palette, type scale, spacing scale, and radii are declared once, in
+`apps/storefront/src/app/globals.css`, as a Tailwind v4 `@theme` block.
+**Components use the generated utilities — `bg-gold`, `text-foreground-muted`,
+`rounded-lg`, `font-display` — and never a raw hex value.** Prefer the semantic
+aliases (`background`, `foreground`, `primary`, `danger`) over the raw brand
+names; they carry intent and survive a palette change.
+
+Greys are ink navy composited at reduced opacity over the page background
+(`ink-muted`, `ink-subtle`, `border`, `border-strong`). Do not introduce a new
+grey hue.
+
+`src/lib/design-tokens.ts` mirrors those values so the reference page at
+**`/design`** can render and measure every token; `design-tokens.test.ts` fails
+if the mirror and the CSS drift, and asserts that every text-bearing pairing
+clears WCAG AA at 4.5:1. Pairings below that threshold must be marked
+`decorative` with a note explaining why. Change a token in both files, or the
+suite will tell you.
+
 ### Testing
 
 - **Jest**, with a **per-workspace config** rather than one root config, because
@@ -255,8 +275,9 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
 - **Do not try to render `src/app/page.tsx`.** It is an async server component
   that fetches from a live backend; RTL cannot render it. Cover it with
   HTTP-level checks against the running app instead.
-- Current suite: **30 tests** across the three workspaces (types 17, medusa 9,
-  storefront 4). A smaller number after your change means something was dropped.
+- Current suite: **78 tests** across the three workspaces (types 17, medusa 9,
+  storefront 52). A smaller number after your change means something was
+  dropped.
 
 ## Guidance for agents
 
