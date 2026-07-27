@@ -33,9 +33,35 @@ function Section({
   );
 }
 
+/**
+ * One entry per component demoed below, in the order they appear. Add to
+ * this list — and wrap the new demo in a `<div id={…}>` — as components join
+ * the page; the nav needs no other changes.
+ */
+const componentNavEntries = [{ id: "product-card", label: "Product Card" }];
+
+function ComponentNav() {
+  return (
+    <nav aria-label="Components" className="hidden lg:block">
+      <ul className="sticky top-16 space-y-1">
+        {componentNavEntries.map((entry) => (
+          <li key={entry.id}>
+            <a
+              href={`#${entry.id}`}
+              className="block rounded-md px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-soft hover:text-foreground"
+            >
+              {entry.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 export default function ComponentsPage() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-16">
+    <main className="mx-auto max-w-6xl px-6 py-16">
       <h1 className="font-display text-4xl">Components</h1>
       <p className="mt-4 max-w-2xl text-lg text-foreground-muted">
         Higher-level components, assembled from the{" "}
@@ -60,92 +86,98 @@ export default function ComponentsPage() {
         </p>
       </div>
 
-      <Section
-        title="Product card"
-        description="Shows image, category, name and price. Customizable products get a gold badge; ready-made get a mint one. Sale items show both prices and a text 'Sale' indicator, never colour alone."
-      >
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <ProductCard
-            href="/products/custom-die-cut-stickers"
-            title="Custom Die-Cut Stickers"
-            category="Stickers"
-            price="from $0.55"
-            isCustomizable
-          />
-          <ProductCard
-            href="/products/wildflower-acrylic-keychain"
-            title="Wildflower Acrylic Keychain"
-            category="Keychains"
-            price="$9.00"
-            originalPrice="$12.00"
-          />
-          <ProductCard
-            href="/products/embroidered-tote-bag"
-            title="Embroidered Canvas Tote Bag With a Very Long Name"
-            category="Bags"
-            price="$24.00"
-          />
-        </div>
-      </Section>
+      <div className="mt-12 lg:grid lg:grid-cols-[180px_1fr] lg:gap-12">
+        <ComponentNav />
 
-      <Section
-        title="Missing image"
-        description="A tokenised placeholder fills the fixed aspect ratio rather than leaving the card empty."
-      >
-        <div className="max-w-xs">
-          <ProductCard
-            href="/products/coming-soon"
-            title="Coming Soon"
-            category="Seasonal"
-            price="from $5.00"
-          />
-        </div>
-      </Section>
+        <div id="product-card">
+          <Section
+            title="Product card"
+            description="Shows image, category, name and price. Customizable products get a gold badge; ready-made get a mint one. Sale items show both prices and a text 'Sale' indicator, never colour alone."
+          >
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <ProductCard
+                href="/products/custom-die-cut-stickers"
+                title="Custom Die-Cut Stickers"
+                category="Stickers"
+                price="from $0.55"
+                isCustomizable
+              />
+              <ProductCard
+                href="/products/wildflower-acrylic-keychain"
+                title="Wildflower Acrylic Keychain"
+                category="Keychains"
+                price="$9.00"
+                originalPrice="$12.00"
+              />
+              <ProductCard
+                href="/products/embroidered-tote-bag"
+                title="Embroidered Canvas Tote Bag With a Very Long Name"
+                category="Bags"
+                price="$24.00"
+              />
+            </div>
+          </Section>
 
-      <Section
-        title="Loading"
-        description="Shown while a product list is still fetching. The skeleton matches the card's shape exactly, so nothing shifts when the real content arrives."
-      >
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <ProductCard isLoading />
-          <ProductCard isLoading />
-          <ProductCard isLoading />
-        </div>
-      </Section>
+          <Section
+            title="Missing image"
+            description="A tokenised placeholder fills the fixed aspect ratio rather than leaving the card empty."
+          >
+            <div className="max-w-xs">
+              <ProductCard
+                href="/products/coming-soon"
+                title="Coming Soon"
+                category="Seasonal"
+                price="from $5.00"
+              />
+            </div>
+          </Section>
 
-      <Section
-        title="In grid"
-        description="Several cards in a responsive grid. Each reserves its image space up front, so nothing shifts as thumbnails load."
-      >
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <ProductCard
-            href="/products/custom-die-cut-stickers"
-            title="Custom Die-Cut Stickers"
-            category="Stickers"
-            price="from $0.55"
-            isCustomizable
-          />
-          <ProductCard
-            href="/products/wildflower-acrylic-keychain"
-            title="Wildflower Acrylic Keychain"
-            category="Keychains"
-            price="$9.00"
-            originalPrice="$12.00"
-          />
-          <ProductCard
-            href="/products/enamel-pin-set"
-            title="Enamel Pin Set"
-            category="Pins"
-            price="$14.00"
-          />
-          <ProductCard
-            href="/products/greeting-card-pack"
-            title="Greeting Card Pack"
-            category="Cards"
-            price="from $3.00"
-          />
+          <Section
+            title="Loading"
+            description="Shown while a product list is still fetching. The skeleton matches the card's shape exactly, so nothing shifts when the real content arrives."
+          >
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <ProductCard isLoading />
+              <ProductCard isLoading />
+              <ProductCard isLoading />
+            </div>
+          </Section>
+
+          <Section
+            title="In grid"
+            description="Several cards in a responsive grid. Each reserves its image space up front, so nothing shifts as thumbnails load."
+          >
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <ProductCard
+                href="/products/custom-die-cut-stickers"
+                title="Custom Die-Cut Stickers"
+                category="Stickers"
+                price="from $0.55"
+                isCustomizable
+              />
+              <ProductCard
+                href="/products/wildflower-acrylic-keychain"
+                title="Wildflower Acrylic Keychain"
+                category="Keychains"
+                price="$9.00"
+                originalPrice="$12.00"
+              />
+              <ProductCard
+                href="/products/enamel-pin-set"
+                title="Enamel Pin Set"
+                category="Pins"
+                price="$14.00"
+              />
+              <ProductCard
+                href="/products/greeting-card-pack"
+                title="Greeting Card Pack"
+                category="Cards"
+                price="from $3.00"
+              />
+            </div>
+          </Section>
         </div>
-      </Section>
+      </div>
     </main>
   );
 }
