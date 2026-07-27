@@ -1,8 +1,8 @@
-import { MedusaError } from "@medusajs/framework/utils";
 import {
   lineItemCustomizationSchema,
   type LineItemCustomization,
 } from "@craftynp/types";
+import { MedusaError } from "@medusajs/framework/utils";
 
 export function validateCustomization(input: unknown): LineItemCustomization {
   const result = lineItemCustomizationSchema.safeParse(input);

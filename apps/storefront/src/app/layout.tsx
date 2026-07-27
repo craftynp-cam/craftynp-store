@@ -1,6 +1,6 @@
+import { themeInitScript } from "@/lib/theme";
 import type { Metadata } from "next";
 import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
-import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
 
 const libreBaskerville = Libre_Baskerville({
