@@ -6,10 +6,9 @@ describe("SkipLink", () => {
   it("links to the page's main content", () => {
     render(<SkipLink />);
 
-    expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute(
-      "href",
-      "#main-content",
-    );
+    expect(
+      screen.getByRole("link", { name: "Skip to content" }),
+    ).toHaveAttribute("href", "#main-content");
   });
 
   it("is visually hidden until it receives focus", () => {

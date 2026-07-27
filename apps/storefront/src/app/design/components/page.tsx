@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import { ProductCard, ThemeToggle } from "@/components";
 
+import { CartCardDemo } from "./cart-card-demo";
+
 export const metadata: Metadata = {
   title: "Components — The Crafty NP",
   description:
@@ -38,7 +40,10 @@ function Section({
  * this list — and wrap the new demo in a `<div id={…}>` — as components join
  * the page; the nav needs no other changes.
  */
-const componentNavEntries = [{ id: "product-card", label: "Product Card" }];
+const componentNavEntries = [
+  { id: "product-card", label: "Product Card" },
+  { id: "cart-card", label: "Cart Card" },
+];
 
 function ComponentNav() {
   return (
@@ -179,6 +184,89 @@ export default function ComponentsPage() {
                 price="from $3.00"
               />
             </div>
+          </Section>
+        </div>
+
+        <div id="cart-card">
+          <Section
+            title="Cart card"
+            description="The cart drawer's line item (CNP-47). The badge always matches the product card it came from. Custom detail rows are dormant until the configurator ships in Release 3, but render here to prove the layout."
+          >
+            <CartCardDemo
+              initialLines={[
+                {
+                  id: "ready-made",
+                  href: "/products/wildflower-acrylic-keychain",
+                  title: "Wildflower Acrylic Keychain",
+                  unitPrice: 9,
+                  currencyCode: "usd",
+                  quantity: 2,
+                },
+                {
+                  id: "customizable",
+                  href: "/products/custom-die-cut-stickers",
+                  title: "Custom Die-Cut Stickers",
+                  unitPrice: 0.75,
+                  currencyCode: "usd",
+                  quantity: 50,
+                  isCustomizable: true,
+                  details: [
+                    { label: "Size", value: '3" · matte' },
+                    { label: "Text", value: "Sarah's Sweet Shop" },
+                    { label: "File", value: "logo-final.png" },
+                  ],
+                },
+              ]}
+            />
+          </Section>
+
+          <Section
+            title="Long detail values"
+            description="A custom text or filename far longer than the panel truncates with an ellipsis rather than widening the card (AC 3)."
+          >
+            <CartCardDemo
+              initialLines={[
+                {
+                  id: "long-details",
+                  href: "/products/custom-die-cut-stickers",
+                  title: "Custom Die-Cut Stickers",
+                  unitPrice: 0.75,
+                  currencyCode: "usd",
+                  quantity: 25,
+                  isCustomizable: true,
+                  details: [
+                    {
+                      label: "Text",
+                      value:
+                        "Please make sure the logo is centered and the drop shadow matches our brand guide exactly — see attached PDF for reference",
+                    },
+                    {
+                      label: "File",
+                      value:
+                        "sarahs-sweet-shop-final-logo-v3-approved-for-print-2026.png",
+                    },
+                  ],
+                },
+              ]}
+            />
+          </Section>
+
+          <Section
+            title="Missing image"
+            description="Uses the same diagonal placeholder as the product card, so a cart line without a thumbnail still reads as part of the same family."
+          >
+            <CartCardDemo
+              initialLines={[
+                {
+                  id: "missing-image",
+                  href: "/products/coming-soon",
+                  title: "Coming Soon",
+                  unitPrice: 5,
+                  currencyCode: "usd",
+                  quantity: 1,
+                },
+              ]}
+            />
           </Section>
         </div>
       </div>
