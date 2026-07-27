@@ -14,7 +14,7 @@ import {
   typeScale,
 } from "@/lib/design-tokens";
 
-const srcDir = join(__dirname, "..");
+const srcDir = join(__dirname, "..", "..", "src");
 
 /** Prettier reflows long declarations, so compare everything on one line. */
 function normalise(css: string): string {
@@ -57,7 +57,7 @@ describe("palette", () => {
     const componentSources = [
       join(srcDir, "app", "page.tsx"),
       join(srcDir, "app", "design", "page.tsx"),
-      join(srcDir, "components", "product-list-item.tsx"),
+      join(srcDir, "components", "ui", "product-list-item.tsx"),
     ];
 
     for (const source of componentSources) {

@@ -268,7 +268,7 @@ switches the tokens _and_ the native form controls, scrollbars, and caret. Do
 not reintroduce a `prefers-color-scheme` block — a test asserts its absence,
 because a second mechanism would have to be kept in sync with this one.
 
-`ThemeToggle` (`src/components/theme-toggle.tsx`) writes that attribute and
+`ThemeToggle` (`src/components/ui/theme-toggle.tsx`) writes that attribute and
 persists to `localStorage`. Two things about it are load-bearing:
 
 - It reads the stored value through `useSyncExternalStore`, not `useState` in
@@ -292,6 +292,23 @@ input, textarea, select, checkbox, radio group, badge — are thin wrappers over
 **HeroUI v3**, which is built on React Aria Components. Use them rather than
 reaching for HeroUI directly; they translate brand vocabulary into HeroUI's and
 are where the accessibility guarantees are tested.
+
+### Component imports
+
+`src/components/index.ts` is the barrel: it re-exports everything under
+`src/components/ui`, so the whole component surface is one import object.
+
+- **From outside the components directory** — pages, tests, anywhere — import
+  from `@/components`: `import { Button, ThemeToggle } from "@/components";`.
+  Do not reach past the barrel to a file path like
+  `@/components/ui/button`.
+- **From inside the components directory**, import from `"."`, which resolves
+  to the nearest barrel: `import type { FieldProps } from ".";` in
+  `ui/textarea.tsx`. Do not use sibling paths like `"./text-input"`.
+
+When you add a component, export it from `src/components/ui/index.ts` in the
+same call — an unexported file is unreachable through the barrel and will fail
+to import from anywhere else.
 
 **HeroUI's component CSS is plain BEM** (`.button`, `.button--primary`), not
 generated utilities, so Tailwind does not need to `@source`-scan
@@ -344,9 +361,28 @@ for `apps/medusa`, which runs React 18).
   - `packages/types` and `apps/medusa` — node environment, `@swc/jest`
     transform.
   - `apps/storefront` — jsdom, via `next/jest`.
-- Tests live **beside the code they cover**, named `*.test.ts` — or `*.test.tsx`
-  when the test renders JSX (e.g. `src/lib/validate-customization.ts` →
-  `src/lib/validate-customization.test.ts`).
+- Test files are named `*.test.ts` — or `*.test.tsx` when the test renders JSX
+  — and where they live differs by workspace:
+  - `packages/types` and `apps/medusa` keep tests **beside the code they
+    cover** (`src/lib/validate-customization.ts` →
+    `src/lib/validate-customization.test.ts`). Both configs set
+    `roots: ["<rootDir>/src"]`.
+  - `apps/storefront` keeps tests in a **separate `test/` tree that mirrors
+    `src/`** — a test sits in the same-named parent directory as its
+    production counterpart (`src/components/ui/button.tsx` →
+    `test/components/button.test.tsx`, `src/lib/medusa.ts` →
+    `test/lib/medusa.test.ts`). Its config sets `roots: ["<rootDir>/test"]`,
+    so a test left under `src/` is silently never run.
+
+  In the storefront, import the code under test through the `@/` alias
+  (`@/lib/contrast`, `@/components`) — a relative path out of `test/` will not
+  resolve. Tests that read source files off disk (`design-tokens.test.ts`,
+  `focus-ring.test.ts`) must reach back two levels and into `src` from
+  `__dirname`, not one.
+
+  Note that `pnpm run lint` runs `eslint src` in the storefront, so the
+  `test/` tree is typechecked but not linted.
+
 - A test must be able to fail. Write it so you have seen it fail for the right
   reason before you make it pass; a test that passes against a broken
   implementation is worse than no test.
@@ -354,7 +390,7 @@ for `apps/medusa`, which runs React 18).
   19-compatible) and `@testing-library/jest-dom` are storefront devDependencies,
   and `apps/storefront/jest.setup.ts` imports the jest-dom matchers above the
   Streams/`TextEncoder` polyfills that `@medusajs/js-sdk` needs — leave those
-  polyfills in place. `src/components/product-list-item.test.tsx` is the worked
+  polyfills in place. `test/components/product-list-item.test.tsx` is the worked
   example.
 
   This was previously blocked: under npm, React 18 hoisted to the root

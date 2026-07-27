@@ -6,7 +6,7 @@ import { Label } from "@heroui/react/label";
 import { TextArea as HeroTextArea } from "@heroui/react/textarea";
 import { TextField } from "@heroui/react/textfield";
 
-import type { FieldProps } from "./text-input";
+import type { FieldProps } from ".";
 
 type TextareaProps = Omit<React.ComponentProps<typeof TextField>, "children"> &
   FieldProps & {

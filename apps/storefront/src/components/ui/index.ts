@@ -1,4 +1,3 @@
-import { ProductListItem } from "./product-list-item";
 export { Badge, type BadgeTone } from "./badge";
 export { Button, type ButtonSize, type ButtonVariant } from "./button";
 export { Checkbox } from "./checkbox";
