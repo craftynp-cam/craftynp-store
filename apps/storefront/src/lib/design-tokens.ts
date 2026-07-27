@@ -1,132 +1,341 @@
-import { mixOver, parseHex, toHex } from "@/lib/contrast";
+import { contrastRatio, mixOver, parseHex, toHex } from "@/lib/contrast";
 
 /**
  * A TypeScript mirror of the tokens defined in `src/app/globals.css`, so the
  * reference page can measure and document them. `design-tokens.test.ts` fails
- * if the two ever drift.
+ * if the two ever drift, and enforces the contrast floor in both modes.
  */
+
+export const brandColors = {
+  gold: "#ebb805",
+  mint: "#85dfc3",
+  blush: "#ecdad1",
+  ink: "#04133b",
+  "off-white": "#fbfaf7",
+  "muted-black": "#1f1e1c",
+  alert: "#b4574a",
+  // Tailwind's own --color-white. Not a brand colour; the light-mode card surface.
+  white: "#ffffff",
+} as const;
+
+export type BrandName = keyof typeof brandColors;
+
+export type ColorSpec =
+  { brand: BrandName } | { mix: BrandName; percent: number; over: BrandName };
+
+/** The exact CSS the token declares, for the drift check. */
+export function cssValue(spec: ColorSpec): string {
+  if ("brand" in spec) return `var(--color-${spec.brand})`;
+  return `color-mix(in srgb, var(--color-${spec.mix}) ${spec.percent}%, var(--color-${spec.over}))`;
+}
+
+export function resolveHex(spec: ColorSpec): string {
+  if ("brand" in spec) return brandColors[spec.brand];
+  return toHex(
+    mixOver(
+      parseHex(brandColors[spec.mix]),
+      parseHex(brandColors[spec.over]),
+      spec.percent / 100,
+    ),
+  );
+}
+
+export const modes = ["light", "dark"] as const;
+export type Mode = (typeof modes)[number];
 
 export type PaletteToken = {
   name: string;
-  utility: string;
-  hex: string;
+  utility: BrandName;
   usage: string;
 };
 
 export const palette: readonly PaletteToken[] = [
-  {
-    name: "Warm gold",
-    utility: "gold",
-    hex: "#ebb805",
-    usage: "Accent surfaces, badges, highlights.",
-  },
-  {
-    name: "Mint",
-    utility: "mint",
-    hex: "#85dfc3",
-    usage: "Success surfaces, secondary accents.",
-  },
-  {
-    name: "Blush cream",
-    utility: "blush",
-    hex: "#ecdad1",
-    usage: "Soft section backgrounds.",
-  },
+  { name: "Warm gold", utility: "gold", usage: "Accent surfaces, badges." },
+  { name: "Mint", utility: "mint", usage: "Success surfaces." },
+  { name: "Blush cream", utility: "blush", usage: "Soft section surfaces." },
   {
     name: "Ink navy",
     utility: "ink",
-    hex: "#04133b",
-    usage: "Primary text, primary buttons.",
+    usage: "Light-mode text; dark-mode page.",
   },
   {
     name: "Off-white",
     utility: "off-white",
-    hex: "#fbfaf7",
-    usage: "Page background, text on dark surfaces.",
+    usage: "Light-mode page; dark-mode text.",
   },
   {
     name: "Muted black",
     utility: "muted-black",
-    hex: "#1f1e1c",
-    usage: "Deep neutral surfaces, footer.",
+    usage: "Warm near-black for light-mode chrome. Unused in dark mode.",
   },
-  {
-    name: "Alert red",
-    utility: "alert",
-    hex: "#b4574a",
-    usage: "Errors, destructive actions.",
-  },
-];
-
-const inkHex = "#04133b";
-const backgroundHex = "#fbfaf7";
-
-function inkAt(alpha: number): string {
-  return toHex(mixOver(parseHex(inkHex), parseHex(backgroundHex), alpha));
-}
-
-export type DerivedToken = PaletteToken & { inkOpacity: number };
-
-/** Greys come from ink navy at reduced opacity — never from a new hue. */
-export const derivedNeutrals: readonly DerivedToken[] = [
-  {
-    name: "Ink muted",
-    utility: "ink-muted",
-    inkOpacity: 0.6,
-    hex: inkAt(0.6),
-    usage: "Secondary body text.",
-  },
-  {
-    name: "Ink subtle",
-    utility: "ink-subtle",
-    inkOpacity: 0.4,
-    hex: inkAt(0.4),
-    usage: "Disabled text, placeholder text (decorative).",
-  },
-  {
-    name: "Border",
-    utility: "border",
-    inkOpacity: 0.16,
-    hex: inkAt(0.16),
-    usage: "Default hairline borders and dividers.",
-  },
-  {
-    name: "Border strong",
-    utility: "border-strong",
-    inkOpacity: 0.32,
-    hex: inkAt(0.32),
-    usage: "Emphasised borders, input outlines.",
-  },
+  { name: "Alert red", utility: "alert", usage: "Error surfaces." },
 ];
 
 export type SemanticToken = {
   token: string;
-  resolvesTo: string;
   usage: string;
+  light: ColorSpec;
+  dark: ColorSpec;
 };
 
+/**
+ * Light composites ink navy over off-white; dark composites off-white over ink
+ * navy. Same seven colours, mirrored.
+ */
 export const semanticTokens: readonly SemanticToken[] = [
   {
     token: "background",
-    resolvesTo: "off-white",
     usage: "Page background.",
+    light: { brand: "off-white" },
+    dark: { brand: "ink" },
   },
-  { token: "surface", resolvesTo: "#ffffff", usage: "Cards and panels." },
-  { token: "foreground", resolvesTo: "ink", usage: "Body text." },
+  {
+    token: "surface",
+    usage: "Cards and panels.",
+    light: { brand: "white" },
+    dark: { mix: "off-white", percent: 7, over: "ink" },
+  },
+  {
+    token: "surface-soft",
+    usage: "Tinted section bands, table headers.",
+    light: { brand: "blush" },
+    dark: { mix: "blush", percent: 14, over: "ink" },
+  },
+  {
+    token: "foreground",
+    usage: "Body text.",
+    light: { brand: "ink" },
+    dark: { brand: "off-white" },
+  },
   {
     token: "foreground-muted",
-    resolvesTo: "ink-muted",
-    usage: "Secondary text.",
+    usage: "Secondary text. Legible on every surface in its mode.",
+    light: { mix: "ink", percent: 68, over: "off-white" },
+    dark: { mix: "off-white", percent: 60, over: "ink" },
   },
-  { token: "primary", resolvesTo: "ink", usage: "Primary action surface." },
-  { token: "on-primary", resolvesTo: "off-white", usage: "Text on primary." },
-  { token: "accent", resolvesTo: "gold", usage: "Accent surface." },
-  { token: "on-accent", resolvesTo: "ink", usage: "Text on accent." },
-  { token: "success", resolvesTo: "mint", usage: "Success surface." },
-  { token: "on-success", resolvesTo: "ink", usage: "Text on success." },
-  { token: "danger", resolvesTo: "alert", usage: "Error surface." },
-  { token: "on-danger", resolvesTo: "off-white", usage: "Text on danger." },
+  {
+    token: "foreground-subtle",
+    usage: "Placeholder and disabled text.",
+    light: { mix: "ink", percent: 40, over: "off-white" },
+    dark: { mix: "off-white", percent: 40, over: "ink" },
+  },
+  {
+    token: "border",
+    usage: "Hairline borders and dividers.",
+    light: { mix: "ink", percent: 16, over: "off-white" },
+    dark: { mix: "off-white", percent: 18, over: "ink" },
+  },
+  {
+    token: "border-strong",
+    usage: "Emphasised borders, input outlines.",
+    light: { mix: "ink", percent: 32, over: "off-white" },
+    dark: { mix: "off-white", percent: 36, over: "ink" },
+  },
+  {
+    token: "primary",
+    usage: "Primary action surface. Inverts with the mode.",
+    light: { brand: "ink" },
+    dark: { brand: "off-white" },
+  },
+  {
+    token: "on-primary",
+    usage: "Text on primary.",
+    light: { brand: "off-white" },
+    dark: { brand: "ink" },
+  },
+  {
+    token: "accent",
+    usage: "Accent surface.",
+    light: { brand: "gold" },
+    dark: { brand: "gold" },
+  },
+  {
+    token: "on-accent",
+    usage: "Text on accent.",
+    light: { brand: "ink" },
+    dark: { brand: "ink" },
+  },
+  {
+    token: "success",
+    usage: "Success surface.",
+    light: { brand: "mint" },
+    dark: { brand: "mint" },
+  },
+  {
+    token: "on-success",
+    usage: "Text on success.",
+    light: { brand: "ink" },
+    dark: { brand: "ink" },
+  },
+  {
+    token: "danger",
+    usage: "Error surface.",
+    light: { brand: "alert" },
+    dark: { brand: "alert" },
+  },
+  {
+    token: "on-danger",
+    usage: "Text on danger.",
+    light: { brand: "off-white" },
+    dark: { brand: "off-white" },
+  },
+  {
+    token: "danger-foreground",
+    usage: "Error text and icons. Raw alert red is not legible enough.",
+    light: { mix: "ink", percent: 20, over: "alert" },
+    dark: { mix: "off-white", percent: 35, over: "alert" },
+  },
 ];
+
+const tokensByName = new Map(
+  semanticTokens.map((token) => [token.token, token]),
+);
+
+export function tokenHex(name: string, mode: Mode): string {
+  const semantic = tokensByName.get(name);
+  if (semantic) return resolveHex(semantic[mode]);
+
+  const brand = brandColors[name as BrandName];
+  if (brand) return brand;
+
+  throw new Error(`Unknown token "${name}"`);
+}
+
+/** Every token that paints a background other text sits on. */
+export const surfaceTokens = ["background", "surface", "surface-soft"] as const;
+
+type Role = { name: string; note?: string };
+
+/**
+ * Which colours may carry text on each mode's surfaces. `text` roles are held
+ * to 4.5:1 by the test suite; `decorative` roles are exempt and must say why.
+ */
+const roles: Record<
+  Mode,
+  { text: readonly Role[]; decorative: readonly Role[] }
+> = {
+  light: {
+    text: [
+      { name: "foreground" },
+      { name: "foreground-muted" },
+      { name: "danger-foreground" },
+    ],
+    decorative: [
+      {
+        name: "foreground-subtle",
+        note: "Placeholder and disabled text, which WCAG exempts from 4.5:1.",
+      },
+      { name: "border", note: "Hairline divider. Non-text." },
+      { name: "border-strong", note: "Input outline. Non-text." },
+      {
+        name: "gold",
+        note: "Under 2:1 on light surfaces — fills, rules, and icons only. Never text.",
+      },
+      {
+        name: "mint",
+        note: "Under 2:1 on light surfaces — fills and rules only. Never text.",
+      },
+      {
+        name: "blush",
+        note: "A surface tint on light backgrounds, not a text colour.",
+      },
+      {
+        name: "alert",
+        note: "Raw alert red drops to 3.5:1 on the blush surface. Use danger-foreground for text.",
+      },
+    ],
+  },
+  dark: {
+    text: [
+      { name: "foreground" },
+      { name: "foreground-muted" },
+      { name: "danger-foreground" },
+      {
+        name: "gold",
+        note: "Inverted: gold clears AA on every dark surface, so it may carry accent text.",
+      },
+      { name: "mint", note: "Inverted: mint clears AA on every dark surface." },
+      {
+        name: "blush",
+        note: "Inverted: blush clears AA on every dark surface.",
+      },
+    ],
+    decorative: [
+      {
+        name: "foreground-subtle",
+        note: "Placeholder and disabled text, which WCAG exempts from 4.5:1.",
+      },
+      { name: "border", note: "Hairline divider. Non-text." },
+      { name: "border-strong", note: "Input outline. Non-text." },
+      {
+        name: "alert",
+        note: "Raw alert red reaches only 3.8:1 on the dark page. Use danger-foreground for text.",
+      },
+    ],
+  },
+};
+
+/** Pairs that must hold whatever surface they sit on. */
+const onPairs = [
+  ["on-primary", "primary"],
+  ["on-accent", "accent"],
+  ["on-success", "success"],
+  ["on-danger", "danger"],
+] as const;
+
+export type PairingIntent = "text" | "decorative";
+
+export type Pairing = {
+  foreground: string;
+  background: string;
+  foregroundHex: string;
+  backgroundHex: string;
+  ratio: number;
+  intent: PairingIntent;
+  note?: string;
+};
+
+function pair(
+  foreground: string,
+  background: string,
+  mode: Mode,
+  intent: PairingIntent,
+  note?: string,
+): Pairing {
+  const foregroundHex = tokenHex(foreground, mode);
+  const backgroundHex = tokenHex(background, mode);
+
+  return {
+    foreground,
+    background,
+    foregroundHex,
+    backgroundHex,
+    ratio: contrastRatio(foregroundHex, backgroundHex),
+    intent,
+    ...(note ? { note } : {}),
+  };
+}
+
+/** Every sanctioned pairing for a mode, measured. */
+export function pairingsFor(mode: Mode): readonly Pairing[] {
+  const { text, decorative } = roles[mode];
+
+  return [
+    ...text.flatMap((role) =>
+      surfaceTokens.map((surface) =>
+        pair(role.name, surface, mode, "text", role.note),
+      ),
+    ),
+    ...onPairs.map(([foreground, background]) =>
+      pair(foreground, background, mode, "text"),
+    ),
+    ...decorative.flatMap((role) =>
+      surfaceTokens.map((surface) =>
+        pair(role.name, surface, mode, "decorative", role.note),
+      ),
+    ),
+  ];
+}
 
 export type TypeStep = {
   utility: string;
@@ -216,67 +425,4 @@ export const radiusScale: readonly ScaleStep[] = [
   { utility: "rounded-2xl", value: "1.75rem" },
   { utility: "rounded-3xl", value: "2.25rem" },
   { utility: "rounded-full", value: "9999px" },
-];
-
-export type PairingIntent = "text" | "decorative";
-
-export type Pairing = {
-  foreground: string;
-  background: string;
-  intent: PairingIntent;
-  note?: string;
-};
-
-/**
- * Every foreground/background combination the design system sanctions.
- * `text` pairings must meet 4.5:1; `decorative` ones are documented as
- * non-text-bearing and are enforced not to carry copy.
- */
-export const pairings: readonly Pairing[] = [
-  { foreground: "#04133b", background: "#fbfaf7", intent: "text" },
-  { foreground: "#04133b", background: "#ffffff", intent: "text" },
-  { foreground: "#04133b", background: "#ecdad1", intent: "text" },
-  { foreground: "#04133b", background: "#85dfc3", intent: "text" },
-  { foreground: "#04133b", background: "#ebb805", intent: "text" },
-  { foreground: "#fbfaf7", background: "#04133b", intent: "text" },
-  { foreground: "#fbfaf7", background: "#1f1e1c", intent: "text" },
-  { foreground: "#fbfaf7", background: "#b4574a", intent: "text" },
-  { foreground: "#b4574a", background: "#fbfaf7", intent: "text" },
-  { foreground: inkAt(0.6), background: "#fbfaf7", intent: "text" },
-  {
-    foreground: "#ebb805",
-    background: "#fbfaf7",
-    intent: "decorative",
-    note: "Gold on light backgrounds is decorative only — rules, icons, and fills. Never text.",
-  },
-  {
-    foreground: "#85dfc3",
-    background: "#fbfaf7",
-    intent: "decorative",
-    note: "Mint on light backgrounds is decorative only. Never text.",
-  },
-  {
-    foreground: "#ecdad1",
-    background: "#fbfaf7",
-    intent: "decorative",
-    note: "Blush on off-white is a surface tint, not a text colour.",
-  },
-  {
-    foreground: "#b4574a",
-    background: "#ecdad1",
-    intent: "decorative",
-    note: "Alert on blush reaches 3.5:1 — usable for icons and borders, not body text.",
-  },
-  {
-    foreground: inkAt(0.4),
-    background: "#fbfaf7",
-    intent: "decorative",
-    note: "Ink at 40% is for disabled and placeholder states, which are exempt from 4.5:1.",
-  },
-  {
-    foreground: inkAt(0.16),
-    background: "#fbfaf7",
-    intent: "decorative",
-    note: "Border hairline. Non-text.",
-  },
 ];

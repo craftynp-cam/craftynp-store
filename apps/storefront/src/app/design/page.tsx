@@ -1,20 +1,28 @@
 import type { Metadata } from "next";
 
-import { contrastRatio, gradeContrast } from "@/lib/contrast";
+import { gradeContrast } from "@/lib/contrast";
 import {
-  derivedNeutrals,
-  pairings,
+  brandColors,
+  modes,
+  pairingsFor,
   palette,
   radiusScale,
+  resolveHex,
   semanticTokens,
   spacingScale,
+  surfaceTokens,
+  tokenHex,
   typeScale,
+  type Mode,
 } from "@/lib/design-tokens";
 
 export const metadata: Metadata = {
   title: "Design tokens — The Crafty NP",
-  description: "Reference page for the brand palette, type, spacing and radii.",
+  description:
+    "Reference page for the brand palette, type, spacing, radii, and both colour modes.",
 };
+
+const modeLabel: Record<Mode, string> = { light: "Light", dark: "Dark" };
 
 function Section({
   title,
@@ -34,27 +42,111 @@ function Section({
   );
 }
 
-function Swatch({
-  name,
-  utility,
-  hex,
-  usage,
+/**
+ * The page follows the reader's own mode, so the mode it is not currently in
+ * has to be shown explicitly. These panes paint themselves from resolved hex
+ * rather than from utilities, which is the one place that is legitimate.
+ */
+function ModePane({
+  mode,
+  children,
 }: {
-  name: string;
-  utility: string;
-  hex: string;
-  usage: string;
+  mode: Mode;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="h-20" style={{ backgroundColor: hex }} />
-      <div className="p-4">
-        <p className="font-medium">{name}</p>
-        <p className="mt-1 font-mono text-sm text-foreground-muted">
-          {utility} · {hex}
-        </p>
-        <p className="mt-2 text-sm text-foreground-muted">{usage}</p>
-      </div>
+    <div
+      className="rounded-lg p-5"
+      style={{
+        backgroundColor: tokenHex("background", mode),
+        color: tokenHex("foreground", mode),
+        border: `1px solid ${tokenHex("border-strong", mode)}`,
+      }}
+    >
+      <p
+        className="text-sm font-medium"
+        style={{ color: tokenHex("foreground-muted", mode) }}
+      >
+        {modeLabel[mode]}
+      </p>
+      <div className="mt-4">{children}</div>
+    </div>
+  );
+}
+
+function Swatch({
+  label,
+  caption,
+  hex,
+  usage,
+  borderHex,
+}: {
+  label: string;
+  caption: string;
+  hex: string;
+  usage?: string;
+  borderHex?: string;
+}) {
+  return (
+    <div>
+      <div
+        className="h-16 rounded-md"
+        style={{
+          backgroundColor: hex,
+          border: `1px solid ${borderHex ?? "currentColor"}`,
+        }}
+      />
+      <p className="mt-2 text-sm font-medium">{label}</p>
+      <p className="font-mono text-xs opacity-70">{caption}</p>
+      {usage ? <p className="mt-1 text-xs opacity-70">{usage}</p> : null}
+    </div>
+  );
+}
+
+function ContrastTable({ mode }: { mode: Mode }) {
+  const pairings = pairingsFor(mode);
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-2xl border-collapse text-left text-sm">
+        <thead className="bg-surface-soft">
+          <tr>
+            <th className="p-3 font-medium">Sample</th>
+            <th className="p-3 font-medium">Pairing</th>
+            <th className="p-3 font-medium">Ratio</th>
+            <th className="p-3 font-medium">Grade</th>
+            <th className="p-3 font-medium">Intent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pairings.map((pairing) => (
+            <tr
+              key={`${pairing.foreground}-on-${pairing.background}`}
+              className="border-t border-border"
+            >
+              <td className="p-3">
+                <span
+                  className="inline-block rounded-sm px-3 py-2 whitespace-nowrap"
+                  style={{
+                    backgroundColor: pairing.backgroundHex,
+                    color: pairing.foregroundHex,
+                  }}
+                >
+                  Handmade with care
+                </span>
+              </td>
+              <td className="p-3 font-mono text-xs">
+                {pairing.foreground} on {pairing.background}
+              </td>
+              <td className="p-3 font-mono">{pairing.ratio.toFixed(2)}:1</td>
+              <td className="p-3 font-mono">{gradeContrast(pairing.ratio)}</td>
+              <td className="p-3 text-foreground-muted">
+                {pairing.note ?? (pairing.intent === "text" ? "Text." : "—")}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -66,50 +158,96 @@ export default function DesignTokensPage() {
       <p className="mt-4 max-w-2xl text-lg text-foreground-muted">
         Every colour, type step, spacing step and radius the storefront is
         allowed to use. Tokens are declared once in{" "}
-        <code className="rounded-xs bg-blush px-1 py-0.5 font-mono text-base">
+        <code className="rounded-xs bg-surface-soft px-1 py-0.5 font-mono text-base">
           src/app/globals.css
         </code>
-        ; components reference the generated utilities, never raw hex.
+        ; components reference the generated utilities, never raw hex. This page
+        follows your system colour mode, and shows both.
       </p>
 
       <Section
         title="Palette"
-        description="The four official brand colours and three neutrals. The neutrals are proposals pending sign-off."
-      >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {palette.map((token) => (
-            <Swatch key={token.utility} {...token} />
-          ))}
-        </div>
-      </Section>
-
-      <Section
-        title="Derived neutrals"
-        description="Greys are ink navy at reduced opacity over the page background, so no new hues enter the system."
+        description="The four official brand colours and three neutrals. Both modes are built from these seven — the neutrals are proposals pending sign-off."
       >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {derivedNeutrals.map((token) => (
+          {palette.map((token) => (
             <Swatch
               key={token.utility}
-              name={`${token.name} (ink ${Math.round(token.inkOpacity * 100)}%)`}
-              utility={token.utility}
-              hex={token.hex}
+              label={token.name}
+              caption={`${token.utility} · ${brandColors[token.utility]}`}
+              hex={brandColors[token.utility]}
               usage={token.usage}
+              borderHex={tokenHex("border", "light")}
             />
           ))}
         </div>
       </Section>
 
       <Section
+        title="Colour modes"
+        description="Light composites ink navy over off-white; dark composites off-white over ink navy. Ink navy is the darkest brand colour, so it becomes the dark page and surfaces lift away from it. Muted black sits within 1.1:1 of ink navy and is deliberately unused in dark mode — as a layer it would be invisible."
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          {modes.map((mode) => (
+            <ModePane key={mode} mode={mode}>
+              <div className="grid grid-cols-3 gap-3">
+                {surfaceTokens.map((surface) => (
+                  <Swatch
+                    key={surface}
+                    label={surface}
+                    caption={tokenHex(surface, mode)}
+                    hex={tokenHex(surface, mode)}
+                    borderHex={tokenHex("border-strong", mode)}
+                  />
+                ))}
+              </div>
+              <div className="mt-5 space-y-1">
+                <p>Body text sits at foreground.</p>
+                <p style={{ color: tokenHex("foreground-muted", mode) }}>
+                  Secondary text sits at foreground-muted.
+                </p>
+                <p style={{ color: tokenHex("foreground-subtle", mode) }}>
+                  Placeholders sit at foreground-subtle.
+                </p>
+                <p style={{ color: tokenHex("danger-foreground", mode) }}>
+                  Errors sit at danger-foreground.
+                </p>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {(["primary", "accent", "success", "danger"] as const).map(
+                  (token) => (
+                    <span
+                      key={token}
+                      className="rounded-md px-3 py-2 text-sm font-medium"
+                      style={{
+                        backgroundColor: tokenHex(token, mode),
+                        color: tokenHex(
+                          token === "primary" ? "on-primary" : `on-${token}`,
+                          mode,
+                        ),
+                      }}
+                    >
+                      {token}
+                    </span>
+                  ),
+                )}
+              </div>
+            </ModePane>
+          ))}
+        </div>
+      </Section>
+
+      <Section
         title="Semantic aliases"
-        description="Prefer these over the raw palette names — they carry intent and survive a palette change."
+        description="Prefer these over the raw palette names — they carry intent, and they are the only colours that follow the active mode."
       >
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-lg border-collapse text-left text-sm">
-            <thead className="bg-blush">
+          <table className="w-full min-w-2xl border-collapse text-left text-sm">
+            <thead className="bg-surface-soft">
               <tr>
                 <th className="p-3 font-medium">Token</th>
-                <th className="p-3 font-medium">Resolves to</th>
+                <th className="p-3 font-medium">Light</th>
+                <th className="p-3 font-medium">Dark</th>
                 <th className="p-3 font-medium">Usage</th>
               </tr>
             </thead>
@@ -117,9 +255,19 @@ export default function DesignTokensPage() {
               {semanticTokens.map((token) => (
                 <tr key={token.token} className="border-t border-border">
                   <td className="p-3 font-mono">{token.token}</td>
-                  <td className="p-3 font-mono text-foreground-muted">
-                    {token.resolvesTo}
-                  </td>
+                  {modes.map((mode) => (
+                    <td key={mode} className="p-3">
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="inline-block size-4 shrink-0 rounded-xs border border-border-strong"
+                          style={{ backgroundColor: resolveHex(token[mode]) }}
+                        />
+                        <span className="font-mono text-xs text-foreground-muted">
+                          {resolveHex(token[mode])}
+                        </span>
+                      </span>
+                    </td>
+                  ))}
                   <td className="p-3 text-foreground-muted">{token.usage}</td>
                 </tr>
               ))}
@@ -170,7 +318,7 @@ export default function DesignTokensPage() {
                 {step.utility} · {step.value}
               </span>
               <span
-                className="h-4 rounded-xs bg-gold"
+                className="h-4 rounded-xs bg-accent"
                 style={{ width: step.value }}
               />
             </li>
@@ -186,7 +334,7 @@ export default function DesignTokensPage() {
           {radiusScale.map((step) => (
             <div key={step.utility} className="text-center">
               <div
-                className="h-24 border border-border-strong bg-mint"
+                className="h-24 border border-border-strong bg-success"
                 style={{ borderRadius: step.value }}
               />
               <p className="mt-2 font-mono text-sm text-foreground-muted">
@@ -197,54 +345,15 @@ export default function DesignTokensPage() {
         </div>
       </Section>
 
-      <Section
-        title="Contrast"
-        description="Every sanctioned pairing, measured. Text pairings meet WCAG AA at 4.5:1; anything below is decorative-only and says why."
-      >
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-2xl border-collapse text-left text-sm">
-            <thead className="bg-blush">
-              <tr>
-                <th className="p-3 font-medium">Sample</th>
-                <th className="p-3 font-medium">Ratio</th>
-                <th className="p-3 font-medium">Grade</th>
-                <th className="p-3 font-medium">Intent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pairings.map((pair) => {
-                const ratio = contrastRatio(pair.foreground, pair.background);
-
-                return (
-                  <tr
-                    key={`${pair.foreground}-${pair.background}`}
-                    className="border-t border-border"
-                  >
-                    <td className="p-3">
-                      <span
-                        className="inline-block rounded-sm px-3 py-2"
-                        style={{
-                          backgroundColor: pair.background,
-                          color: pair.foreground,
-                        }}
-                      >
-                        Handmade with care
-                      </span>
-                    </td>
-                    <td className="p-3 font-mono">{ratio.toFixed(2)}:1</td>
-                    <td className="p-3 font-mono">{gradeContrast(ratio)}</td>
-                    <td className="p-3 text-foreground-muted">
-                      {pair.intent === "text"
-                        ? "Text"
-                        : (pair.note ?? "Decorative only.")}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Section>
+      {modes.map((mode) => (
+        <Section
+          key={mode}
+          title={`Contrast — ${modeLabel[mode].toLowerCase()} mode`}
+          description="Every sanctioned pairing, measured at render time. Text pairings meet WCAG AA at 4.5:1; anything below is decorative-only and says why."
+        >
+          <ContrastTable mode={mode} />
+        </Section>
+      ))}
     </main>
   );
 }

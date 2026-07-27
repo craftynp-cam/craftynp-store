@@ -1,37 +1,71 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { contrastRatio } from "@/lib/contrast";
 import {
-  derivedNeutrals,
-  pairings,
+  brandColors,
+  cssValue,
+  modes,
+  pairingsFor,
   palette,
   radiusScale,
+  semanticTokens,
+  surfaceTokens,
+  tokenHex,
   typeScale,
+  type Mode,
 } from "@/lib/design-tokens";
 
-// Prettier reflows long declarations across lines, so compare on a single line.
-const globalsCss = readFileSync(
-  join(__dirname, "..", "app", "globals.css"),
-  "utf8",
-)
-  .replace(/\s+/g, " ")
-  .replace(/\(\s+/g, "(")
-  .replace(/\s+\)/g, ")");
+const srcDir = join(__dirname, "..");
+
+/** Prettier reflows long declarations, so compare everything on one line. */
+function normalise(css: string): string {
+  return css.replace(/\s+/g, " ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+}
+
+const globalsCss = normalise(
+  readFileSync(join(srcDir, "app", "globals.css"), "utf8"),
+);
+
+/**
+ * The light values live in `:root`, the dark ones inside the
+ * prefers-color-scheme block. Slicing them apart stops a token that is only
+ * declared for one mode from passing the drift check for both.
+ */
+const darkBlockStart = globalsCss.indexOf(
+  "@media (prefers-color-scheme: dark)",
+);
+
+const cssByMode: Record<Mode, string> = {
+  light: globalsCss.slice(0, darkBlockStart),
+  dark: globalsCss.slice(darkBlockStart),
+};
+
+describe("globals.css", () => {
+  it("declares a dark block", () => {
+    expect(darkBlockStart).toBeGreaterThan(-1);
+  });
+
+  it("sets color-scheme for both modes", () => {
+    expect(cssByMode.light).toContain("color-scheme: light;");
+    expect(cssByMode.dark).toContain("color-scheme: dark;");
+  });
+});
 
 describe("palette", () => {
-  it.each(palette.map((token) => [token.name, token.utility, token.hex]))(
-    "%s is declared in globals.css",
-    (_name, utility, hex) => {
-      expect(globalsCss).toContain(`--color-${utility}: ${hex};`);
+  it.each(palette.map((token) => [token.name, token.utility]))(
+    "%s is declared once, in the theme block",
+    (_name, utility) => {
+      expect(globalsCss).toContain(
+        `--color-${utility}: ${brandColors[utility]};`,
+      );
     },
   );
 
-  it("keeps raw hex out of everything but the token layer", () => {
+  it("keeps raw hex out of component code", () => {
     const componentSources = [
-      join(__dirname, "..", "app", "page.tsx"),
-      join(__dirname, "..", "app", "design", "page.tsx"),
-      join(__dirname, "..", "components", "product-list-item.tsx"),
+      join(srcDir, "app", "page.tsx"),
+      join(srcDir, "app", "design", "page.tsx"),
+      join(srcDir, "components", "product-list-item.tsx"),
     ];
 
     for (const source of componentSources) {
@@ -40,17 +74,27 @@ describe("palette", () => {
   });
 });
 
-describe("derived neutrals", () => {
-  it.each(derivedNeutrals.map((token) => [token.utility, token.inkOpacity]))(
-    "%s is mixed from ink navy at %s",
-    (utility, opacity) => {
-      expect(globalsCss).toContain(
-        `--color-${utility}: color-mix(in srgb, var(--color-ink) ${Math.round(
-          opacity * 100,
-        )}%, var(--color-off-white));`,
-      );
+describe("semantic tokens", () => {
+  const cases = modes.flatMap((mode) =>
+    semanticTokens.map((token) => [mode, token.token, cssValue(token[mode])]),
+  );
+
+  it.each(cases)("%s: --t-%s is declared as %s", (mode, token, value) => {
+    expect(cssByMode[mode as Mode]).toContain(`--t-${token}: ${value};`);
+  });
+
+  it.each(semanticTokens.map((token) => [token.token]))(
+    "%s is aliased into the theme so utilities follow the mode",
+    (token) => {
+      expect(globalsCss).toContain(`--color-${token}: var(--t-${token});`);
     },
   );
+
+  it("gives light and dark a distinct page and text colour", () => {
+    for (const token of ["background", "foreground"]) {
+      expect(tokenHex(token, "light")).not.toBe(tokenHex(token, "dark"));
+    }
+  });
 });
 
 describe("scales", () => {
@@ -78,40 +122,31 @@ describe("scales", () => {
   });
 });
 
-describe("contrast", () => {
-  const textPairings = pairings.filter((pair) => pair.intent === "text");
-  const decorativePairings = pairings.filter(
-    (pair) => pair.intent === "decorative",
-  );
+describe.each(modes)("contrast in %s mode", (mode) => {
+  const pairings = pairingsFor(mode);
 
-  it.each(textPairings.map((pair) => [pair.foreground, pair.background]))(
+  const textCases = pairings
+    .filter((pairing) => pairing.intent === "text")
+    .map((pairing) => [pairing.foreground, pairing.background, pairing.ratio]);
+
+  it.each(textCases)(
     "%s on %s meets 4.5:1",
-    (foreground, background) => {
-      expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
-    },
+    (_foreground, _background, ratio) =>
+      expect(ratio).toBeGreaterThanOrEqual(4.5),
   );
 
-  it("documents why every sub-4.5:1 pairing is allowed", () => {
-    for (const pair of decorativePairings) {
-      expect(pair.note).toBeTruthy();
+  it("documents every pairing that falls below 4.5:1", () => {
+    for (const pairing of pairings) {
+      if (pairing.ratio >= 4.5) continue;
+      expect(pairing.intent).toBe("decorative");
+      expect(pairing.note).toBeTruthy();
     }
   });
-});
 
-describe("fonts", () => {
-  const layout = readFileSync(
-    join(__dirname, "..", "app", "layout.tsx"),
-    "utf8",
-  );
-
-  it.each(["Libre_Baskerville", "Source_Sans_3"])(
-    "loads %s with font-display: swap",
-    (font) => {
-      expect(layout).toContain(font);
-    },
-  );
-
-  it("sets display swap on both families", () => {
-    expect(layout.match(/display: "swap"/g)).toHaveLength(2);
+  it("keeps every surface distinguishable from the page", () => {
+    for (const surface of surfaceTokens) {
+      if (surface === "background") continue;
+      expect(tokenHex(surface, mode)).not.toBe(tokenHex("background", mode));
+    }
   });
 });

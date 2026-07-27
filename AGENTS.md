@@ -227,22 +227,43 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
 ### Design tokens
 
 The brand palette, type scale, spacing scale, and radii are declared once, in
-`apps/storefront/src/app/globals.css`, as a Tailwind v4 `@theme` block.
-**Components use the generated utilities — `bg-gold`, `text-foreground-muted`,
-`rounded-lg`, `font-display` — and never a raw hex value.** Prefer the semantic
-aliases (`background`, `foreground`, `primary`, `danger`) over the raw brand
-names; they carry intent and survive a palette change.
+`apps/storefront/src/app/globals.css`, in three layers:
 
-Greys are ink navy composited at reduced opacity over the page background
-(`ink-muted`, `ink-subtle`, `border`, `border-strong`). Do not introduce a new
-grey hue.
+1. `@theme` — the seven fixed brand colours and the type/spacing/radius scales.
+2. `@theme inline` — semantic aliases, each pointing at a `--t-*` variable.
+3. `:root` and the `prefers-color-scheme: dark` block — the light and dark
+   values of those `--t-*` variables.
+
+**Components use the generated utilities — `bg-surface`,
+`text-foreground-muted`, `rounded-lg`, `font-display` — and never a raw hex
+value.** Prefer the semantic aliases (`background`, `surface`, `foreground`,
+`primary`, `danger`) over the raw brand names: they carry intent, and they are
+the only colours that follow the active mode.
+
+The `inline` on the second layer is load-bearing. It emits `var(--t-*)` into
+each utility, so the utility tracks the mode. A plain `@theme` would freeze
+every utility at its light value.
+
+**Both modes come from the same seven colours.** Light composites ink navy over
+off-white; dark composites off-white over ink navy. Do not introduce a hue that
+exists in only one mode, and do not introduce a new grey — greys are the two
+extremes composited at reduced opacity. Muted black is unused in dark mode on
+purpose: it sits within 1.1:1 of ink navy, so as a layer it would be invisible.
+
+Raw alert red is not legible enough for text in either mode (3.5:1 on the light
+blush surface, 3.8:1 on the dark page). Use `danger-foreground` for error text
+and `danger` only as a surface.
 
 `src/lib/design-tokens.ts` mirrors those values so the reference page at
-**`/design`** can render and measure every token; `design-tokens.test.ts` fails
-if the mirror and the CSS drift, and asserts that every text-bearing pairing
-clears WCAG AA at 4.5:1. Pairings below that threshold must be marked
-`decorative` with a note explaining why. Change a token in both files, or the
-suite will tell you.
+**`/design`** can render and measure every token in both modes;
+`design-tokens.test.ts` fails if the mirror and the CSS drift, and asserts that
+every text-bearing pairing clears WCAG AA at 4.5:1 on every surface of its
+mode. Pairings below that threshold must be marked `decorative` with a note
+explaining why. Change a token in both files, or the suite will tell you.
+
+There is no manual theme switcher — the mode follows the OS. Adding a toggle
+means introducing a `data-theme` override alongside the media query; it is not
+wired up yet.
 
 ### Testing
 
@@ -275,8 +296,8 @@ suite will tell you.
 - **Do not try to render `src/app/page.tsx`.** It is an async server component
   that fetches from a live backend; RTL cannot render it. Cover it with
   HTTP-level checks against the running app instead.
-- Current suite: **78 tests** across the three workspaces (types 17, medusa 9,
-  storefront 52). A smaller number after your change means something was
+- Current suite: **153 tests** across the three workspaces (types 17, medusa 9,
+  storefront 127). A smaller number after your change means something was
   dropped.
 
 ## Guidance for agents

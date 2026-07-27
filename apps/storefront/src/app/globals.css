@@ -2,10 +2,19 @@
 
 /*
  * Design tokens (CNP-21). Every value the UI draws from lives here.
- * Components use the generated utilities (bg-gold, text-ink, rounded-lg,
- * text-2xl) — never raw hex.
+ * Components use the generated utilities (bg-surface, text-foreground-muted,
+ * rounded-lg, text-2xl) — never raw hex.
  *
- * Contrast: see /design for the measured ratio of every pairing.
+ * Three layers:
+ *   1. @theme          — the fixed brand palette and the type/spacing/radius scales.
+ *   2. @theme inline   — semantic aliases, which point at the --t-* variables.
+ *   3. :root + @media  — the light and dark values of those --t-* variables.
+ *
+ * Both modes are built from the same seven brand colours: light composites
+ * ink navy over off-white, dark composites off-white over ink navy. No hue
+ * exists in one mode that does not exist in the other.
+ *
+ * Contrast: see /design for the measured ratio of every pairing in both modes.
  */
 @theme {
   /* Brand palette. Raw values appear here and nowhere else. */
@@ -16,43 +25,6 @@
   --color-off-white: #fbfaf7;
   --color-muted-black: #1f1e1c;
   --color-alert: #b4574a;
-
-  /* Derived greys: ink navy at reduced opacity over the page background.
-     No new hues enter the system. */
-  --color-ink-muted: color-mix(
-    in srgb,
-    var(--color-ink) 60%,
-    var(--color-off-white)
-  );
-  --color-ink-subtle: color-mix(
-    in srgb,
-    var(--color-ink) 40%,
-    var(--color-off-white)
-  );
-  --color-border: color-mix(
-    in srgb,
-    var(--color-ink) 16%,
-    var(--color-off-white)
-  );
-  --color-border-strong: color-mix(
-    in srgb,
-    var(--color-ink) 32%,
-    var(--color-off-white)
-  );
-
-  /* Semantic aliases. Prefer these in components. */
-  --color-background: var(--color-off-white);
-  --color-surface: #ffffff;
-  --color-foreground: var(--color-ink);
-  --color-foreground-muted: var(--color-ink-muted);
-  --color-primary: var(--color-ink);
-  --color-on-primary: var(--color-off-white);
-  --color-accent: var(--color-gold);
-  --color-on-accent: var(--color-ink);
-  --color-success: var(--color-mint);
-  --color-on-success: var(--color-ink);
-  --color-danger: var(--color-alert);
-  --color-on-danger: var(--color-off-white);
 
   /* Type. Libre Baskerville sets display copy; Source Sans 3 sets everything else. */
   --font-display:
@@ -90,6 +62,130 @@
   --radius-xl: 1.25rem;
   --radius-2xl: 1.75rem;
   --radius-3xl: 2.25rem;
+}
+
+/*
+ * Semantic aliases. Prefer these in components — they carry intent and they
+ * are the only colours that follow the active mode. `inline` matters here:
+ * it emits var(--t-*) into each utility, so the utility tracks the mode
+ * instead of freezing at its light value.
+ */
+@theme inline {
+  --color-background: var(--t-background);
+  --color-surface: var(--t-surface);
+  --color-surface-soft: var(--t-surface-soft);
+  --color-foreground: var(--t-foreground);
+  --color-foreground-muted: var(--t-foreground-muted);
+  --color-foreground-subtle: var(--t-foreground-subtle);
+  --color-border: var(--t-border);
+  --color-border-strong: var(--t-border-strong);
+  --color-primary: var(--t-primary);
+  --color-on-primary: var(--t-on-primary);
+  --color-accent: var(--t-accent);
+  --color-on-accent: var(--t-on-accent);
+  --color-success: var(--t-success);
+  --color-on-success: var(--t-on-success);
+  --color-danger: var(--t-danger);
+  --color-on-danger: var(--t-on-danger);
+  --color-danger-foreground: var(--t-danger-foreground);
+}
+
+/* Light: ink navy composited over off-white. */
+:root {
+  color-scheme: light;
+
+  --t-background: var(--color-off-white);
+  --t-surface: var(--color-white);
+  --t-surface-soft: var(--color-blush);
+  --t-foreground: var(--color-ink);
+  --t-foreground-muted: color-mix(
+    in srgb,
+    var(--color-ink) 68%,
+    var(--color-off-white)
+  );
+  --t-foreground-subtle: color-mix(
+    in srgb,
+    var(--color-ink) 40%,
+    var(--color-off-white)
+  );
+  --t-border: color-mix(in srgb, var(--color-ink) 16%, var(--color-off-white));
+  --t-border-strong: color-mix(
+    in srgb,
+    var(--color-ink) 32%,
+    var(--color-off-white)
+  );
+  --t-primary: var(--color-ink);
+  --t-on-primary: var(--color-off-white);
+  --t-accent: var(--color-gold);
+  --t-on-accent: var(--color-ink);
+  --t-success: var(--color-mint);
+  --t-on-success: var(--color-ink);
+  --t-danger: var(--color-alert);
+  --t-on-danger: var(--color-off-white);
+  --t-danger-foreground: color-mix(
+    in srgb,
+    var(--color-ink) 20%,
+    var(--color-alert)
+  );
+}
+
+/*
+ * Dark: the same palette inverted — off-white composited over ink navy.
+ * Ink navy is the darkest brand colour, so it becomes the page; surfaces lift
+ * away from it rather than stacking a second near-black on top. Muted black
+ * sits within 1.1:1 of ink navy and so is deliberately unused here — as a
+ * layer it would be invisible.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --t-background: var(--color-ink);
+    --t-surface: color-mix(
+      in srgb,
+      var(--color-off-white) 7%,
+      var(--color-ink)
+    );
+    --t-surface-soft: color-mix(
+      in srgb,
+      var(--color-blush) 14%,
+      var(--color-ink)
+    );
+    --t-foreground: var(--color-off-white);
+    --t-foreground-muted: color-mix(
+      in srgb,
+      var(--color-off-white) 60%,
+      var(--color-ink)
+    );
+    --t-foreground-subtle: color-mix(
+      in srgb,
+      var(--color-off-white) 40%,
+      var(--color-ink)
+    );
+    --t-border: color-mix(
+      in srgb,
+      var(--color-off-white) 18%,
+      var(--color-ink)
+    );
+    --t-border-strong: color-mix(
+      in srgb,
+      var(--color-off-white) 36%,
+      var(--color-ink)
+    );
+    --t-primary: var(--color-off-white);
+    --t-on-primary: var(--color-ink);
+    --t-accent: var(--color-gold);
+    --t-on-accent: var(--color-ink);
+    --t-success: var(--color-mint);
+    --t-on-success: var(--color-ink);
+    --t-danger: var(--color-alert);
+    --t-on-danger: var(--color-off-white);
+    --t-danger-foreground: color-mix(
+      in srgb,
+      var(--color-off-white) 35%,
+      var(--color-alert)
+    );
+  }
 }
 
 @layer base {
