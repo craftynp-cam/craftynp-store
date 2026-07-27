@@ -1,6 +1,6 @@
-import { lineItemCustomizationSchema } from "@craftynp/types";
 import { ProductListItem } from "@/components";
 import { sdk } from "@/lib/medusa";
+import { lineItemCustomizationSchema } from "@craftynp/types";
 
 export default async function Home() {
   const { products } = await sdk.store.product.list({ limit: 3 });
