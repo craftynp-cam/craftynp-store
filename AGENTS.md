@@ -380,8 +380,12 @@ for `apps/medusa`, which runs React 18).
   `focus-ring.test.ts`) must reach back two levels and into `src` from
   `__dirname`, not one.
 
-  Note that `pnpm run lint` runs `eslint src` in the storefront, so the
-  `test/` tree is typechecked but not linted.
+  The storefront's lint script is `eslint src test`, so tests are linted to
+  the same standard as production code — including
+  `@typescript-eslint/consistent-type-imports`, whose `files` glob in
+  `apps/storefront/eslint.config.mjs` covers both trees. A new top-level
+  directory needs adding to both, or its contents go unchecked. The other two
+  workspaces keep the plain `eslint src`, since their tests live under `src`.
 
 - A test must be able to fail. Write it so you have seen it fail for the right
   reason before you make it pass; a test that passes against a broken
