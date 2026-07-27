@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 
-import { TextInput } from "./text-input";
+import { TextInput } from ".";
 
 /** The ids React Aria generates are opaque, so resolve them through the DOM. */
 function describedTextFor(element: HTMLElement): string[] {

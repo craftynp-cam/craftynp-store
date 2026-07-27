@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { Select } from "./select";
+import { Select } from ".";
 
 const options = [
   { id: "small", label: "Small" },

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Badge,
   Button,
@@ -12,7 +11,8 @@ import {
   Select,
   Textarea,
   TextInput,
-} from "@/components/ui";
+  ThemeToggle,
+} from "@/components";
 
 /**
  * The reference page for CNP-22's primitives. Every variant and every state is

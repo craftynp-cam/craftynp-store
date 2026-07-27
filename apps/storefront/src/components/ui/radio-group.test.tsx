@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { RadioGroup } from "./radio-group";
+import { RadioGroup } from ".";
 
 const options = [
   { value: "standard", label: "Standard" },
