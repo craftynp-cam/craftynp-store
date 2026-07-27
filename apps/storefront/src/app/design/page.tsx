@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { gradeContrast } from "@/lib/contrast";
@@ -164,7 +165,14 @@ export default function DesignTokensPage() {
         <code className="rounded-xs bg-surface-soft px-1 py-0.5 font-mono text-base">
           src/app/globals.css
         </code>
-        ; components reference the generated utilities, never raw hex.
+        ; components reference the generated utilities, never raw hex. The{" "}
+        <Link
+          href="/design/primitives"
+          className="underline underline-offset-4"
+        >
+          UI primitives
+        </Link>{" "}
+        page shows what these tokens build.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-4">
