@@ -1,4 +1,12 @@
-@import "tailwindcss";
+/*
+ * Pulls in Tailwind itself, plus HeroUI's base/component/theme layers. It
+ * replaces a bare `@import "tailwindcss"` — @heroui/styles already imports
+ * Tailwind, and importing both would emit it twice.
+ *
+ * HeroUI's component CSS is plain BEM (.button, .button--primary), not
+ * generated utilities, so Tailwind does not need to scan node_modules for it.
+ */
+@import "@heroui/styles";
 
 /*
  * Design tokens (CNP-21). Every value the UI draws from lives here.
@@ -145,6 +153,95 @@
     color-mix(in srgb, var(--color-ink) 20%, var(--color-alert)),
     color-mix(in srgb, var(--color-off-white) 35%, var(--color-alert))
   );
+}
+
+/*
+ * HeroUI bridge. HeroUI's components read bare variables directly — button.css
+ * is literally `--button-bg: var(--accent)` — so pointing those at our --t-*
+ * tokens re-skins the whole library in brand colours.
+ *
+ * This is what keeps `system` mode working. HeroUI's own theme has only two
+ * states, keyed off `.light`/`.dark`/[data-theme], with no OS-following
+ * equivalent; left alone it would paint light components on a dark page for a
+ * dark-OS reader who has not pinned a mode. Because every --t-* is a
+ * light-dark(), HeroUI's variables inherit color-scheme for free and no JS is
+ * involved. Nothing in theme.ts or ThemeToggle had to change.
+ *
+ * Deliberately unlayered: HeroUI declares its own values in a nested cascade
+ * layer, and unlayered declarations beat every layered one, so this wins
+ * without depending on layer-ordering subtleties.
+ *
+ * `accent` means two different things across the two systems — see the note
+ * on --accent below.
+ */
+:root {
+  --background: var(--t-background);
+  --foreground: var(--t-foreground);
+
+  --surface: var(--t-surface);
+  --surface-foreground: var(--t-foreground);
+  --surface-secondary: var(--t-surface-soft);
+  --surface-secondary-foreground: var(--t-foreground);
+  --surface-tertiary: var(--t-surface-soft);
+  --surface-tertiary-foreground: var(--t-foreground);
+
+  --overlay: var(--t-surface);
+  --overlay-foreground: var(--t-foreground);
+
+  --muted: var(--t-foreground-muted);
+  --border: var(--t-border);
+  --separator: var(--t-border);
+  --link: var(--t-foreground);
+
+  /*
+   * The ring takes `primary`, not gold. Gold is the brand's attention colour
+   * but it only reaches 1.36–1.84:1 against the light-mode surfaces, well
+   * under the 3:1 that WCAG 1.4.11 requires of a focus indicator; it clears
+   * the bar in dark mode only because the page is dark behind it. Primary
+   * inverts with the mode and measures 12.6:1 at worst. HeroUI draws the ring
+   * outside a 2px offset, so it reads even on a primary-coloured control.
+   * focus-ring.test.ts holds this to 3:1 on every surface of both modes.
+   */
+  --focus: var(--t-primary);
+
+  /*
+   * One colour drives HeroUI's primary button, its selected radio and
+   * checkbox, and its links. It has to be our gold `accent`, and the reason is
+   * not aesthetic: HeroUI reads this colour two different ways. button.css
+   * takes the bare variable (`--button-bg: var(--accent)`), while radio.css
+   * takes the Tailwind utility (`@apply bg-accent`), which resolves through
+   * --color-accent — and our own @theme inline defines that as gold. Point the
+   * bare variable anywhere else and the two disagree: a navy button beside a
+   * gold radio, in the same form.
+   *
+   * So `accent` means gold on both sides of the bridge, and the primary action
+   * is gold on ink navy — a pairing design-tokens.test.ts already holds to AA.
+   * The palette's `primary` (ink navy) still backs bg-primary and the focus
+   * ring below.
+   */
+  --accent: var(--t-accent);
+  --accent-foreground: var(--t-on-accent);
+
+  --default: var(--t-surface-soft);
+  --default-foreground: var(--t-foreground);
+
+  --success: var(--t-success);
+  --success-foreground: var(--t-on-success);
+  --danger: var(--t-danger);
+  --danger-foreground: var(--t-on-danger);
+
+  /* The palette has no separate warning hue. Gold is the one that carries
+     "attention" without reading as an error. */
+  --warning: var(--t-accent);
+  --warning-foreground: var(--t-on-accent);
+
+  --field-background: var(--t-surface);
+  --field-foreground: var(--t-foreground);
+  --field-placeholder: var(--t-foreground-subtle);
+  --field-border: var(--t-border);
+  --field-border-width: 1px;
+
+  --radius: var(--radius-md);
 }
 
 /*
