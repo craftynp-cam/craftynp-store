@@ -1,3 +1,4 @@
+import { Navbar } from "@/components";
 import { themeInitScript } from "@/lib/theme";
 import type { Metadata } from "next";
 import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
@@ -40,7 +41,10 @@ export default function RootLayout({
         {/* Blocking on purpose: a pinned theme must land on <html> before paint. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Navbar />
+        <div className="flex-1">{children}</div>
+      </body>
     </html>
   );
 }

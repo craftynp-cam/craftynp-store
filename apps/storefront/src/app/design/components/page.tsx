@@ -61,7 +61,11 @@ function ComponentNav() {
 
 export default function ComponentsPage() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-16">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="mx-auto max-w-6xl px-6 py-16"
+    >
       <h1 className="font-display text-4xl">Components</h1>
       <p className="mt-4 max-w-2xl text-lg text-foreground-muted">
         Higher-level components, assembled from the{" "}

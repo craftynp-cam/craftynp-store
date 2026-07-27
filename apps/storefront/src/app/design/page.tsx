@@ -157,7 +157,11 @@ function ContrastTable({ mode }: { mode: Mode }) {
 
 export default function DesignTokensPage() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-16">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="mx-auto max-w-5xl px-6 py-16"
+    >
       <h1 className="font-display text-4xl">Design tokens</h1>
       <p className="mt-4 max-w-2xl text-lg text-foreground-muted">
         Every colour, type step, spacing step and radius the storefront is
