@@ -1,3 +1,4 @@
+export { CartCard, type CartCardProps } from "./cart-card";
 export {
   ProductCard,
   type ProductCardData,
