@@ -178,7 +178,7 @@ export default function DesignTokensPage() {
 
       <Section
         title="Palette"
-        description="The four official brand colours and three neutrals. Both modes are built from these seven — the neutrals are proposals pending sign-off."
+        description="The four official brand colours and three signed-off neutrals. Both modes are built from these seven."
       >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {palette.map((token) => (
