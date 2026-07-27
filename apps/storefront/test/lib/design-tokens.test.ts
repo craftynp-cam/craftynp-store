@@ -56,7 +56,7 @@ describe("palette", () => {
   it("keeps raw hex out of component code", () => {
     const componentSources = [
       join(srcDir, "app", "page.tsx"),
-      join(srcDir, "app", "design", "page.tsx"),
+      join(srcDir, "app", "design", "tokens", "page.tsx"),
       join(srcDir, "components", "ui", "product-list-item.tsx"),
       join(srcDir, "components", "cards", "product-card.tsx"),
     ];

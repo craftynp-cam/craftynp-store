@@ -76,7 +76,7 @@ export default function ComponentsPage() {
           UI primitives
         </Link>{" "}
         and coloured entirely by the{" "}
-        <Link href="/design" className="underline underline-offset-4">
+        <Link href="/design/tokens" className="underline underline-offset-4">
           design tokens
         </Link>
         .

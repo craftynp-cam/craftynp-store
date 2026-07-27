@@ -100,7 +100,7 @@ export default function PrimitivesPage() {
       <p className="mt-4 max-w-2xl text-lg text-foreground-muted">
         The shared form and layout components screens are assembled from. Built
         on HeroUI, coloured entirely by the tokens on the{" "}
-        <Link href="/design" className="underline underline-offset-4">
+        <Link href="/design/tokens" className="underline underline-offset-4">
           design tokens
         </Link>{" "}
         page — no component here declares a colour of its own.
