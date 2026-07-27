@@ -136,4 +136,20 @@ describe("CartCard", () => {
       screen.getByRole("link", { name: "Custom Die-Cut Stickers" }),
     ).toHaveAttribute("href", "/products/sticker");
   });
+
+  describe("loading state", () => {
+    it("renders skeletons instead of a link or product content", () => {
+      const { container } = render(<CartCard isLoading />);
+
+      expect(container.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("is hidden from assistive technology, since it names no line yet", () => {
+      const { container } = render(<CartCard isLoading />);
+
+      expect(container.firstChild).toHaveAttribute("aria-hidden", "true");
+    });
+  });
 });

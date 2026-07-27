@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { ProductCard, ThemeToggle } from "@/components";
+import { CartCard, ProductCard, ThemeToggle } from "@/components";
 
 import { CartCardDemo } from "./cart-card-demo";
 
@@ -272,6 +272,16 @@ export default function ComponentsPage() {
                   },
                 ]}
               />
+            </Section>
+
+            <Section
+              title="Loading"
+              description="Shown while the cart is still resolving. The skeleton matches the card's shape exactly, so nothing shifts when the real line arrives."
+            >
+              <ul className="max-w-md space-y-4">
+                <CartCard isLoading />
+                <CartCard isLoading />
+              </ul>
             </Section>
           </div>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@heroui/react/skeleton";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -9,20 +10,49 @@ import { formatMoney } from "@/lib/money";
 import { Badge, QuantityStepper } from "../ui";
 import { X } from "../icons";
 
-export type CartCardProps = {
+export type CartCardData = {
+  isLoading?: false;
   line: CartLine;
   onQuantityChange: (id: string, quantity: number) => void;
   onRemove: (id: string) => void;
 };
 
 /**
- * The cart's line-item card (CNP-47) — deliberately mirrors `ProductCard`'s
- * badge and image-placeholder treatment so a line in the cart visibly matches
- * the card it came from. `details` is dormant until the configurator (CNP-9)
- * ships customizable products in Release 3; until then every line renders
- * with `isCustomizable` false and no `details`.
+ * While loading there is no line yet to describe, so `isLoading` excludes
+ * every other prop rather than making them optional alongside it — mirrors
+ * `ProductCardProps`.
  */
-export function CartCard({ line, onQuantityChange, onRemove }: CartCardProps) {
+export type CartCardProps = { isLoading: true } | CartCardData;
+
+const cardShellClassName = "rounded-xl border border-border bg-surface p-4";
+
+/**
+ * The cart's line-item card (CNP-47) — deliberately mirrors `ProductCard`'s
+ * badge, image-placeholder, and loading-skeleton treatment (CNP-27) so a line
+ * in the cart visibly matches the card it came from. `details` is dormant
+ * until the configurator (CNP-9) ships customizable products in Release 3;
+ * until then every line renders with `isCustomizable` false and no `details`.
+ */
+export function CartCard(props: CartCardProps) {
+  if (props.isLoading) {
+    return (
+      <li className={cardShellClassName} aria-hidden="true">
+        <div className="flex gap-4">
+          <Skeleton className="size-16 shrink-0 rounded-lg" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-6 w-3/5 rounded-md" />
+            <Skeleton className="mt-2 h-5 w-1/4 rounded-full" />
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-4">
+          <Skeleton className="h-9 w-28 rounded-lg" />
+          <Skeleton className="h-6 w-12 rounded-md" />
+        </div>
+      </li>
+    );
+  }
+
+  const { line, onQuantityChange, onRemove } = props;
   const {
     id,
     href,
@@ -37,7 +67,7 @@ export function CartCard({ line, onQuantityChange, onRemove }: CartCardProps) {
   } = line;
 
   return (
-    <li className="rounded-xl border border-border bg-surface p-4">
+    <li className={cardShellClassName}>
       <div className="flex gap-4">
         <div className="relative size-16 shrink-0 overflow-hidden rounded-lg">
           {imageUrl ? (

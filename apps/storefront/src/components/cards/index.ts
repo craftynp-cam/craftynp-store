@@ -1,4 +1,4 @@
-export { CartCard, type CartCardProps } from "./cart-card";
+export { CartCard, type CartCardData, type CartCardProps } from "./cart-card";
 export {
   ProductCard,
   type ProductCardData,
