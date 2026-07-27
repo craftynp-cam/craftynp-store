@@ -98,176 +98,182 @@ export default function ComponentsPage() {
       <div className="mt-12 lg:grid lg:grid-cols-[180px_1fr] lg:gap-12">
         <ComponentNav />
 
-        <div id="product-card">
-          <Section
-            title="Product card"
-            description="Shows image, category, name and price. Customizable products get a gold badge; ready-made get a mint one. Sale items show both prices and a text 'Sale' indicator, never colour alone."
-          >
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              <ProductCard
-                href="/products/custom-die-cut-stickers"
-                title="Custom Die-Cut Stickers"
-                category="Stickers"
-                price="from $0.55"
-                isCustomizable
-              />
-              <ProductCard
-                href="/products/wildflower-acrylic-keychain"
-                title="Wildflower Acrylic Keychain"
-                category="Keychains"
-                price="$9.00"
-                originalPrice="$12.00"
-              />
-              <ProductCard
-                href="/products/embroidered-tote-bag"
-                title="Embroidered Canvas Tote Bag With a Very Long Name"
-                category="Bags"
-                price="$24.00"
-              />
-            </div>
-          </Section>
+        {/* A single grid child, holding every section — the grid above
+            defines exactly two columns, so a second and third top-level
+            child here would cycle back into the 180px nav column instead
+            of staying in the content column. */}
+        <div>
+          <div id="product-card">
+            <Section
+              title="Product card"
+              description="Shows image, category, name and price. Customizable products get a gold badge; ready-made get a mint one. Sale items show both prices and a text 'Sale' indicator, never colour alone."
+            >
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <ProductCard
+                  href="/products/custom-die-cut-stickers"
+                  title="Custom Die-Cut Stickers"
+                  category="Stickers"
+                  price="from $0.55"
+                  isCustomizable
+                />
+                <ProductCard
+                  href="/products/wildflower-acrylic-keychain"
+                  title="Wildflower Acrylic Keychain"
+                  category="Keychains"
+                  price="$9.00"
+                  originalPrice="$12.00"
+                />
+                <ProductCard
+                  href="/products/embroidered-tote-bag"
+                  title="Embroidered Canvas Tote Bag With a Very Long Name"
+                  category="Bags"
+                  price="$24.00"
+                />
+              </div>
+            </Section>
 
-          <Section
-            title="Missing image"
-            description="A tokenised placeholder fills the fixed aspect ratio rather than leaving the card empty."
-          >
-            <div className="max-w-xs">
-              <ProductCard
-                href="/products/coming-soon"
-                title="Coming Soon"
-                category="Seasonal"
-                price="from $5.00"
-              />
-            </div>
-          </Section>
+            <Section
+              title="Missing image"
+              description="A tokenised placeholder fills the fixed aspect ratio rather than leaving the card empty."
+            >
+              <div className="max-w-xs">
+                <ProductCard
+                  href="/products/coming-soon"
+                  title="Coming Soon"
+                  category="Seasonal"
+                  price="from $5.00"
+                />
+              </div>
+            </Section>
 
-          <Section
-            title="Loading"
-            description="Shown while a product list is still fetching. The skeleton matches the card's shape exactly, so nothing shifts when the real content arrives."
-          >
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              <ProductCard isLoading />
-              <ProductCard isLoading />
-              <ProductCard isLoading />
-            </div>
-          </Section>
+            <Section
+              title="Loading"
+              description="Shown while a product list is still fetching. The skeleton matches the card's shape exactly, so nothing shifts when the real content arrives."
+            >
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <ProductCard isLoading />
+                <ProductCard isLoading />
+                <ProductCard isLoading />
+              </div>
+            </Section>
 
-          <Section
-            title="In grid"
-            description="Several cards in a responsive grid. Each reserves its image space up front, so nothing shifts as thumbnails load."
-          >
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <ProductCard
-                href="/products/custom-die-cut-stickers"
-                title="Custom Die-Cut Stickers"
-                category="Stickers"
-                price="from $0.55"
-                isCustomizable
-              />
-              <ProductCard
-                href="/products/wildflower-acrylic-keychain"
-                title="Wildflower Acrylic Keychain"
-                category="Keychains"
-                price="$9.00"
-                originalPrice="$12.00"
-              />
-              <ProductCard
-                href="/products/enamel-pin-set"
-                title="Enamel Pin Set"
-                category="Pins"
-                price="$14.00"
-              />
-              <ProductCard
-                href="/products/greeting-card-pack"
-                title="Greeting Card Pack"
-                category="Cards"
-                price="from $3.00"
-              />
-            </div>
-          </Section>
-        </div>
+            <Section
+              title="In grid"
+              description="Several cards in a responsive grid. Each reserves its image space up front, so nothing shifts as thumbnails load."
+            >
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <ProductCard
+                  href="/products/custom-die-cut-stickers"
+                  title="Custom Die-Cut Stickers"
+                  category="Stickers"
+                  price="from $0.55"
+                  isCustomizable
+                />
+                <ProductCard
+                  href="/products/wildflower-acrylic-keychain"
+                  title="Wildflower Acrylic Keychain"
+                  category="Keychains"
+                  price="$9.00"
+                  originalPrice="$12.00"
+                />
+                <ProductCard
+                  href="/products/enamel-pin-set"
+                  title="Enamel Pin Set"
+                  category="Pins"
+                  price="$14.00"
+                />
+                <ProductCard
+                  href="/products/greeting-card-pack"
+                  title="Greeting Card Pack"
+                  category="Cards"
+                  price="from $3.00"
+                />
+              </div>
+            </Section>
+          </div>
 
-        <div id="cart-card">
-          <Section
-            title="Cart card"
-            description="The cart drawer's line item (CNP-47). The badge always matches the product card it came from. Custom detail rows are dormant until the configurator ships in Release 3, but render here to prove the layout."
-          >
-            <CartCardDemo
-              initialLines={[
-                {
-                  id: "ready-made",
-                  href: "/products/wildflower-acrylic-keychain",
-                  title: "Wildflower Acrylic Keychain",
-                  unitPrice: 9,
-                  currencyCode: "usd",
-                  quantity: 2,
-                },
-                {
-                  id: "customizable",
-                  href: "/products/custom-die-cut-stickers",
-                  title: "Custom Die-Cut Stickers",
-                  unitPrice: 0.75,
-                  currencyCode: "usd",
-                  quantity: 50,
-                  isCustomizable: true,
-                  details: [
-                    { label: "Size", value: '3" · matte' },
-                    { label: "Text", value: "Sarah's Sweet Shop" },
-                    { label: "File", value: "logo-final.png" },
-                  ],
-                },
-              ]}
-            />
-          </Section>
+          <div id="cart-card">
+            <Section
+              title="Cart card"
+              description="The cart drawer's line item (CNP-47). The badge always matches the product card it came from. Custom detail rows are dormant until the configurator ships in Release 3, but render here to prove the layout."
+            >
+              <CartCardDemo
+                initialLines={[
+                  {
+                    id: "ready-made",
+                    href: "/products/wildflower-acrylic-keychain",
+                    title: "Wildflower Acrylic Keychain",
+                    unitPrice: 9,
+                    currencyCode: "usd",
+                    quantity: 2,
+                  },
+                  {
+                    id: "customizable",
+                    href: "/products/custom-die-cut-stickers",
+                    title: "Custom Die-Cut Stickers",
+                    unitPrice: 0.75,
+                    currencyCode: "usd",
+                    quantity: 50,
+                    isCustomizable: true,
+                    details: [
+                      { label: "Size", value: '3" · matte' },
+                      { label: "Text", value: "Sarah's Sweet Shop" },
+                      { label: "File", value: "logo-final.png" },
+                    ],
+                  },
+                ]}
+              />
+            </Section>
 
-          <Section
-            title="Long detail values"
-            description="A custom text or filename far longer than the panel truncates with an ellipsis rather than widening the card (AC 3)."
-          >
-            <CartCardDemo
-              initialLines={[
-                {
-                  id: "long-details",
-                  href: "/products/custom-die-cut-stickers",
-                  title: "Custom Die-Cut Stickers",
-                  unitPrice: 0.75,
-                  currencyCode: "usd",
-                  quantity: 25,
-                  isCustomizable: true,
-                  details: [
-                    {
-                      label: "Text",
-                      value:
-                        "Please make sure the logo is centered and the drop shadow matches our brand guide exactly — see attached PDF for reference",
-                    },
-                    {
-                      label: "File",
-                      value:
-                        "sarahs-sweet-shop-final-logo-v3-approved-for-print-2026.png",
-                    },
-                  ],
-                },
-              ]}
-            />
-          </Section>
+            <Section
+              title="Long detail values"
+              description="A custom text or filename far longer than the panel truncates with an ellipsis rather than widening the card (AC 3)."
+            >
+              <CartCardDemo
+                initialLines={[
+                  {
+                    id: "long-details",
+                    href: "/products/custom-die-cut-stickers",
+                    title: "Custom Die-Cut Stickers",
+                    unitPrice: 0.75,
+                    currencyCode: "usd",
+                    quantity: 25,
+                    isCustomizable: true,
+                    details: [
+                      {
+                        label: "Text",
+                        value:
+                          "Please make sure the logo is centered and the drop shadow matches our brand guide exactly — see attached PDF for reference",
+                      },
+                      {
+                        label: "File",
+                        value:
+                          "sarahs-sweet-shop-final-logo-v3-approved-for-print-2026.png",
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </Section>
 
-          <Section
-            title="Missing image"
-            description="Uses the same diagonal placeholder as the product card, so a cart line without a thumbnail still reads as part of the same family."
-          >
-            <CartCardDemo
-              initialLines={[
-                {
-                  id: "missing-image",
-                  href: "/products/coming-soon",
-                  title: "Coming Soon",
-                  unitPrice: 5,
-                  currencyCode: "usd",
-                  quantity: 1,
-                },
-              ]}
-            />
-          </Section>
+            <Section
+              title="Missing image"
+              description="Uses the same diagonal placeholder as the product card, so a cart line without a thumbnail still reads as part of the same family."
+            >
+              <CartCardDemo
+                initialLines={[
+                  {
+                    id: "missing-image",
+                    href: "/products/coming-soon",
+                    title: "Coming Soon",
+                    unitPrice: 5,
+                    currencyCode: "usd",
+                    quantity: 1,
+                  },
+                ]}
+              />
+            </Section>
+          </div>
         </div>
       </div>
     </main>
