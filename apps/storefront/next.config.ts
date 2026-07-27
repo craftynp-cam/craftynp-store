@@ -6,6 +6,11 @@ const backendUrl =
 const backend = new URL(backendUrl);
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Phosphor's barrel re-exports every icon; without this every subpath
+    // import pulls the full package into the client bundle.
+    optimizePackageImports: ["@phosphor-icons/react"],
+  },
   async rewrites() {
     return [
       {

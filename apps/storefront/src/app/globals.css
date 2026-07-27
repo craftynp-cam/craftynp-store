@@ -25,7 +25,7 @@
  * from it. Muted black is deliberately unused in dark mode — it sits within
  * 1.1:1 of ink navy, so as a layer it would be invisible.
  *
- * Contrast: see /design for the measured ratio of every pairing in both modes.
+ * Contrast: see /design/tokens for the measured ratio of every pairing in both modes.
  */
 @theme {
   /* Brand palette. Raw values appear here and nowhere else. */

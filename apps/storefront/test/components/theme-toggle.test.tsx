@@ -65,4 +65,51 @@ describe("ThemeToggle", () => {
       "true",
     );
   });
+
+  describe("compact variant", () => {
+    it("names both the current mode and what activating it switches to", () => {
+      render(<ThemeToggle variant="compact" />);
+
+      expect(
+        screen.getByRole("button", {
+          name: "Theme: System. Switch to Light.",
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it("cycles system → light → dark → system on repeated activation", () => {
+      render(<ThemeToggle variant="compact" />);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Theme: System. Switch to Light." }),
+      );
+      expect(document.documentElement.dataset.theme).toBe("light");
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Theme: Light. Switch to Dark." }),
+      );
+      expect(document.documentElement.dataset.theme).toBe("dark");
+
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Theme: Dark. Switch to System.",
+        }),
+      );
+      expect(document.documentElement.dataset.theme).toBeUndefined();
+    });
+
+    it("renders a single button, not the labelled group", () => {
+      render(<ThemeToggle variant="compact" />);
+
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+      expect(screen.queryByRole("group")).not.toBeInTheDocument();
+    });
+
+    it("hides the glyph from assistive technology", () => {
+      const { container } = render(<ThemeToggle variant="compact" />);
+
+      const icon = container.querySelector("svg");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    });
+  });
 });

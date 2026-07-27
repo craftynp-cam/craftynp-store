@@ -11,7 +11,7 @@ export default async function Home() {
   }).success;
 
   return (
-    <main className="mx-auto max-w-2xl p-8">
+    <main id="main-content" tabIndex={-1} className="mx-auto max-w-2xl p-8">
       <h1 className="font-display text-2xl">The Crafty NP</h1>
       <p className="mt-2 text-sm text-foreground-muted">
         Scaffold check. Shared types contract: {contractOk ? "ok" : "failed"}.

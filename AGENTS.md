@@ -249,8 +249,8 @@ live — are in each app's `AGENTS.md`. What holds everywhere:
 - A test must be able to fail. Write it so you have seen it fail for the right
   reason before you make it pass; a test that passes against a broken
   implementation is worse than no test.
-- Current suite: **220 tests** across the three workspaces (types 17, medusa 9,
-  storefront 194). A smaller number after your change means something was
+- Current suite: **241 tests** across the three workspaces (types 17, medusa 9,
+  storefront 215). A smaller number after your change means something was
   dropped.
 
 ## Guidance for agents
@@ -267,3 +267,4 @@ live — are in each app's `AGENTS.md`. What holds everywhere:
   than leaving it stale. Put repo-wide facts here and app-specific facts in the
   app's own file.
 - Keep comments to a minimum. Never add comments for the sake of it. Do not add JSDoc comments throughout the code.
+- Make commits at logical checkpoints, do not allow changes to build up.

@@ -16,13 +16,26 @@ via the root scripts, never `pnpm --filter`.
 Layout:
 
 - `src/app` — routes, `layout.tsx`, `globals.css` (the token source of truth),
-  and the `/design` token reference page.
+  and the `/design/tokens` token reference page. Every route's `<main>` carries
+  `id="main-content" tabIndex={-1}` — that is what the navbar's skip link
+  targets. Add both to any new page's `<main>`.
 - `src/components/ui` — the HeroUI-backed primitives, re-exported through
   `src/components/index.ts`.
 - `src/components/cards` — higher-level, product-facing components built on
   those primitives (`ProductCard`), re-exported through the same barrel.
+- `src/components/nav` — the global navbar (`Navbar`, CNP-24) and its parts
+  (menu button, logo, search, cart, account), re-exported through the same
+  barrel. Rendered once, in `layout.tsx`, above `{children}`.
+- `src/components/icons` — the only module that imports Phosphor
+  (`@phosphor-icons/react`) directly; every icon used in the app is
+  re-exported from here so the library stays swappable. Pulled from the
+  `/dist/ssr` subpath, which has no `"use client"` boundary, so icons render
+  in server components too. Every glyph is decorative: callers pass
+  `aria-hidden` on the icon and put the accessible name on the surrounding
+  control.
 - `src/lib` — the Medusa SDK client, the design-token mirror, contrast maths,
-  theme store.
+  theme store, and the cart-count store (`cart-count.ts` — a
+  localStorage-backed stand-in for the real cart until CNP-47).
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 ## Environment
@@ -64,7 +77,7 @@ blush surface, 3.8:1 on the dark page). Use `danger-foreground` for error text
 and `danger` only as a surface.
 
 `src/lib/design-tokens.ts` mirrors those values so the reference page at
-**`/design`** can render and measure every token in both modes;
+**`/design/tokens`** can render and measure every token in both modes;
 `design-tokens.test.ts` fails if the mirror and the CSS drift, and asserts that
 every text-bearing pairing clears WCAG AA at 4.5:1 on every surface of its
 mode. Pairings below that threshold must be marked `decorative` with a note
@@ -91,8 +104,10 @@ persists to `localStorage`. Two things about it are load-bearing:
   error. The suppression is scoped to `<html>`'s own attributes and does not
   reach any child.
 
-The toggle currently only appears on `/design`. Putting it in the global header
-is a matter of rendering it there — the layout wiring is already done.
+`ThemeToggle` takes a `variant` prop: `"group"` (default) is the labelled
+three-button control on `/design`; `"compact"` is the single icon button in the
+navbar, which cycles system → light → dark and names both the current mode and
+what activating it switches to.
 
 ## HeroUI
 
@@ -145,6 +160,28 @@ storefront is on 19, and anything crossing the boundary fails to typecheck. Do
 not solve this by hoisting (it removes the types entirely) or by adding
 `@types/react` to the root `package.json` (it makes React 19's types ambient
 for `apps/medusa`, which runs React 18).
+
+## Icons
+
+**Phosphor** (`@phosphor-icons/react`) is the icon library. Import glyphs only
+through `src/components/icons` — that barrel is the sole place the package is
+imported directly, so swapping icon libraries later touches one file. It
+imports from the `/dist/ssr` subpath, not the package root: the SSR build
+carries no `"use client"` boundary, so icons render inside server components
+(`Logo`, `AccountLink`) as well as client ones. `next.config.ts` sets
+`experimental.optimizePackageImports` for the package so its barrel re-export
+doesn't pull the whole icon set into the client bundle.
+
+Every glyph is decorative. The icon component gets `aria-hidden="true"`; the
+accessible name goes on the surrounding button or link, never the glyph — this
+is what CNP-24's navbar tests assert (no `svg` contributes to an accessible
+name anywhere in the header).
+
+## Logo
+
+`public/logo.svg` is a placeholder monogram, clearly marked as such in the
+file's own comment — swap it for the real artwork and nothing else changes.
+`src/components/nav/logo.tsx` references it by path only.
 
 ## Component imports
 
@@ -215,5 +252,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **194** of the repo's 220 tests. A smaller number
+The storefront currently holds **215** of the repo's 241 tests. A smaller number
 after your change means something was dropped.
