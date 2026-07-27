@@ -19,6 +19,8 @@ Layout:
   and the `/design` token reference page.
 - `src/components/ui` — the HeroUI-backed primitives, re-exported through
   `src/components/index.ts`.
+- `src/components/cards` — higher-level, product-facing components built on
+  those primitives (`ProductCard`), re-exported through the same barrel.
 - `src/lib` — the Medusa SDK client, the design-token mirror, contrast maths,
   theme store.
 - `test` — a mirror of `src/`; see [Testing](#testing).
@@ -213,5 +215,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **176** of the repo's 202 tests. A smaller number
+The storefront currently holds **194** of the repo's 220 tests. A smaller number
 after your change means something was dropped.
