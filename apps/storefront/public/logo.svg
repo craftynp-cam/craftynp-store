@@ -1,0 +1,10 @@
+<!--
+  Placeholder monogram — a stand-in for the real mark, sized to match the
+  mockup's circular "NP" badge. Replace this file with the final artwork;
+  `Logo` (src/components/nav/logo.tsx) references it by path only, so no
+  other file changes when it's swapped.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-hidden="true">
+  <circle cx="20" cy="20" r="19" fill="#04133b" stroke="#ebb805" stroke-width="2" />
+  <text x="20" y="26" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="14" fill="#ebb805">NP</text>
+</svg>
