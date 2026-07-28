@@ -1,4 +1,5 @@
 export { AccountLink } from "./account-link";
+export { Breadcrumbs } from "./breadcrumbs";
 export { CartButton } from "./cart-button";
 export { CartDrawer } from "./cart-drawer";
 export { Footer } from "./footer";

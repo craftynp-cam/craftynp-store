@@ -1,6 +1,7 @@
 import type { ProductCardData } from "@/components";
 
 import { formatMoney } from "./money";
+import { productHref } from "./routes";
 
 /**
  * A narrow structural type rather than the SDK's generated product type, so
@@ -11,7 +12,7 @@ export type ProductCardSourceProduct = {
   handle: string | null;
   title: string;
   thumbnail?: string | null;
-  categories?: readonly { name: string }[] | null;
+  categories?: readonly { name: string; handle: string }[] | null;
   variants?:
     | readonly {
         calculated_price?: {
@@ -50,7 +51,10 @@ export function toProductCardProps(
     cheapest != null && cheapest.calculated_amount < cheapest.original_amount;
 
   return {
-    href: `/products/${product.handle ?? ""}`,
+    href: productHref(
+      product.categories?.[0]?.handle ?? "",
+      product.handle ?? "",
+    ),
     title: product.title,
     category: product.categories?.[0]?.name ?? "",
     imageUrl: product.thumbnail ?? undefined,

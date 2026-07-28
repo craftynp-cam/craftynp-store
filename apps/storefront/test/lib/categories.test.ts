@@ -33,7 +33,7 @@ describe("toNavCategories", () => {
       { name: "Stickers", handle: "stickers" },
     ];
 
-    expect(toNavCategories(sources)[0]?.href).toBe("/categories/stickers");
+    expect(toNavCategories(sources)[0]?.href).toBe("/stickers");
   });
 
   it("drops categories that have a parent", () => {
@@ -109,7 +109,7 @@ describe("fetchNavCategories", () => {
     });
 
     expect(await fetchNavCategories()).toEqual([
-      { name: "Shirts", href: "/categories/shirts" },
+      { name: "Shirts", href: "/shirts" },
     ]);
   });
 
@@ -155,7 +155,7 @@ describe("toShowcaseSources", () => {
     ];
 
     expect(toShowcaseSources(sources)).toEqual([
-      { id: "pcat_1", name: "Shirts", href: "/categories/shirts" },
+      { id: "pcat_1", name: "Shirts", href: "/shirts" },
     ]);
   });
 
@@ -210,7 +210,7 @@ describe("fetchShowcaseCategories", () => {
     });
 
     expect(await fetchShowcaseCategories()).toEqual([
-      { name: "Shirts", href: "/categories/shirts", productCount: 4 },
+      { name: "Shirts", href: "/shirts", productCount: 4 },
     ]);
     expect(sdk.store.product.list).toHaveBeenCalledWith(
       expect.objectContaining({ category_id: ["pcat_1"] }),
@@ -241,8 +241,8 @@ describe("fetchShowcaseCategories", () => {
 
     // toShowcaseSources sorts alphabetically, so Pants precedes Shirts.
     expect(categories).toEqual([
-      { name: "Pants", href: "/categories/pants", productCount: 5 },
-      { name: "Shirts", href: "/categories/shirts", productCount: 2 },
+      { name: "Pants", href: "/pants", productCount: 5 },
+      { name: "Shirts", href: "/shirts", productCount: 2 },
     ]);
   });
 
@@ -260,7 +260,7 @@ describe("fetchShowcaseCategories", () => {
       .mockImplementation(() => {});
 
     expect(await fetchShowcaseCategories()).toEqual([
-      { name: "Shirts", href: "/categories/shirts", productCount: 0 },
+      { name: "Shirts", href: "/shirts", productCount: 0 },
     ]);
 
     consoleError.mockRestore();

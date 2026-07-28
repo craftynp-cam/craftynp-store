@@ -8,6 +8,22 @@ up, the commands, the branching strategy, and the conventions that hold across
 every workspace. **Anything specific to one app lives in that app's own
 `AGENTS.md`** — read it as well as this one before working there.
 
+## Guidance for agents
+
+- Read the relevant app's `AGENTS.md` before changing anything under `apps/*`.
+- Do not commit, push, or open pull requests unless asked.
+- Never commit secrets, `.env` files, API keys, or customer data.
+- Do not delete or force-push `dev`, `qa`, or `main` — and do not attempt to
+  work around the rulesets that prevent it.
+- Match the surrounding code's style rather than importing conventions from
+  elsewhere.
+- Keep these files true. When your change makes a statement wrong — a command,
+  a port, a version, a test count — update it as part of the same change rather
+  than leaving it stale. Put repo-wide facts here and app-specific facts in the
+  app's own file.
+- Keep comments to a minimum. Never add comments for the sake of it. Do not add JSDoc comments throughout the code.
+- Make commits at logical checkpoints, do not allow changes to build up.
+
 | Workspace         | Instructions                                           |
 | ----------------- | ------------------------------------------------------ |
 | `apps/storefront` | [apps/storefront/AGENTS.md](apps/storefront/AGENTS.md) |
@@ -249,22 +265,6 @@ live — are in each app's `AGENTS.md`. What holds everywhere:
 - A test must be able to fail. Write it so you have seen it fail for the right
   reason before you make it pass; a test that passes against a broken
   implementation is worse than no test.
-- Current suite: **365 tests** across the three workspaces (types 17, medusa 9,
-  storefront 339). A smaller number after your change means something was
+- Current suite: **428 tests** across the three workspaces (types 17, medusa 9,
+  storefront 402). A smaller number after your change means something was
   dropped.
-
-## Guidance for agents
-
-- Read the relevant app's `AGENTS.md` before changing anything under `apps/*`.
-- Do not commit, push, or open pull requests unless asked.
-- Never commit secrets, `.env` files, API keys, or customer data.
-- Do not delete or force-push `dev`, `qa`, or `main` — and do not attempt to
-  work around the rulesets that prevent it.
-- Match the surrounding code's style rather than importing conventions from
-  elsewhere.
-- Keep these files true. When your change makes a statement wrong — a command,
-  a port, a version, a test count — update it as part of the same change rather
-  than leaving it stale. Put repo-wide facts here and app-specific facts in the
-  app's own file.
-- Keep comments to a minimum. Never add comments for the sake of it. Do not add JSDoc comments throughout the code.
-- Make commits at logical checkpoints, do not allow changes to build up.
