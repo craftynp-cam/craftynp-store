@@ -13,6 +13,8 @@ type QuantityStepperProps = {
 
 const buttonClassName =
   "flex size-9 shrink-0 items-center justify-center bg-surface-soft text-foreground transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset";
+const decrementButtonClassName = `${buttonClassName} rounded-l-lg`;
+const incrementButtonClassName = `${buttonClassName} rounded-r-lg`;
 
 /**
  * Shared by the cart drawer (CNP-47) and, later, the configurator's own
@@ -37,7 +39,7 @@ export function QuantityStepper({
         aria-label="Decrease quantity"
         disabled={!canDecrement}
         onClick={() => onChange(Math.max(min, value - 1))}
-        className={buttonClassName}
+        className={decrementButtonClassName}
       >
         <Minus aria-hidden="true" size={16} />
       </button>
@@ -61,7 +63,7 @@ export function QuantityStepper({
         aria-label="Increase quantity"
         disabled={!canIncrement}
         onClick={() => onChange(value + 1)}
-        className={buttonClassName}
+        className={incrementButtonClassName}
       >
         <Plus aria-hidden="true" size={16} />
       </button>
