@@ -16,13 +16,43 @@ export type ProductCardSourceProduct = {
   variants?:
     | readonly {
         calculated_price?: {
-          calculated_amount: number;
-          original_amount: number;
-          currency_code: string;
+          calculated_amount: number | null;
+          original_amount: number | null;
+          currency_code: string | null;
         } | null;
       }[]
     | null;
 };
+
+export type CalculatedPrice = {
+  calculated_amount: number;
+  original_amount: number;
+  currency_code: string;
+};
+
+export function cheapestPrice(
+  product: ProductCardSourceProduct,
+): CalculatedPrice | null {
+  const prices = (product.variants ?? [])
+    .map((variant) => variant.calculated_price)
+    .filter(
+      (price): price is CalculatedPrice =>
+        price != null &&
+        price.calculated_amount != null &&
+        price.original_amount != null &&
+        price.currency_code != null,
+    );
+
+  return (
+    prices.reduce<CalculatedPrice | undefined>(
+      (lowest, price) =>
+        !lowest || price.calculated_amount < lowest.calculated_amount
+          ? price
+          : lowest,
+      undefined,
+    ) ?? null
+  );
+}
 
 /**
  * Maps a Medusa store product onto the card's presentational props: the
@@ -34,15 +64,15 @@ export function toProductCardProps(
 ): ProductCardData {
   const prices = (product.variants ?? [])
     .map((variant) => variant.calculated_price)
-    .filter((price) => price != null);
+    .filter(
+      (price): price is CalculatedPrice =>
+        price != null &&
+        price.calculated_amount != null &&
+        price.original_amount != null &&
+        price.currency_code != null,
+    );
 
-  const cheapest = prices.reduce<(typeof prices)[number] | undefined>(
-    (lowest, price) =>
-      !lowest || price.calculated_amount < lowest.calculated_amount
-        ? price
-        : lowest,
-    undefined,
-  );
+  const cheapest = cheapestPrice(product);
 
   const isFromPrice =
     new Set(prices.map((price) => price.calculated_amount)).size > 1;

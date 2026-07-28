@@ -1,9 +1,12 @@
 import {
+  fetchCatalogSidebar,
   fetchNavCategories,
   fetchShowcaseCategories,
   toNavCategories,
   toShowcaseSources,
+  toSidebarCategories,
   type NavCategorySource,
+  type ProductCategorySource,
   type ShowcaseCategorySource,
 } from "@/lib/categories";
 
@@ -175,6 +178,135 @@ describe("toShowcaseSources", () => {
       "Merch",
       "Pants",
     ]);
+  });
+});
+
+describe("toSidebarCategories", () => {
+  it("counts products per category and carries a per-category handle", () => {
+    const categories: ShowcaseCategorySource[] = [
+      { id: "pcat_1", name: "Shirts", handle: "shirts" },
+      { id: "pcat_2", name: "Pants", handle: "pants" },
+    ];
+    const products: ProductCategorySource[] = [
+      { categories: [{ id: "pcat_1" }] },
+      { categories: [{ id: "pcat_1" }] },
+      { categories: [{ id: "pcat_2" }] },
+    ];
+
+    expect(toSidebarCategories(categories, products)).toEqual({
+      totalCount: 3,
+      categories: [
+        {
+          id: "pcat_2",
+          name: "Pants",
+          handle: "pants",
+          href: "/pants",
+          productCount: 1,
+        },
+        {
+          id: "pcat_1",
+          name: "Shirts",
+          handle: "shirts",
+          href: "/shirts",
+          productCount: 2,
+        },
+      ],
+    });
+  });
+
+  it("gives a category with no matching products a count of 0", () => {
+    const categories: ShowcaseCategorySource[] = [
+      { id: "pcat_1", name: "Banners", handle: "banners" },
+    ];
+
+    expect(toSidebarCategories(categories, []).categories).toEqual([
+      {
+        id: "pcat_1",
+        name: "Banners",
+        handle: "banners",
+        href: "/banners",
+        productCount: 0,
+      },
+    ]);
+  });
+
+  it("ignores a product with no category", () => {
+    const categories: ShowcaseCategorySource[] = [
+      { id: "pcat_1", name: "Shirts", handle: "shirts" },
+    ];
+    const products: ProductCategorySource[] = [{ categories: [] }, {}];
+
+    expect(toSidebarCategories(categories, products).totalCount).toBe(2);
+    expect(
+      toSidebarCategories(categories, products).categories[0]?.productCount,
+    ).toBe(0);
+  });
+});
+
+describe("fetchCatalogSidebar", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  function mockSdk() {
+    return jest.requireMock<{
+      sdk: {
+        store: {
+          category: { list: jest.Mock };
+          product: { list: jest.Mock };
+        };
+      };
+    }>("../../src/lib/medusa").sdk;
+  }
+
+  it("attaches a productCount per category and a total from the product count", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockResolvedValue({
+      product_categories: [{ id: "pcat_1", name: "Shirts", handle: "shirts" }],
+      count: 1,
+      offset: 0,
+      limit: 100,
+    });
+    sdk.store.product.list.mockResolvedValue({
+      products: [{ id: "prod_1", categories: [{ id: "pcat_1" }] }],
+      count: 8,
+      offset: 0,
+      limit: 100,
+    });
+
+    expect(await fetchCatalogSidebar()).toEqual({
+      totalCount: 8,
+      categories: [
+        {
+          id: "pcat_1",
+          name: "Shirts",
+          handle: "shirts",
+          href: "/shirts",
+          productCount: 1,
+        },
+      ],
+    });
+  });
+
+  it("returns an empty sidebar and does not throw when the SDK rejects", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockRejectedValue(new Error("backend is down"));
+    sdk.store.product.list.mockResolvedValue({
+      products: [],
+      count: 0,
+      offset: 0,
+      limit: 100,
+    });
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(fetchCatalogSidebar()).resolves.toEqual({
+      totalCount: 0,
+      categories: [],
+    });
+
+    consoleError.mockRestore();
   });
 });
 

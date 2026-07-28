@@ -60,6 +60,69 @@ export function toShowcaseSources(
   });
 }
 
+export type SidebarCategory = {
+  id: string;
+  name: string;
+  handle: string;
+  href: string;
+  productCount: number;
+};
+
+export type SidebarCatalog = {
+  totalCount: number;
+  categories: SidebarCategory[];
+};
+
+export type ProductCategorySource = {
+  categories?: readonly { id: string }[] | null;
+};
+
+export function toSidebarCategories(
+  categorySources: readonly ShowcaseCategorySource[],
+  productSources: readonly ProductCategorySource[],
+): SidebarCatalog {
+  const categories = toShowcaseSources(categorySources);
+
+  const counts = new Map<string, number>();
+  for (const product of productSources) {
+    for (const category of product.categories ?? []) {
+      counts.set(category.id, (counts.get(category.id) ?? 0) + 1);
+    }
+  }
+
+  return {
+    totalCount: productSources.length,
+    categories: categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      href: category.href,
+      handle: category.href.slice(1),
+      productCount: counts.get(category.id) ?? 0,
+    })),
+  };
+}
+
+export const fetchCatalogSidebar = cache(async (): Promise<SidebarCatalog> => {
+  try {
+    const [{ product_categories }, { products, count }] = await Promise.all([
+      sdk.store.category.list({
+        fields: "id,name,handle,parent_category_id",
+        limit: 100,
+      }),
+      sdk.store.product.list({
+        fields: "id,categories.id",
+        limit: 100,
+      }),
+    ]);
+
+    const sidebar = toSidebarCategories(product_categories, products);
+    return { ...sidebar, totalCount: count };
+  } catch (error) {
+    console.error("Could not load the catalog sidebar", error);
+    return { totalCount: 0, categories: [] };
+  }
+});
+
 export const fetchShowcaseCategories = cache(
   async (): Promise<ShowcaseCategory[]> => {
     try {

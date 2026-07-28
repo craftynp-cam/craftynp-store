@@ -34,4 +34,29 @@ describe("toBreadcrumbs", () => {
       { label: "Keychains" },
     ]);
   });
+
+  it("overrides a segment's label when the path has a matching entry", () => {
+    expect(toBreadcrumbs("/products", { "/products": "All products" })).toEqual(
+      [{ label: "Home", href: "/" }, { label: "All products" }],
+    );
+  });
+
+  it("uses a label override for the real category name over the title-cased handle", () => {
+    expect(toBreadcrumbs("/t-shirts", { "/t-shirts": "T-Shirts" })).toEqual([
+      { label: "Home", href: "/" },
+      { label: "T-Shirts" },
+    ]);
+  });
+
+  it("falls back to title-casing for a segment with no override", () => {
+    expect(
+      toBreadcrumbs("/keychains/wildflower-acrylic-keychain", {
+        "/keychains": "Keychains",
+      }),
+    ).toEqual([
+      { label: "Home", href: "/" },
+      { label: "Keychains", href: "/keychains" },
+      { label: "Wildflower Acrylic Keychain" },
+    ]);
+  });
 });
