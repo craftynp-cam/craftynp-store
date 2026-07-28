@@ -13,10 +13,7 @@ type ProductGalleryProps = {
 const placeholderClassName =
   "size-full bg-surface-soft bg-[repeating-linear-gradient(45deg,var(--color-border)_0,var(--color-border)_1px,transparent_1px,transparent_12px)]";
 
-export function ProductGallery({
-  images,
-  productTitle,
-}: ProductGalleryProps) {
+export function ProductGallery({ images, productTitle }: ProductGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const selected = images[selectedIndex];
 

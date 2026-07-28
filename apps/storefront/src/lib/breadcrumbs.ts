@@ -8,7 +8,10 @@ function titleCase(segment: string): string {
     .join(" ");
 }
 
-export function toBreadcrumbs(pathname: string): Breadcrumb[] {
+export function toBreadcrumbs(
+  pathname: string,
+  labels?: Record<string, string>,
+): Breadcrumb[] {
   const segments = pathname.split("/").filter(Boolean);
 
   if (segments.length === 0) return [{ label: "Home" }];
@@ -19,7 +22,10 @@ export function toBreadcrumbs(pathname: string): Breadcrumb[] {
   const crumbs = segments.map((segment, index) => {
     path += `/${segment}`;
     const isLast = index === segments.length - 1;
-    return { label: titleCase(segment), href: isLast ? undefined : path };
+    return {
+      label: labels?.[path] ?? titleCase(segment),
+      href: isLast ? undefined : path,
+    };
   });
 
   return [home, ...crumbs];

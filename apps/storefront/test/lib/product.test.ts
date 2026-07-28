@@ -32,7 +32,10 @@ describe("toProductDetail", () => {
     expect(detail.categoryName).toBe("Keychains");
     expect(detail.categoryHandle).toBe("keychains");
     expect(detail.images).toEqual([
-      { url: "https://example.com/keychain.png", alt: "Wildflower Acrylic Keychain" },
+      {
+        url: "https://example.com/keychain.png",
+        alt: "Wildflower Acrylic Keychain",
+      },
     ]);
     expect(detail.variants[0]?.price).toBe("$9.00");
     expect(detail.variants[0]?.originalPrice).toBeUndefined();
@@ -156,7 +159,6 @@ describe("toProductDetail", () => {
       },
     ]);
   });
-
 });
 
 describe("fetchProductByHandle", () => {

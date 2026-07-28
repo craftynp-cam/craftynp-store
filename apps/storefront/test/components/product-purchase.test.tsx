@@ -85,9 +85,7 @@ describe("ProductPurchase", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
 
     expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /add to cart/i }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
   });
 
   it("adds the selected variant to the cart and opens the drawer", () => {
@@ -155,5 +153,38 @@ describe("ProductPurchase", () => {
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
 
     expect(readCart().lines[0]?.quantity).toBe(2);
+  });
+
+  it("shows the unit price on the add to cart button at quantity 1", () => {
+    render(
+      <ProductPurchase
+        title="Wildflower Acrylic Keychain"
+        href="/keychains/wildflower-acrylic-keychain"
+        options={options}
+        variants={variants}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Add to cart · $9.00" }),
+    ).toBeInTheDocument();
+  });
+
+  it("multiplies the add to cart button's price by the selected quantity", () => {
+    render(
+      <ProductPurchase
+        title="Wildflower Acrylic Keychain"
+        href="/keychains/wildflower-acrylic-keychain"
+        options={options}
+        variants={variants}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+
+    expect(
+      screen.getByRole("button", { name: "Add to cart · $27.00" }),
+    ).toBeInTheDocument();
   });
 });

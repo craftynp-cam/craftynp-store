@@ -10,9 +10,7 @@ jest.mock("next/navigation", () => ({
 
 describe("Breadcrumbs", () => {
   it("renders a link for every crumb except the current page", () => {
-    mockUsePathname.mockReturnValue(
-      "/keychains/wildflower-acrylic-keychain",
-    );
+    mockUsePathname.mockReturnValue("/keychains/wildflower-acrylic-keychain");
     render(<Breadcrumbs />);
 
     const home = screen.getByRole("link", { name: "Home" });
@@ -22,9 +20,7 @@ describe("Breadcrumbs", () => {
   });
 
   it("marks the last crumb as the current page, not a link", () => {
-    mockUsePathname.mockReturnValue(
-      "/keychains/wildflower-acrylic-keychain",
-    );
+    mockUsePathname.mockReturnValue("/keychains/wildflower-acrylic-keychain");
     render(<Breadcrumbs />);
 
     const current = screen.getByText("Wildflower Acrylic Keychain");

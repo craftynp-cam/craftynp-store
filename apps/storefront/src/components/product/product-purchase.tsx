@@ -8,6 +8,7 @@ import { StockStatus } from "./stock-status";
 import { VariantSelector } from "./variant-selector";
 import { addCartLine } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
+import { formatMoney } from "@/lib/money";
 import type { ProductDetailOption, ProductDetailVariant } from "@/lib/product";
 import { findVariant, optionValueAvailability } from "@/lib/variant";
 
@@ -42,9 +43,10 @@ export function ProductPurchase({
   );
   const [quantity, setQuantity] = useState(1);
 
-  const optionIds = useMemo(() => options.map((option) => option.id), [
-    options,
-  ]);
+  const optionIds = useMemo(
+    () => options.map((option) => option.id),
+    [options],
+  );
 
   const availability = useMemo(
     () => optionValueAvailability(options, variants, selected),
@@ -54,6 +56,13 @@ export function ProductPurchase({
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isOutOfStock =
     selectedVariant == null || selectedVariant.availability === "out_of_stock";
+
+  const totalPrice = selectedVariant?.price
+    ? formatMoney(
+        selectedVariant.calculatedAmount * quantity,
+        selectedVariant.currencyCode,
+      )
+    : undefined;
 
   const detailsForCart = options
     .map((option) => {
@@ -133,7 +142,7 @@ export function ProductPurchase({
         isDisabled={isOutOfStock}
         onPress={handleAddToCart}
       >
-        Add to cart{selectedVariant?.price ? ` · ${selectedVariant.price}` : ""}
+        Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
       </Button>
     </div>
   );
