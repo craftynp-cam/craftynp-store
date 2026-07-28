@@ -13,53 +13,40 @@ components fetch from the Medusa backend through `@medusajs/js-sdk`
 resolved through its built `dist/` — which is why storefront tasks must be run
 via the root scripts, never `pnpm --filter`.
 
-Layout:
+Layout — read the directory before changing it; this is not an inventory of
+what's inside, just what a reader wouldn't get from the code:
 
 - `src/app` — routes, `layout.tsx`, `globals.css` (the token source of truth),
   and the `/design/tokens` token reference page. Every route's `<main>` carries
   `id="main-content" tabIndex={-1}` — that is what the navbar's skip link
   targets. Add both to any new page's `<main>`.
-- `src/components/ui` — the HeroUI-backed primitives, re-exported through
-  `src/components/index.ts`.
+- `src/components/ui` — the HeroUI-backed primitives.
 - `src/components/cards` — higher-level, product-facing components built on
-  those primitives (`ProductCard`, `CartCard`), re-exported through the same
-  barrel. `CartCard` (CNP-47) deliberately mirrors `ProductCard`'s badge and
-  missing-image treatment so a line in the cart drawer visibly matches the
-  card it came from.
-- `src/components/nav` — the global navbar (`Navbar`, CNP-24) and its parts
-  (menu button, logo, search, account, and the two drawers — navigation,
-  CNP-25, and cart, CNP-47 — re-exported through the same barrel). Rendered
-  once, in `layout.tsx`, above `{children}`. There is no horizontal desktop
-  nav — the drawer is the site's only navigation at every breakpoint, so
-  `Navbar` takes `categories` as a required prop rather than fetching them
-  itself: RTL cannot render an async server component, so `layout.tsx` awaits
-  `fetchNavCategories()` and passes the result down.
+  those primitives.
+- `src/components/nav` — the global header, footer, and their parts, rendered
+  once in `layout.tsx`. There is no horizontal desktop nav — the drawer is the
+  site's only navigation at every breakpoint. `Navbar` and `Footer` both take
+  `categories` as a required prop rather than fetching it themselves: RTL
+  cannot render an async server component, so `layout.tsx` awaits
+  `fetchNavCategories()` once and passes the result to both.
 - `src/components/icons` — the only module that imports Phosphor
-  (`@phosphor-icons/react`) directly; every icon used in the app is
-  re-exported from here so the library stays swappable. Pulled from the
-  `/dist/ssr` subpath, which has no `"use client"` boundary, so icons render
-  in server components too. Every glyph is decorative: callers pass
+  (`@phosphor-icons/react`) directly, so the library stays swappable. Pulled
+  from the `/dist/ssr` subpath, which has no `"use client"` boundary, so icons
+  render in server components too. Every glyph is decorative: callers pass
   `aria-hidden` on the icon and put the accessible name on the surrounding
   control.
 - `src/lib` — the Medusa SDK client, the design-token mirror, contrast maths,
-  the theme store, `categories.ts` (the nav drawer's category fetch and the
-  first data-fetch module in the repo — a narrow structural source type plus a
-  pure mapper, the same shape as `product-card.ts`, React's request-scoped
-  `cache()` for dedupe, and it never throws, so a Medusa outage degrades to the
-  drawer's empty state instead of taking the site down), and the cart itself
-  (CNP-47): `cart.ts` is a localStorage-backed cart store — lines, quantities,
-  and the subtotal/line-count derivations — behind a narrow public surface
-  (`readCart`, `subscribeToCart`, `addCartLine`, `setCartLineQuantity`,
-  `removeCartLine`, `clearCart`) so a later story can swap the backing for
-  Medusa's `/store/carts` without touching any component. Its snapshot is
-  cached at module scope and only invalidated on a write or a cross-tab
-  `storage` event — `useSyncExternalStore` requires a referentially stable
-  snapshot, and a cart is an object, unlike the plain number the old
-  `cart-count.ts` returned. `cart-drawer.ts` is a separate, unpersisted
-  open/close store for the drawer itself — UI state and cart contents have
-  different lifetimes, and a reload must never leave the drawer open.
-  `openCartDrawer()` is the seam CNP-45 calls after a successful add-to-cart.
+  the theme store, category fetching, site constants, and the cart. Two things
+  worth knowing before you touch them: `categories.ts` never throws — a Medusa
+  outage degrades to an empty state instead of taking the site down — and
+  `cart.ts`'s snapshot is cached at module scope because
+  `useSyncExternalStore` requires a referentially stable object; `cart-drawer.ts`
+  is a separate, unpersisted open/close store so a reload never leaves the
+  drawer open.
 - `test` — a mirror of `src/`; see [Testing](#testing).
+
+Each directory has its own barrel (`index.ts`); a new component is unreachable
+until it's exported there — see [Component imports](#component-imports).
 
 ## Environment
 
@@ -198,6 +185,11 @@ surfaces, well under the 3:1 WCAG 1.4.11 requires. `focus-ring.test.ts` holds
 the ring to 3:1 on every surface of both modes and records why gold is
 rejected.
 
+**The footer is the one surface that stays navy in both modes.** It uses the
+fixed brand utilities (`bg-ink`, `text-off-white`, `text-gold`) rather than the
+mode-following semantic aliases, so `ring-primary` — ink navy in light mode —
+would be invisible on it. Its focus ring is `ring-off-white` instead.
+
 **`pnpm-workspace.yaml` declares `@types/react` as a peer** of HeroUI and the
 React Aria packages. They declare `react` but not its types, so pnpm links no
 type package into their subgraphs and their `.d.ts` files resolve `react` by
@@ -309,5 +301,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **283** of the repo's 309 tests. A smaller number
+The storefront currently holds **293** of the repo's 319 tests. A smaller number
 after your change means something was dropped.
