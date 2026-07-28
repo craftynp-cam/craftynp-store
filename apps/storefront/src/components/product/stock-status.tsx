@@ -2,7 +2,7 @@ import type { Availability } from "@/lib/variant";
 
 const copy: Record<Availability, { label: string; dotClassName: string }> = {
   in_stock: {
-    label: "In stock — ships next business day",
+    label: "In stock",
     dotClassName: "bg-success",
   },
   low_stock: {
@@ -23,8 +23,13 @@ export function StockStatus({ availability }: { availability: Availability }) {
       : "text-foreground";
 
   return (
-    <p className={`flex items-center gap-2 text-sm font-medium ${textClassName}`}>
-      <span aria-hidden="true" className={`size-2 rounded-full ${dotClassName}`} />
+    <p
+      className={`flex items-center gap-2 text-sm font-medium ${textClassName}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`size-2 rounded-full ${dotClassName}`}
+      />
       {label}
     </p>
   );
