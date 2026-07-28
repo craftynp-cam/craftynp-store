@@ -2,12 +2,6 @@ import Link from "next/link";
 
 import type { SidebarCategory } from "@/lib/categories";
 
-export type CatalogSidebarEntry = {
-  name: string;
-  href: string;
-  productCount: number;
-};
-
 type CatalogSidebarProps = {
   categories: readonly SidebarCategory[];
   totalCount: number;
