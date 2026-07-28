@@ -24,21 +24,14 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const arrowButtonClassName =
   "flex size-11 shrink-0 items-center justify-center rounded-full bg-off-white/90 text-ink transition-colors hover:bg-off-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
-// AC 11: the carousel's height comes from fixed classes, not slide content,
-// so nothing reflows as slides load. Mobile is a square per the mockup; from
-// `md` up it fills most of the viewport below the sticky header, leaving a
-// hint of the page beneath to imply scrolling.
+// Fixed height rather than content-driven, so nothing reflows as slides
+// load; the subtracted 4rem on desktop leaves a hint of the page beneath to
+// imply scrolling.
 const shellClassName =
   "relative aspect-square w-full overflow-hidden md:aspect-auto md:h-[calc(100svh-var(--header-height)-4rem)] md:min-h-[28rem]";
 
 type CategoryCarouselProps = { categories: readonly ShowcaseCategory[] };
 
-/**
- * The homepage hero (CNP-29): one full-bleed slide per Medusa category,
- * auto-advancing every 5s with wraparound, pausable by hover, focus, an open
- * drawer, or the visible pause control, and fully inert to
- * `prefers-reduced-motion`.
- */
 export function CategoryCarousel({ categories }: CategoryCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
@@ -65,11 +58,9 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
 
   // Bumped whenever the carousel resumes from a pause on the same slide, so
   // the progress ring — keyed on this alongside activeIndex — remounts and
-  // restarts in step with the real timer below, which also restarts its
-  // full 5s wait on every resume rather than continuing a partial one. This
-  // follows React's "adjusting state during render" pattern (a guarded
-  // setState call in the render body, not an effect) rather than a
-  // useEffect, since the latter would cause an extra, visible render pass.
+  // restarts in step with the timer below, which also restarts its full 5s
+  // wait on every resume. A guarded setState call in the render body (not an
+  // effect) avoids an extra, visible render pass.
   const [prevIsPaused, setPrevIsPaused] = useState(isPaused);
   const [runToken, setRunToken] = useState(0);
   if (prevIsPaused !== isPaused) {
@@ -112,8 +103,6 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
     );
   }
 
-  // AC 10: fewer than two categories is a single static slide — no arrows,
-  // dots, or pause control, since there is nothing to rotate between.
   if (total === 1) {
     const only = categories[0]!;
     return (
@@ -221,9 +210,6 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
               strokeOpacity={0.25}
               strokeWidth={2}
             />
-            {/* Keyed on runToken so a fresh countdown remounts the circle and
-                restarts it from a full ring; pausing only toggles
-                animation-play-state, freezing it exactly where it is. */}
             <circle
               key={`${activeIndex}-${runToken}`}
               cx="22"

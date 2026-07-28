@@ -18,17 +18,12 @@ const countLinkClassName =
   "inline-flex items-center gap-1 text-off-white/80 underline-offset-4 transition-colors hover:text-off-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink rounded-sm";
 
 /**
- * One slide of the homepage category carousel (CNP-29). Presentational and
+ * One slide of the homepage category carousel. Presentational and
  * stateless — `CategoryCarousel` owns which slide is active and drives every
- * prop here.
- *
- * AC 9: the active slide's name is the page's only `<h1>`; every other slide
- * renders the same text as a plain paragraph, so exactly one heading exists
- * at a time no matter which slide is showing.
- *
- * AC 8: inactive slides carry `inert` and `aria-hidden` so they drop out of
- * both the tab order and assistive tech, and the slide itself is labelled
- * with its position for whichever AT surface reads the live region.
+ * prop here. Only the active slide renders its name as an `<h1>` (every
+ * other slide gets a plain paragraph), so exactly one heading exists on the
+ * page no matter which slide is showing; inactive slides also carry `inert`
+ * and `aria-hidden` to drop out of the tab order and assistive tech.
  */
 export function CategorySlide({
   name,

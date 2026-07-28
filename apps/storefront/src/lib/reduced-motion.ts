@@ -1,8 +1,8 @@
 /**
  * Mirrors `(prefers-reduced-motion: reduce)` into a `useSyncExternalStore`
- * source (CNP-29 AC 7) — never `useState` in an effect, matching the rest of
- * this app's client stores (see `cart-drawer.ts`). jsdom has no
- * `matchMedia`, so every read guards for its absence and reports `false`.
+ * source, matching the rest of this app's client stores (see
+ * `cart-drawer.ts`). jsdom has no `matchMedia`, so every read guards for its
+ * absence and reports `false`.
  */
 function getMediaQueryList(): MediaQueryList | null {
   if (

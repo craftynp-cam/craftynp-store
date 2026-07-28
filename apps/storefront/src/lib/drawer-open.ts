@@ -1,9 +1,7 @@
 /**
- * Tracks whether any drawer (nav or cart) is currently open, so the homepage
- * carousel (CNP-29 AC 5) can pause auto-advance while a drawer is up — the
- * drawers themselves have no reason to know about the carousel. A set of ids
- * rather than a boolean or count, so a drawer reporting the same state twice
- * (e.g. a re-render) never drifts the tally.
+ * Tracks whether any drawer is currently open. A set of ids rather than a
+ * boolean or count, so a drawer reporting the same state twice (e.g. a
+ * re-render) never drifts the tally.
  */
 const openDrawerIds = new Set<string>();
 

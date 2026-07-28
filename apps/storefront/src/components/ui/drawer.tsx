@@ -20,10 +20,8 @@ export { HeroDrawerTrigger as DrawerTrigger };
 
 /**
  * Wraps HeroUI's `DrawerRoot` to also report open/close into
- * `drawer-open.ts`, so the homepage carousel (CNP-29 AC 5) can pause
- * auto-advance while any drawer is up. `DrawerRoot` fires `onOpenChange` in
- * both controlled (`CartDrawer`) and uncontrolled (`NavDrawer`) modes, so
- * this needs no change from either caller.
+ * `drawer-open.ts`. `DrawerRoot` fires `onOpenChange` in both controlled and
+ * uncontrolled modes, so this works regardless of how a caller uses it.
  */
 export function Drawer({
   onOpenChange,

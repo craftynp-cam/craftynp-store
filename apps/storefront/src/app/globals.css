@@ -77,9 +77,9 @@
 
 /*
  * The sticky header's height, shared with anything that needs to size itself
- * against the viewport below it (the homepage carousel, CNP-29). Kept as a
- * plain custom property, not a @theme token — nothing generates a utility
- * from it, it only feeds `calc()`.
+ * against the viewport below it. Kept as a plain custom property, not a
+ * @theme token — nothing generates a utility from it, it only feeds
+ * `calc()`.
  */
 :root {
   --header-height: 5rem;
@@ -282,8 +282,8 @@
 }
 
 /*
- * Drains the homepage carousel's pause/play ring over one slide's dwell time
- * (CNP-29 AC 6). The ring is a stroke-dasharray circle sized to its full
+ * Drains the homepage carousel's pause/play ring over one slide's dwell
+ * time. The ring is a stroke-dasharray circle sized to its full
  * circumference, so animating stroke-dashoffset from 0 to that same
  * circumference erases it clockwise from the 12 o'clock mark (the circle is
  * rotated -90deg in markup) until nothing is left. `animation-play-state`

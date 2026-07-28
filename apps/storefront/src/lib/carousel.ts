@@ -1,7 +1,6 @@
 /**
- * Pure wraparound index maths for the homepage category carousel (CNP-29
- * AC 3), split out so the wrap behaviour is provable without driving fake
- * timers.
+ * Pure wraparound index maths for the homepage category carousel, split out
+ * so the wrap behaviour is provable without driving fake timers.
  */
 export function nextIndex(current: number, total: number): number {
   if (total <= 0) return 0;
