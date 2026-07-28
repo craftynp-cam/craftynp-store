@@ -9,6 +9,7 @@ import {
 } from "@/components";
 import { fetchProductByHandle } from "@/lib/product";
 import { fetchRegion } from "@/lib/region";
+import { toProductJsonLd } from "@/lib/structured-data";
 
 type ProductPageProps = {
   params: Promise<{ category: string; product: string }>;
@@ -41,26 +42,35 @@ export default async function ProductPage({ params }: ProductPageProps) {
   if (!product) notFound();
 
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-8">
-      <Breadcrumbs />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(toProductJsonLd(product)),
+        }}
+      />
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-2">
-        <ProductGallery images={product.images} productTitle={product.title} />
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-8">
+        <Breadcrumbs />
 
-        <div className="flex flex-col gap-8">
-          <ProductPurchase
-            title={product.title}
-            href={product.href}
-            imageUrl={product.images[0]?.url}
-            options={product.options}
-            variants={product.variants}
-          />
-          <ProductDetails
-            description={product.description}
-            crossSellHref={product.crossSellHref}
-          />
+        <div className="mt-6 grid gap-10 lg:grid-cols-2">
+          <ProductGallery images={product.images} productTitle={product.title} />
+
+          <div className="flex flex-col gap-8">
+            <ProductPurchase
+              title={product.title}
+              href={product.href}
+              imageUrl={product.images[0]?.url}
+              options={product.options}
+              variants={product.variants}
+            />
+            <ProductDetails
+              description={product.description}
+              crossSellHref={product.crossSellHref}
+            />
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }

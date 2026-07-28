@@ -70,7 +70,8 @@ what's inside, just what a reader wouldn't get from the code:
   `variant.ts` is the pure availability/selection logic behind it — in vs. low
   vs. out of stock, and which option-value combinations currently resolve to a
   purchasable variant (unavailable ones are flagged for a disabled control, not
-  removed).
+  removed). `structured-data.ts` builds the product page's schema.org
+  Product JSON-LD from that same `ProductDetail` shape.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -329,5 +330,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **401** of the repo's 427 tests. A smaller number
+The storefront currently holds **405** of the repo's 431 tests. A smaller number
 after your change means something was dropped.
