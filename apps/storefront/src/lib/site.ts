@@ -1,14 +1,13 @@
 export const SITE_NAME = "The Crafty NP";
 
 export const SITE_TAGLINE =
-  "Handmade & custom stickers, shirts, keychains, cups and banners — made one order at a time.";
+  "Elevated Creativity. Custom designs personalized with you in mind!";
 
 export type SocialLink = { label: string; href: string };
 
 export const SOCIAL_LINKS: readonly SocialLink[] = [
   { label: "Instagram", href: "https://www.instagram.com/the_crafty_np_" },
-  // Page slug unconfirmed — verify before shipping.
-  { label: "Facebook", href: "https://www.facebook.com/thecraftynp" },
+  { label: "Facebook", href: "https://www.facebook.com/people/The-Crafty-NP" },
   { label: "TikTok", href: "https://www.tiktok.com/@thecraftynp89" },
 ];
 

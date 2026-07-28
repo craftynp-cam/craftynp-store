@@ -12,13 +12,8 @@ export function Logo() {
       className="flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <Image src="/logo.svg" alt="" width={40} height={40} priority />
-      <span className="flex flex-col leading-tight">
-        <span className="font-display text-xl text-foreground">
-          The Crafty NP
-        </span>
-        <span className="text-xs tracking-widest text-foreground-muted uppercase">
-          Handmade · Custom
-        </span>
+      <span className="font-display text-xl text-foreground">
+        The Crafty NP
       </span>
     </Link>
   );
