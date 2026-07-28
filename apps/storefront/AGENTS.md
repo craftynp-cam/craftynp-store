@@ -19,10 +19,20 @@ what's inside, just what a reader wouldn't get from the code:
 - `src/app` — routes, `layout.tsx`, `globals.css` (the token source of truth),
   and the `/design/tokens` token reference page. Every route's `<main>` carries
   `id="main-content" tabIndex={-1}` — that is what the navbar's skip link
-  targets. Add both to any new page's `<main>`.
+  targets. Add both to any new page's `<main>`. Catalog URLs are
+  `/products` (all products), `/{category}`, and `/{category}/{product}`
+  (CNP-33) — `src/app/[category]/[product]/page.tsx` is the only one built so
+  far; the other two 404 until CNP-28. A product 404s if its handle resolves
+  but the URL's category segment doesn't match, so it isn't reachable at more
+  than one path.
 - `src/components/ui` — the HeroUI-backed primitives.
 - `src/components/cards` — higher-level, product-facing components built on
   those primitives.
+- `src/components/product` — the product detail page's parts (CNP-33):
+  gallery, variant selector, price, stock status, purchase panel, details.
+  `Breadcrumbs` (`src/components/nav/breadcrumbs.tsx`) is strictly
+  URL-derived — it reads `usePathname()` and title-cases each segment, with no
+  per-page override.
 - `src/components/home` — the homepage category carousel (CNP-29) and its
   slide. Rendered on a fixed navy surface (`bg-ink`/`text-off-white`), the same
   fixed-in-both-modes treatment the footer uses, so its focus ring is
@@ -51,7 +61,16 @@ what's inside, just what a reader wouldn't get from the code:
   reports into it from every `Drawer` instance. `reduced-motion.ts` mirrors
   `prefers-reduced-motion` the same `useSyncExternalStore` way, guarding for
   jsdom's lack of `matchMedia`. `carousel.ts` is the pure wraparound index
-  maths behind the carousel's auto-advance.
+  maths behind the carousel's auto-advance. `routes.ts` is the single place a
+  category or product href is built — `categories.ts`, `product-card.ts`, and
+  `product.ts` all go through it. `region.ts` (CNP-33) fetches the default
+  Medusa region and, like `categories.ts`, never throws; its `id` has to be
+  passed as `region_id` to any product query or `calculated_price` comes back
+  null. `product.ts` maps a Medusa product to the product page's shape;
+  `variant.ts` is the pure availability/selection logic behind it — in vs. low
+  vs. out of stock, and which option-value combinations currently resolve to a
+  purchasable variant (unavailable ones are flagged for a disabled control, not
+  removed).
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -310,5 +329,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **339** of the repo's 365 tests. A smaller number
+The storefront currently holds **401** of the repo's 427 tests. A smaller number
 after your change means something was dropped.

@@ -72,4 +72,4 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **9** of the repo's 202 tests.
+This app currently holds **9** of the repo's 425 tests.
