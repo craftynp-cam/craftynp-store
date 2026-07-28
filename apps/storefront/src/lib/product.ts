@@ -36,7 +36,6 @@ export type ProductDetailSourceProduct = {
       }[]
     | null;
   variants?: readonly ProductDetailSourceVariant[] | null;
-  metadata?: { custom_product_handle?: string } | null;
 };
 
 export type ProductDetailImage = { url: string; alt: string };
@@ -71,7 +70,6 @@ export type ProductDetail = {
   images: ProductDetailImage[];
   options: ProductDetailOption[];
   variants: ProductDetailVariant[];
-  crossSellHref?: string;
 };
 
 export function toProductDetail(
@@ -133,8 +131,6 @@ export function toProductDetail(
     },
   );
 
-  const crossSellHandle = product.metadata?.custom_product_handle;
-
   return {
     id: product.id,
     href: productHref(categoryHandle, productHandleValue),
@@ -145,9 +141,6 @@ export function toProductDetail(
     images,
     options,
     variants,
-    crossSellHref: crossSellHandle
-      ? productHref(categoryHandle, crossSellHandle)
-      : undefined,
   };
 }
 

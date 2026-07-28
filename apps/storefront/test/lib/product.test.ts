@@ -157,26 +157,6 @@ describe("toProductDetail", () => {
     ]);
   });
 
-  it("builds a cross-sell href only when metadata names a custom product", () => {
-    const withCrossSell = toProductDetail({
-      id: "prod_1",
-      handle: "keychain",
-      title: "Keychain",
-      categories: [{ name: "Keychains", handle: "keychains" }],
-      variants: [],
-      metadata: { custom_product_handle: "custom-keychain" },
-    });
-    const withoutCrossSell = toProductDetail({
-      id: "prod_2",
-      handle: "keychain-2",
-      title: "Keychain 2",
-      categories: [{ name: "Keychains", handle: "keychains" }],
-      variants: [],
-    });
-
-    expect(withCrossSell.crossSellHref).toBe("/keychains/custom-keychain");
-    expect(withoutCrossSell.crossSellHref).toBeUndefined();
-  });
 });
 
 describe("fetchProductByHandle", () => {

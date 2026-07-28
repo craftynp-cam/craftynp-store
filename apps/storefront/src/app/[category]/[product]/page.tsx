@@ -64,10 +64,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               options={product.options}
               variants={product.variants}
             />
-            <ProductDetails
-              description={product.description}
-              crossSellHref={product.crossSellHref}
-            />
+            <ProductDetails description={product.description} />
           </div>
         </div>
       </main>
