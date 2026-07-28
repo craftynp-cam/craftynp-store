@@ -18,11 +18,6 @@ import { X } from "../icons";
 
 export { HeroDrawerTrigger as DrawerTrigger };
 
-/**
- * Wraps HeroUI's `DrawerRoot` to also report open/close into
- * `drawer-open.ts`. `DrawerRoot` fires `onOpenChange` in both controlled and
- * uncontrolled modes, so this works regardless of how a caller uses it.
- */
 export function Drawer({
   onOpenChange,
   ...rest

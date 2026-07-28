@@ -1,8 +1,3 @@
-/**
- * Tracks whether any drawer is currently open. A set of ids rather than a
- * boolean or count, so a drawer reporting the same state twice (e.g. a
- * re-render) never drifts the tally.
- */
 const openDrawerIds = new Set<string>();
 
 const listeners = new Set<() => void>();
