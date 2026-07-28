@@ -16,6 +16,11 @@ import { CategorySlide } from "./category-slide";
 
 const AUTO_ADVANCE_MS = 5000;
 
+// The pause/play button's progress ring. Must match the `to` keyframe in
+// globals.css (2 * PI * RING_RADIUS).
+const RING_RADIUS = 19;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
 const arrowButtonClassName =
   "flex size-11 shrink-0 items-center justify-center rounded-full bg-off-white/90 text-ink transition-colors hover:bg-off-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
@@ -57,6 +62,22 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
     isHovered || isFocusWithin || isAnyDrawerOpen || isPausedByUser;
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Bumped whenever the carousel resumes from a pause on the same slide, so
+  // the progress ring — keyed on this alongside activeIndex — remounts and
+  // restarts in step with the real timer below, which also restarts its
+  // full 5s wait on every resume rather than continuing a partial one. This
+  // follows React's "adjusting state during render" pattern (a guarded
+  // setState call in the render body, not an effect) rather than a
+  // useEffect, since the latter would cause an extra, visible render pass.
+  const [prevIsPaused, setPrevIsPaused] = useState(isPaused);
+  const [runToken, setRunToken] = useState(0);
+  if (prevIsPaused !== isPaused) {
+    setPrevIsPaused(isPaused);
+    if (prevIsPaused && !isPaused) {
+      setRunToken((token) => token + 1);
+    }
+  }
 
   useEffect(() => {
     if (!canAutoAdvance || isPaused) return;
@@ -186,6 +207,39 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
           }
           className={`${arrowButtonClassName} absolute right-4 bottom-6 z-10 sm:bottom-8`}
         >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 44 44"
+            className="pointer-events-none absolute inset-0 -rotate-90"
+          >
+            <circle
+              cx="22"
+              cy="22"
+              r={RING_RADIUS}
+              fill="none"
+              stroke="currentColor"
+              strokeOpacity={0.25}
+              strokeWidth={2}
+            />
+            {/* Keyed on runToken so a fresh countdown remounts the circle and
+                restarts it from a full ring; pausing only toggles
+                animation-play-state, freezing it exactly where it is. */}
+            <circle
+              key={`${activeIndex}-${runToken}`}
+              cx="22"
+              cy="22"
+              r={RING_RADIUS}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeDasharray={RING_CIRCUMFERENCE}
+              style={{
+                animation: `carousel-progress ${AUTO_ADVANCE_MS}ms linear forwards`,
+                animationPlayState: isPaused ? "paused" : "running",
+              }}
+            />
+          </svg>
           {isPausedByUser ? (
             <Play aria-hidden="true" size={20} />
           ) : (
