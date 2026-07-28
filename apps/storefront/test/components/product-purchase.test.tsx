@@ -85,9 +85,7 @@ describe("ProductPurchase", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
 
     expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /add to cart/i }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
   });
 
   it("adds the selected variant to the cart and opens the drawer", () => {

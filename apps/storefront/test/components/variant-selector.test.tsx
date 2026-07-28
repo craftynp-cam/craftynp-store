@@ -21,7 +21,9 @@ describe("VariantSelector", () => {
         options={options}
         selected={{ opt_color: "val_blush" }}
         onChange={jest.fn()}
-        availability={{ opt_color: { val_blush: true, val_sage: true, val_navy: true } }}
+        availability={{
+          opt_color: { val_blush: true, val_sage: true, val_navy: true },
+        }}
       />,
     );
 
@@ -55,7 +57,9 @@ describe("VariantSelector", () => {
         options={options}
         selected={{ opt_color: "val_blush" }}
         onChange={onChange}
-        availability={{ opt_color: { val_blush: true, val_sage: true, val_navy: true } }}
+        availability={{
+          opt_color: { val_blush: true, val_sage: true, val_navy: true },
+        }}
       />,
     );
 

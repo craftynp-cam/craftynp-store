@@ -79,9 +79,10 @@ export function toProductDetail(
   const categoryHandle = category?.handle ?? "";
   const productHandleValue = product.handle ?? "";
 
-  const images: ProductDetailImage[] = (product.images ?? []).map(
-    (image) => ({ url: image.url, alt: product.title }),
-  );
+  const images: ProductDetailImage[] = (product.images ?? []).map((image) => ({
+    url: image.url,
+    alt: product.title,
+  }));
   if (images.length === 0 && product.thumbnail) {
     images.push({ url: product.thumbnail, alt: product.title });
   }

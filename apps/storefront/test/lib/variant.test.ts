@@ -55,8 +55,16 @@ describe("variantAvailability", () => {
 
 describe("findVariant", () => {
   const variants = [
-    { id: "var_s_black", optionValueIds: ["val_s", "val_black"], availability: "in_stock" as const },
-    { id: "var_m_black", optionValueIds: ["val_m", "val_black"], availability: "in_stock" as const },
+    {
+      id: "var_s_black",
+      optionValueIds: ["val_s", "val_black"],
+      availability: "in_stock" as const,
+    },
+    {
+      id: "var_m_black",
+      optionValueIds: ["val_m", "val_black"],
+      availability: "in_stock" as const,
+    },
   ];
   const optionIds = ["opt_size", "opt_color"];
 

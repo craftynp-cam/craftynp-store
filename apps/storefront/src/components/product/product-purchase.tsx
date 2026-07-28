@@ -42,9 +42,10 @@ export function ProductPurchase({
   );
   const [quantity, setQuantity] = useState(1);
 
-  const optionIds = useMemo(() => options.map((option) => option.id), [
-    options,
-  ]);
+  const optionIds = useMemo(
+    () => options.map((option) => option.id),
+    [options],
+  );
 
   const availability = useMemo(
     () => optionValueAvailability(options, variants, selected),

@@ -17,9 +17,7 @@ describe("ProductGallery", () => {
   it("switches the main image when a thumbnail is activated", () => {
     render(<ProductGallery images={images} productTitle="Keychain" />);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /show image 2 of 2/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /show image 2 of 2/i }));
 
     expect(screen.getByAltText("Keychain, back")).toBeInTheDocument();
   });
@@ -39,9 +37,7 @@ describe("ProductGallery", () => {
   });
 
   it("renders no thumbnail row for a single image", () => {
-    render(
-      <ProductGallery images={[images[0]!]} productTitle="Keychain" />,
-    );
+    render(<ProductGallery images={[images[0]!]} productTitle="Keychain" />);
 
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });

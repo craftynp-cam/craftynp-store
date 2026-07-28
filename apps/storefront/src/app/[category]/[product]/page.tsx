@@ -50,11 +50,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
         }}
       />
 
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-8">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-6xl px-4 py-8"
+      >
         <Breadcrumbs />
 
         <div className="mt-6 grid gap-10 lg:grid-cols-2">
-          <ProductGallery images={product.images} productTitle={product.title} />
+          <ProductGallery
+            images={product.images}
+            productTitle={product.title}
+          />
 
           <div className="flex flex-col gap-8">
             <ProductPurchase
