@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { sdk } from "./medusa";
+import { categoryHref } from "./routes";
 
 export type NavCategorySource = {
   name: string;
@@ -20,7 +21,7 @@ export function toNavCategories(
     )
     .map((source) => ({
       name: source.name,
-      href: `/categories/${source.handle}`,
+      href: categoryHref(source.handle),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -51,7 +52,7 @@ export function toShowcaseSources(
 ): Array<{ id: string; name: string; href: string }> {
   return toNavCategories(sources).map((category) => {
     const source = sources.find(
-      (candidate) => `/categories/${candidate.handle}` === category.href,
+      (candidate) => categoryHref(candidate.handle) === category.href,
     );
     // toNavCategories only returns entries built from a matching source, so
     // this is always found; the fallback keeps the function total.

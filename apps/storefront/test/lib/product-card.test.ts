@@ -6,7 +6,7 @@ describe("toProductCardProps", () => {
       handle: "custom-die-cut-stickers",
       title: "Custom Die-Cut Stickers",
       thumbnail: "https://example.com/sticker.png",
-      categories: [{ name: "Stickers" }],
+      categories: [{ name: "Stickers", handle: "stickers" }],
       variants: [
         {
           calculated_price: {
@@ -18,7 +18,7 @@ describe("toProductCardProps", () => {
       ],
     });
 
-    expect(props.href).toBe("/products/custom-die-cut-stickers");
+    expect(props.href).toBe("/stickers/custom-die-cut-stickers");
     expect(props.title).toBe("Custom Die-Cut Stickers");
     expect(props.category).toBe("Stickers");
     expect(props.imageUrl).toBe("https://example.com/sticker.png");
@@ -107,6 +107,6 @@ describe("toProductCardProps", () => {
     expect(props.imageUrl).toBeUndefined();
     expect(props.category).toBe("");
     expect(props.price).toBe("");
-    expect(props.href).toBe("/products/");
+    expect(props.href).toBe("//");
   });
 });
