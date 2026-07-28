@@ -137,27 +137,25 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
     >
       <div
         aria-live={isPaused ? "polite" : "off"}
-        className="relative size-full"
+        className="relative size-full overflow-hidden"
       >
-        {categories.map((category, index) => (
-          <div
-            key={category.href}
-            className="absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none"
-            style={{
-              opacity: index === activeIndex ? 1 : 0,
-              pointerEvents: index === activeIndex ? "auto" : "none",
-            }}
-          >
-            <CategorySlide
-              name={category.name}
-              href={category.href}
-              productCount={category.productCount}
-              isActive={index === activeIndex}
-              position={index + 1}
-              total={total}
-            />
-          </div>
-        ))}
+        <div
+          className="flex h-full transition-transform duration-500 ease-in-out motion-reduce:transition-none"
+          style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+        >
+          {categories.map((category, index) => (
+            <div key={category.href} className="h-full w-full shrink-0">
+              <CategorySlide
+                name={category.name}
+                href={category.href}
+                productCount={category.productCount}
+                isActive={index === activeIndex}
+                position={index + 1}
+                total={total}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="absolute inset-x-0 bottom-6 z-10 flex items-center justify-center gap-3 sm:bottom-8">

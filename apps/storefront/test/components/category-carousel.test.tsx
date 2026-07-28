@@ -46,6 +46,16 @@ describe("CategoryCarousel", () => {
     ).toEqual(["1 of 3: Shirts", "2 of 3: Keychains", "3 of 3: Stickers"]);
   });
 
+  it("slides the track to the active slide instead of cross-fading", () => {
+    const { container } = render(<CategoryCarousel categories={categories} />);
+    const track = container.querySelector(".flex.h-full");
+    expect(track).toHaveStyle({ transform: "translateX(-0%)" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Next category" }));
+
+    expect(track).toHaveStyle({ transform: "translateX(-100%)" });
+  });
+
   it("keeps exactly one h1 on the page as slides change", () => {
     render(<CategoryCarousel categories={categories} />);
 
