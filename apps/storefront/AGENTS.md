@@ -20,14 +20,26 @@ what's inside, just what a reader wouldn't get from the code:
   and the `/design/tokens` token reference page. Every route's `<main>` carries
   `id="main-content" tabIndex={-1}` — that is what the navbar's skip link
   targets. Add both to any new page's `<main>`. Catalog URLs are
-  `/products` (all products), `/{category}`, and `/{category}/{product}`
-  (CNP-33) — `src/app/[category]/[product]/page.tsx` is the only one built so
-  far; the other two 404 until CNP-28. A product 404s if its handle resolves
-  but the URL's category segment doesn't match, so it isn't reachable at more
-  than one path.
+  `/products` (all products), `/{category}` (CNP-31), and
+  `/{category}/{product}` (CNP-33). `src/app/products/page.tsx` is a literal
+  segment, so it — and `/design` — shadow any Medusa category whose handle is
+  `products` or `design`; a category can't use those handles. A product 404s
+  if its handle resolves but the URL's category segment doesn't match, so it
+  isn't reachable at more than one path; a category 404s if its handle doesn't
+  resolve at all.
 - `src/components/ui` — the HeroUI-backed primitives.
 - `src/components/cards` — higher-level, product-facing components built on
   those primitives.
+- `src/components/catalog` — the product listing page's parts (CNP-31):
+  sidebar, sort control, toolbar, grid, and the shared `CatalogView` both
+  `/products` and `/{category}` render, so "both use the same layout" is
+  literal rather than a coincidence of two separate pages. Medusa's store
+  product list orders on product fields only — there is no first-class price
+  ordering — so `featured` and `newest` are requested via `order`
+  (`-created_at` for newest) and the two price sorts are applied in Node, over
+  the already-fetched page (`sortCatalogProducts` in `src/lib/product-list.ts`).
+  Release 1's catalog is small enough that one `product.list` per view with a
+  `limit: 100` and no pagination is the whole fetch.
 - `src/components/product` — the product detail page's parts (CNP-33):
   gallery, variant selector, price, stock status, purchase panel, details.
   `Breadcrumbs` (`src/components/nav/breadcrumbs.tsx`) is strictly
@@ -71,7 +83,14 @@ what's inside, just what a reader wouldn't get from the code:
   vs. out of stock, and which option-value combinations currently resolve to a
   purchasable variant (unavailable ones are flagged for a disabled control, not
   removed). `structured-data.ts` builds the product page's schema.org
-  Product JSON-LD from that same `ProductDetail` shape.
+  Product JSON-LD from that same `ProductDetail` shape. `sort.ts` (CNP-31) is
+  the catalog's sort vocabulary — parsing `?sort=`, falling back to featured
+  for anything unrecognised, and mapping a sort to Medusa's `order` param.
+  `product-list.ts` fetches and sorts a catalog view's products;
+  `categories.ts`'s `fetchCatalogSidebar` builds the sidebar's category list
+  and counts from two requests total (one `product.list` read for every
+  product's categories, tallied in Node), not the one-request-per-category
+  `fetchShowcaseCategories` above makes.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -330,5 +349,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **402** of the repo's 428 tests. A smaller number
+The storefront currently holds **442** of the repo's 468 tests. A smaller number
 after your change means something was dropped.
