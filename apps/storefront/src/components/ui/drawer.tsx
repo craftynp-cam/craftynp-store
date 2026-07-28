@@ -9,12 +9,31 @@ import {
   DrawerRoot,
   DrawerTrigger as HeroDrawerTrigger,
 } from "@heroui/react/drawer";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { useId } from "react";
+
+import { setDrawerOpen } from "@/lib/drawer-open";
 
 import { X } from "../icons";
 
-export { DrawerRoot as Drawer };
 export { HeroDrawerTrigger as DrawerTrigger };
+
+export function Drawer({
+  onOpenChange,
+  ...rest
+}: ComponentProps<typeof DrawerRoot>) {
+  const id = useId();
+
+  return (
+    <DrawerRoot
+      {...rest}
+      onOpenChange={(isOpen) => {
+        setDrawerOpen(id, isOpen);
+        onOpenChange?.(isOpen);
+      }}
+    />
+  );
+}
 
 type DrawerPlacement = "top" | "bottom" | "left" | "right";
 

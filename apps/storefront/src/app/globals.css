@@ -76,6 +76,16 @@
 }
 
 /*
+ * The sticky header's height, shared with anything that needs to size itself
+ * against the viewport below it. Kept as a plain custom property, not a
+ * @theme token — nothing generates a utility from it, it only feeds
+ * `calc()`.
+ */
+:root {
+  --header-height: 5rem;
+}
+
+/*
  * Semantic aliases. Prefer these in components — they carry intent and they
  * are the only colours that follow the active mode. `inline` matters here:
  * it emits var(--t-*) into each utility, so the utility tracks the mode
@@ -268,5 +278,23 @@
   h2,
   h3 {
     font-family: var(--font-display);
+  }
+}
+
+/*
+ * Drains the homepage carousel's pause/play ring over one slide's dwell
+ * time. The ring is a stroke-dasharray circle sized to its full
+ * circumference, so animating stroke-dashoffset from 0 to that same
+ * circumference erases it clockwise from the 12 o'clock mark (the circle is
+ * rotated -90deg in markup) until nothing is left. `animation-play-state`
+ * freezes it exactly in place while the carousel is paused, and remounting
+ * the element (keyed on when a run starts) snaps it back to full.
+ */
+@keyframes carousel-progress {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 119.4; /* 2 * PI * 19 — must match the ring's r in category-carousel.tsx */
   }
 }
