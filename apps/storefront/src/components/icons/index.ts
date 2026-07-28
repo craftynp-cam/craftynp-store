@@ -12,6 +12,8 @@
  */
 export {
   ArrowRight,
+  FacebookLogo,
+  InstagramLogo,
   List,
   MagnifyingGlass,
   Minus,
@@ -21,5 +23,6 @@ export {
   Monitor,
   Sun,
   Moon,
+  TiktokLogo,
   X,
 } from "@phosphor-icons/react/dist/ssr";

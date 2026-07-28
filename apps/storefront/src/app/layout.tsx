@@ -1,4 +1,4 @@
-import { Navbar } from "@/components";
+import { Footer, Navbar } from "@/components";
 import { fetchNavCategories } from "@/lib/categories";
 import { themeInitScript } from "@/lib/theme";
 import type { Metadata } from "next";
@@ -47,6 +47,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <Navbar categories={categories} />
         <div className="flex-1">{children}</div>
+        <Footer categories={categories} />
       </body>
     </html>
   );

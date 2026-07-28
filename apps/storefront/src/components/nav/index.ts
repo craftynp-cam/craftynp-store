@@ -1,6 +1,7 @@
 export { AccountLink } from "./account-link";
 export { CartButton } from "./cart-button";
 export { CartDrawer } from "./cart-drawer";
+export { Footer } from "./footer";
 export { Logo } from "./logo";
 export { MenuButton } from "./menu-button";
 export { NavDrawer } from "./nav-drawer";
