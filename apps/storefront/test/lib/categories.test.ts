@@ -1,11 +1,16 @@
 import {
   fetchNavCategories,
+  fetchShowcaseCategories,
   toNavCategories,
+  toShowcaseSources,
   type NavCategorySource,
+  type ShowcaseCategorySource,
 } from "@/lib/categories";
 
 jest.mock("../../src/lib/medusa", () => ({
-  sdk: { store: { category: { list: jest.fn() } } },
+  sdk: {
+    store: { category: { list: jest.fn() }, product: { list: jest.fn() } },
+  },
 }));
 
 describe("toNavCategories", () => {
@@ -140,5 +145,136 @@ describe("fetchNavCategories", () => {
         fields: expect.stringContaining("parent_category_id"),
       }),
     );
+  });
+});
+
+describe("toShowcaseSources", () => {
+  it("keeps the id alongside the mapped name and href", () => {
+    const sources: ShowcaseCategorySource[] = [
+      { id: "pcat_1", name: "Shirts", handle: "shirts" },
+    ];
+
+    expect(toShowcaseSources(sources)).toEqual([
+      { id: "pcat_1", name: "Shirts", href: "/categories/shirts" },
+    ]);
+  });
+
+  it("applies the same top-level filter and sort as toNavCategories", () => {
+    const sources: ShowcaseCategorySource[] = [
+      { id: "pcat_2", name: "Pants", handle: "pants" },
+      { id: "pcat_1", name: "Merch", handle: "merch" },
+      {
+        id: "pcat_3",
+        name: "Long Sleeve",
+        handle: "long-sleeve",
+        parent_category_id: "pcat_2",
+      },
+    ];
+
+    expect(toShowcaseSources(sources).map((c) => c.name)).toEqual([
+      "Merch",
+      "Pants",
+    ]);
+  });
+});
+
+describe("fetchShowcaseCategories", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  function mockSdk() {
+    return jest.requireMock<{
+      sdk: {
+        store: {
+          category: { list: jest.Mock };
+          product: { list: jest.Mock };
+        };
+      };
+    }>("../../src/lib/medusa").sdk;
+  }
+
+  it("attaches a product count per category", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockResolvedValue({
+      product_categories: [{ id: "pcat_1", name: "Shirts", handle: "shirts" }],
+      count: 1,
+      offset: 0,
+      limit: 100,
+    });
+    sdk.store.product.list.mockResolvedValue({
+      products: [],
+      count: 4,
+      offset: 0,
+      limit: 1,
+    });
+
+    expect(await fetchShowcaseCategories()).toEqual([
+      { name: "Shirts", href: "/categories/shirts", productCount: 4 },
+    ]);
+    expect(sdk.store.product.list).toHaveBeenCalledWith(
+      expect.objectContaining({ category_id: ["pcat_1"] }),
+    );
+  });
+
+  it("fetches counts for every category in parallel", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockResolvedValue({
+      product_categories: [
+        { id: "pcat_1", name: "Shirts", handle: "shirts" },
+        { id: "pcat_2", name: "Pants", handle: "pants" },
+      ],
+      count: 2,
+      offset: 0,
+      limit: 100,
+    });
+    sdk.store.product.list.mockImplementation(
+      async ({ category_id }: { category_id: string[] }) => ({
+        products: [],
+        count: category_id[0] === "pcat_1" ? 2 : 5,
+        offset: 0,
+        limit: 1,
+      }),
+    );
+
+    const categories = await fetchShowcaseCategories();
+
+    // toShowcaseSources sorts alphabetically, so Pants precedes Shirts.
+    expect(categories).toEqual([
+      { name: "Pants", href: "/categories/pants", productCount: 5 },
+      { name: "Shirts", href: "/categories/shirts", productCount: 2 },
+    ]);
+  });
+
+  it("degrades a single category's count to 0 without losing the slide", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockResolvedValue({
+      product_categories: [{ id: "pcat_1", name: "Shirts", handle: "shirts" }],
+      count: 1,
+      offset: 0,
+      limit: 100,
+    });
+    sdk.store.product.list.mockRejectedValue(new Error("backend is down"));
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    expect(await fetchShowcaseCategories()).toEqual([
+      { name: "Shirts", href: "/categories/shirts", productCount: 0 },
+    ]);
+
+    consoleError.mockRestore();
+  });
+
+  it("returns an empty array and does not throw when the category list rejects", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockRejectedValue(new Error("backend is down"));
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(fetchShowcaseCategories()).resolves.toEqual([]);
+
+    consoleError.mockRestore();
   });
 });

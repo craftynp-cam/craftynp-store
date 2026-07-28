@@ -9,12 +9,38 @@ import {
   DrawerRoot,
   DrawerTrigger as HeroDrawerTrigger,
 } from "@heroui/react/drawer";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { useId } from "react";
+
+import { setDrawerOpen } from "@/lib/drawer-open";
 
 import { X } from "../icons";
 
-export { DrawerRoot as Drawer };
 export { HeroDrawerTrigger as DrawerTrigger };
+
+/**
+ * Wraps HeroUI's `DrawerRoot` to also report open/close into
+ * `drawer-open.ts`, so the homepage carousel (CNP-29 AC 5) can pause
+ * auto-advance while any drawer is up. `DrawerRoot` fires `onOpenChange` in
+ * both controlled (`CartDrawer`) and uncontrolled (`NavDrawer`) modes, so
+ * this needs no change from either caller.
+ */
+export function Drawer({
+  onOpenChange,
+  ...rest
+}: ComponentProps<typeof DrawerRoot>) {
+  const id = useId();
+
+  return (
+    <DrawerRoot
+      {...rest}
+      onOpenChange={(isOpen) => {
+        setDrawerOpen(id, isOpen);
+        onOpenChange?.(isOpen);
+      }}
+    />
+  );
+}
 
 type DrawerPlacement = "top" | "bottom" | "left" | "right";
 

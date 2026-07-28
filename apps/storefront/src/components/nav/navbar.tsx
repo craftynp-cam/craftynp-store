@@ -15,7 +15,7 @@ export function Navbar({ categories }: NavbarProps) {
     <>
       <SkipLink />
       <header className="sticky top-0 z-40 border-b border-border bg-surface">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-(--header-height) max-w-7xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
           <div className="flex shrink-0 items-center gap-2">
             <NavDrawer categories={categories} />
             <Logo />

@@ -12,12 +12,16 @@
  */
 export {
   ArrowRight,
+  CaretLeft,
+  CaretRight,
   FacebookLogo,
   InstagramLogo,
   List,
   MagnifyingGlass,
   Minus,
   UserCircle,
+  Pause,
+  Play,
   Plus,
   ShoppingCartSimple,
   Monitor,

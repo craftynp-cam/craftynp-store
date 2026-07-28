@@ -23,6 +23,10 @@ what's inside, just what a reader wouldn't get from the code:
 - `src/components/ui` — the HeroUI-backed primitives.
 - `src/components/cards` — higher-level, product-facing components built on
   those primitives.
+- `src/components/home` — the homepage category carousel (CNP-29) and its
+  slide. Rendered on a fixed navy surface (`bg-ink`/`text-off-white`), the same
+  fixed-in-both-modes treatment the footer uses, so its focus ring is
+  `ring-off-white` rather than the mode-following `ring-primary`.
 - `src/components/nav` — the global header, footer, and their parts, rendered
   once in `layout.tsx`. There is no horizontal desktop nav — the drawer is the
   site's only navigation at every breakpoint. `Navbar` and `Footer` both take
@@ -42,7 +46,12 @@ what's inside, just what a reader wouldn't get from the code:
   `cart.ts`'s snapshot is cached at module scope because
   `useSyncExternalStore` requires a referentially stable object; `cart-drawer.ts`
   is a separate, unpersisted open/close store so a reload never leaves the
-  drawer open.
+  drawer open. `drawer-open.ts` (CNP-29) tracks whether any drawer is open at
+  all, by id, so the carousel can pause while one is; `src/components/ui/drawer.tsx`
+  reports into it from every `Drawer` instance. `reduced-motion.ts` mirrors
+  `prefers-reduced-motion` the same `useSyncExternalStore` way, guarding for
+  jsdom's lack of `matchMedia`. `carousel.ts` is the pure wraparound index
+  maths behind the carousel's auto-advance.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -301,5 +310,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **293** of the repo's 319 tests. A smaller number
+The storefront currently holds **336** of the repo's 362 tests. A smaller number
 after your change means something was dropped.
