@@ -36,7 +36,7 @@ export function SignInPanel({ error, returnTo }: SignInPanelProps) {
       {message ? (
         <p
           role="alert"
-          className="flex items-center gap-2 rounded-lg bg-danger px-3 py-2 text-sm font-medium text-danger-foreground"
+          className="flex items-center gap-2 rounded-lg bg-danger px-3 py-2 text-sm font-medium text-on-danger"
         >
           <WarningCircle aria-hidden="true" size={18} />
           {message}
