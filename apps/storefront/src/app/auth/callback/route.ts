@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   AUTH_COOKIE_NAME,
   RETURN_TO_COOKIE_NAME,
+  classifyAuthCallbackError,
   decodeJwtPayload,
   sessionCookieOptions,
 } from "@/lib/auth";
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (query.error) {
-    return failure("cancelled");
+    return failure(classifyAuthCallbackError(query.error_description));
   }
 
   const authSdk = createAuthFlowSdk();

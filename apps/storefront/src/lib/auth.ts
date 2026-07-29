@@ -56,6 +56,24 @@ export function decodeJwtPayload(token: string): DecodedAuthToken | null {
   }
 }
 
+/**
+ * Auth0 reports every denied login as `error=access_denied` — a customer
+ * cancelling and a post-login Action blocking them (the "Require Email
+ * Verification" Action included) are indistinguishable by error code alone.
+ * The description text is all that's left to switch on. Collapsing an
+ * unverified-email block into "sign-in was cancelled" tells a customer who
+ * just registered that nothing happened, when Auth0 already emailed them a
+ * verification link.
+ */
+export function classifyAuthCallbackError(
+  errorDescription: string | undefined,
+): "unverified_email" | "cancelled" {
+  if (errorDescription && /verify/i.test(errorDescription)) {
+    return "unverified_email";
+  }
+  return "cancelled";
+}
+
 export type AuthedCustomer = {
   id: string;
   email: string;

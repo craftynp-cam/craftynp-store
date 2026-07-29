@@ -6,6 +6,8 @@ import { WarningCircle } from "../icons";
 
 const errorMessages: Record<string, string> = {
   cancelled: "Sign-in was cancelled. No account was created.",
+  unverified_email:
+    "Check your inbox to verify your email address, then sign in again.",
   auth_failed: "We couldn't sign you in. Please try again.",
 };
 

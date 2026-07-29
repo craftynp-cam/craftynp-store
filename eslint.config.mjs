@@ -21,6 +21,7 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/consistent-type-imports": "error",
+      "no-empty": ["error", { allowEmptyCatch: true }],
     },
   },
   prettier,

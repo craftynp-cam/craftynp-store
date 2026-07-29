@@ -46,6 +46,14 @@ describe("SignInPanel", () => {
     expect(alert.querySelector("svg")).toBeInTheDocument();
   });
 
+  it("tells an unverified customer to check their inbox, not that sign-in was cancelled", () => {
+    render(<SignInPanel error="unverified_email" />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Check your inbox to verify your email address, then sign in again.",
+    );
+  });
+
   it("falls back to a generic message for an unrecognised error code", () => {
     render(<SignInPanel error="something_unexpected" />);
 

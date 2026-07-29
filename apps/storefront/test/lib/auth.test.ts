@@ -1,5 +1,6 @@
 import {
   AUTH_COOKIE_NAME,
+  classifyAuthCallbackError,
   decodeJwtPayload,
   getCustomer,
   returnToCookieOptions,
@@ -93,6 +94,30 @@ describe("returnToCookieOptions", () => {
 
     expect(options.path).toBe("/auth");
     expect(options.maxAge).toBe(5 * 60);
+  });
+});
+
+describe("classifyAuthCallbackError", () => {
+  it("classifies Auth0's email-verification denial distinctly from a cancellation", () => {
+    expect(
+      classifyAuthCallbackError("Please verify your email before continuing."),
+    ).toBe("unverified_email");
+  });
+
+  it("matches case-insensitively", () => {
+    expect(classifyAuthCallbackError("VERIFY your email")).toBe(
+      "unverified_email",
+    );
+  });
+
+  it("falls back to cancelled for an actual cancellation or unrecognised description", () => {
+    expect(
+      classifyAuthCallbackError("User did not authorize the request"),
+    ).toBe("cancelled");
+  });
+
+  it("falls back to cancelled when there is no description at all", () => {
+    expect(classifyAuthCallbackError(undefined)).toBe("cancelled");
   });
 });
 

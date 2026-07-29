@@ -345,6 +345,15 @@ own `exp`. A second, short-lived cookie (`cnp_auth_return_to`, scoped to
 `/auth/callback`; it exists because Medusa's own OAuth `state` is opaque
 server-side storage the storefront has no way to read back.
 
+**Auth0 reports every denied login as `error=access_denied`**, whether the
+customer actually cancelled or a post-login Action blocked them — there's no
+separate machine-readable code. `classifyAuthCallbackError` (`src/lib/auth.ts`)
+switches on `error_description` instead, specifically so a customer who signs
+up but hasn't clicked the verification link yet (blocked by the tenant's
+"Require Email Verification" Action) sees "check your inbox," not "sign-in was
+cancelled" — the two look identical at the OAuth-error-code level but call for
+opposite next steps.
+
 ## Component imports
 
 `src/components/index.ts` is the barrel: it re-exports everything under
@@ -424,5 +433,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **486** of the repo's 540 tests. A smaller number
+The storefront currently holds **491** of the repo's 545 tests. A smaller number
 after your change means something was dropped.
