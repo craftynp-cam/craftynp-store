@@ -79,7 +79,17 @@ what's inside, just what a reader wouldn't get from the code:
   async server component RTL cannot render — and both use `h2`, since the
   carousel's active slide owns the page's only `h1`. Either section returns
   `null` when it has nothing to show (no gallery tiles with an image, or no
-  maker heading/body).
+  maker heading/body). Their images come from Medusa's local file-local
+  provider (`http://localhost:9000/static/...` in development), which
+  `next.config.ts`'s `images.remotePatterns` already allows — but matching a
+  pattern is not enough. Next's image optimizer separately blocks any
+  upstream host that resolves to a private/loopback IP as SSRF protection,
+  regardless of `remotePatterns`, and fails with the generic
+  `"url" parameter is not allowed` rather than naming the real reason (visible
+  only in the server log, as `resolved to private ip`). `next.config.ts` sets
+  `images.dangerouslyAllowLocalIP: true` for exactly this reason — it's a
+  no-op once production points at a real domain (R2), but without it every
+  locally-uploaded image 400s.
 - `src/components/nav` — the global header, footer, and their parts, rendered
   once in `layout.tsx`. There is no horizontal desktop nav — the drawer is the
   site's only navigation at every breakpoint. `Navbar` and `Footer` both take
