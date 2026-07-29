@@ -13,6 +13,16 @@ components fetch from the Medusa backend through `@medusajs/js-sdk`
 resolved through its built `dist/` — which is why storefront tasks must be run
 via the root scripts, never `pnpm --filter`.
 
+`tsconfig.json`'s `paths` entry for `@craftynp/types` points at
+`dist/index.d.ts`, not the adjacent `dist/index.js` — with `allowJs` on,
+mapping to the `.js` file makes TypeScript infer the module's export list from
+that file's own re-exports, and value-only `export {...} from "./x.js"` lines
+silently swallow every purely type-only `export type {...} from "./x.js"` line
+next to them, since the type-only re-export leaves no trace in the compiled
+JS. Every type in the package (`SiteContent` included) went missing this way
+before the mapping was corrected — the runtime import is unaffected either
+way, since `paths` only ever governs type-checking.
+
 Layout — read the directory before changing it; this is not an inventory of
 what's inside, just what a reader wouldn't get from the code:
 
@@ -54,7 +64,15 @@ what's inside, just what a reader wouldn't get from the code:
   site's only navigation at every breakpoint. `Navbar` and `Footer` both take
   `categories` as a required prop rather than fetching it themselves: RTL
   cannot render an async server component, so `layout.tsx` awaits
-  `fetchNavCategories()` once and passes the result to both.
+  `fetchNavCategories()` once and passes the result to both. `AnnouncementBar`
+  (CNP-23) is `Navbar`'s `announcement` prop, sourced the same way from
+  `fetchSiteContent()`; `Navbar` owns the sticky wrapper around both itself and
+  the bar, so `SkipLink` stays the first element in DOM order and the two
+  scroll together. Short copy renders centred and static; copy wider than the
+  viewport marquees instead of wrapping, so the bar stays exactly one line
+  tall — it reuses `reduced-motion.ts` the same way the category carousel
+  does, and the marquee is a hard stop, not a slowdown, under
+  `prefers-reduced-motion`.
 - `src/components/icons` — the only module that imports Phosphor
   (`@phosphor-icons/react`) directly, so the library stays swappable. Pulled
   from the `/dist/ssr` subpath, which has no `"use client"` boundary, so icons
@@ -90,7 +108,11 @@ what's inside, just what a reader wouldn't get from the code:
   `categories.ts`'s `fetchCatalogSidebar` builds the sidebar's category list
   and counts from two requests total (one `product.list` read for every
   product's categories, tallied in Node), not the one-request-per-category
-  `fetchShowcaseCategories` above makes.
+  `fetchShowcaseCategories` above makes. `site-content.ts` (CNP-23) fetches the
+  Medusa site content module's resolved values, `next: { revalidate: 60 }` so
+  an admin edit shows up without a redeploy; like `categories.ts` and
+  `region.ts` it never throws — an outage falls back to the registry's
+  defaults, which leave the announcement bar off.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -349,5 +371,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **442** of the repo's 468 tests. A smaller number
+The storefront currently holds **457** of the repo's 498 tests. A smaller number
 after your change means something was dropped.
