@@ -66,7 +66,30 @@ what's inside, just what a reader wouldn't get from the code:
 - `src/components/home` — the homepage category carousel (CNP-29) and its
   slide. Rendered on a fixed navy surface (`bg-ink`/`text-off-white`), the same
   fixed-in-both-modes treatment the footer uses, so its focus ring is
-  `ring-off-white` rather than the mode-following `ring-primary`.
+  `ring-off-white` rather than the mode-following `ring-primary`. Below the
+  carousel, `WorkshopGallery` and `MakerIntro` (CNP-30) render the "Fresh from
+  the workshop" gallery and the "About the maker" intro, both driven entirely
+  by the `siteContent` module. `WorkshopGallery` sits on the blush
+  `surface-soft` band; its four tiles are deliberately not links — this is a
+  portfolio, not a catalog — and a tile's caption doubles as its image's alt
+  text. `MakerIntro` sits on the mode-following `surface` band (so its focus
+  ring is `ring-primary`, unlike the carousel's) and links to `/about`, which
+  does not exist yet. Both are **sync, prop-taking** components for the same
+  reason `Navbar` and `SignInPanel` are — the page that renders them is an
+  async server component RTL cannot render — and both use `h2`, since the
+  carousel's active slide owns the page's only `h1`. Either section returns
+  `null` when it has nothing to show (no gallery tiles with an image, or no
+  maker heading/body). Their images come from Medusa's local file-local
+  provider (`http://localhost:9000/static/...` in development), which
+  `next.config.ts`'s `images.remotePatterns` already allows — but matching a
+  pattern is not enough. Next's image optimizer separately blocks any
+  upstream host that resolves to a private/loopback IP as SSRF protection,
+  regardless of `remotePatterns`, and fails with the generic
+  `"url" parameter is not allowed` rather than naming the real reason (visible
+  only in the server log, as `resolved to private ip`). `next.config.ts` sets
+  `images.dangerouslyAllowLocalIP: true` for exactly this reason — it's a
+  no-op once production points at a real domain (R2), but without it every
+  locally-uploaded image 400s.
 - `src/components/nav` — the global header, footer, and their parts, rendered
   once in `layout.tsx`. There is no horizontal desktop nav — the drawer is the
   site's only navigation at every breakpoint. `Navbar` and `Footer` both take
@@ -120,7 +143,11 @@ what's inside, just what a reader wouldn't get from the code:
   Medusa site content module's resolved values, `next: { revalidate: 60 }` so
   an admin edit shows up without a redeploy; like `categories.ts` and
   `region.ts` it never throws — an outage falls back to the registry's
-  defaults, which leave the announcement bar off. `auth.ts` (CNP-56/57/58) is
+  defaults, which leave the announcement bar off. `home-content.ts` (CNP-30) is
+  the pure mapping from that same `SiteContent` to `WorkshopGallery`'s and
+  `MakerIntro`'s props, and the one place the "hide when there's nothing to
+  show" rules live — a gallery tile with no image is dropped, not rendered
+  with a placeholder. `auth.ts` (CNP-56/57/58) is
   the session cookie's shape and options, a dependency-free JWT payload
   decoder (the token comes from a trusted server-to-server exchange, so this
   only reads it — it does not verify a signature), and `getCustomer()`, which
@@ -433,5 +460,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **496** of the repo's 551 tests. A smaller number
+The storefront currently holds **519** of the repo's 583 tests. A smaller number
 after your change means something was dropped.

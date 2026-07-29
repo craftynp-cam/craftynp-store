@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
     ];
   },
   images: {
+    dangerouslyAllowLocalIP: true,
     // Product thumbnails are served from the Medusa backend, wherever it is
     // hosted — derived from the same URL the rewrites above already use.
     remotePatterns: [

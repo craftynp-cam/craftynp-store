@@ -21,6 +21,7 @@ import type {
 } from "@craftynp/types";
 
 import { sdk } from "../../lib/client";
+import { SiteContentImageField } from "../../components/site-content-image-field";
 
 const SITE_CONTENT_QUERY_KEY = ["site-content"];
 
@@ -134,6 +135,15 @@ const SiteContentPage = () => {
                     />
                     <Label htmlFor={key}>{field.label}</Label>
                   </div>
+                ) : field.type === "image" ? (
+                  <>
+                    <Label htmlFor={key}>{field.label}</Label>
+                    <SiteContentImageField
+                      id={key}
+                      value={values[key]}
+                      onChange={(next) => handleChange(key, next)}
+                    />
+                  </>
                 ) : (
                   <>
                     <Label htmlFor={key}>{field.label}</Label>

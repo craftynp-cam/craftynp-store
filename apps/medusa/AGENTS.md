@@ -16,13 +16,24 @@ Layout under `src/`:
 - `admin/` — admin dashboard extensions. `admin/routes/site-content` (CNP-23)
   is the first UI route in the repo; `admin/lib/client.ts` is its SDK
   instance, configured per Medusa's own admin pattern (session auth,
-  `VITE_BACKEND_URL`).
+  `VITE_BACKEND_URL`). `admin/components/site-content-image-field.tsx`
+  (CNP-30) is the control behind the registry's `image` field type: it uploads
+  through `sdk.admin.upload.create` (a multipart `files` field on
+  `POST /admin/uploads`) and writes the returned URL into the entry, so the
+  page's existing Save mutation is otherwise untouched. Two things about it
+  are non-obvious — the file lands on disk the instant it's picked, _before_
+  Save, so an abandoned edit orphans it with no delete path; and it only
+  exists because `medusa-config.ts` now registers the File module explicitly
+  (see below), rather than relying on Medusa's implicit default.
 - `workflows/`, `modules/` — the `siteContent` module (CNP-23) is the first
   custom module in the repo: a generic key/value store
   (`site_content_entry`) whose readable/writable fields are declared by the
   `SITE_CONTENT_FIELDS` registry in `@craftynp/types`, not by the module
   itself — adding a future entry (about-page copy, seasonal notices) is a
-  registry change, not a migration. `workflows/upsert-site-content.ts` is the
+  registry change, not a migration. The registry's field types are `text`,
+  `longText`, `boolean`, and, since CNP-30, `image` — the stored value is
+  still a plain string (the uploaded file's URL), so adding an image field
+  needs no migration either. `workflows/upsert-site-content.ts` is the
   one mutation path; its step validates each entry against the registry and
   keeps prior values for compensation. `subscribers/`, `jobs/`, `links/`
   remain scaffolding only.
@@ -33,7 +44,15 @@ Layout under `src/`:
 
 `medusa-config.ts` holds the module and CORS configuration. It now registers
 `@medusajs/medusa/auth` explicitly (CNP-56/57/58) — see [Auth](#auth-cnp-565758)
-below for what that changed and why.
+below for what that changed and why. It also registers `@medusajs/medusa/file`
+explicitly (CNP-30), with the `file-local` provider given a `backend_url` built
+from `MEDUSA_BACKEND_URL` — left to `defineConfig`'s implicit default, the
+provider hardcodes `http://localhost:9000/static`, which silently disagrees
+with the storefront's `images.remotePatterns` (derived from
+`NEXT_PUBLIC_MEDUSA_BACKEND_URL`) the moment either app's backend URL isn't
+that exact value. Production needs a real provider before this ships —
+`@medusajs/file-s3` on Cloudflare R2 — which is CNP-16/CNP-17's concern.
+Uploaded files land in `apps/medusa/static/`, gitignored.
 
 **`src/admin` typechecks separately from the rest of `src`.** It's the only
 `.tsx` under this app and needs DOM lib types that the Node-only backend
@@ -194,7 +213,9 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **22** of the repo's 540 tests. The `siteContent`
+This app currently holds **23** of the repo's 583 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
-count.
+count. The admin's `.tsx` extensions (including
+`site-content-image-field.tsx`) go untested here too — this app's Jest is
+node-environment with no jsdom, so nothing under `src/admin` can be rendered.
