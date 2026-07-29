@@ -32,12 +32,13 @@ what's inside, just what a reader wouldn't get from the code:
   targets. Add both to any new page's `<main>`. Catalog URLs are
   `/products` (all products), `/{category}` (CNP-31), and
   `/{category}/{product}` (CNP-33). `src/app/products/page.tsx` is a literal
-  segment, so it — and `/design`, `/sign-in`, `/account`, and `/auth` (CNP-56)
-  — shadow any Medusa category whose handle matches; a category can't use
-  those handles. A product 404s if its handle resolves but the URL's category
-  segment doesn't match, so it isn't reachable at more than one path; a
-  category 404s if its handle doesn't resolve at all. `src/app/auth/*` are
-  route handlers, not pages — see [Auth](#auth-cnp-565758) below for why they
+  segment, so it — and `/design`, `/sign-in`, `/account`, `/auth` (CNP-56), and
+  `/about` (CNP-66) — shadow any Medusa category whose handle matches; a
+  category can't use those handles. A product 404s if its handle resolves but
+  the URL's category segment doesn't match, so it isn't reachable at more than
+  one path; a category 404s if its handle doesn't resolve at all.
+  `src/app/auth/*` are route handlers, not pages — see
+  [Auth](#auth-cnp-565758) below for why they
   have to live there specifically and not under `/api`.
 - `src/components/ui` — the HeroUI-backed primitives.
 - `src/components/account` — `/sign-in` and `/account`'s parts (CNP-56/57/58).
@@ -73,8 +74,8 @@ what's inside, just what a reader wouldn't get from the code:
   `surface-soft` band; its four tiles are deliberately not links — this is a
   portfolio, not a catalog — and a tile's caption doubles as its image's alt
   text. `MakerIntro` sits on the mode-following `surface` band (so its focus
-  ring is `ring-primary`, unlike the carousel's) and links to `/about`, which
-  does not exist yet. Both are **sync, prop-taking** components for the same
+  ring is `ring-primary`, unlike the carousel's) and links to `/about`
+  (CNP-66). Both are **sync, prop-taking** components for the same
   reason `Navbar` and `SignInPanel` are — the page that renders them is an
   async server component RTL cannot render — and both use `h2`, since the
   carousel's active slide owns the page's only `h1`. Either section returns
@@ -90,6 +91,16 @@ what's inside, just what a reader wouldn't get from the code:
   `images.dangerouslyAllowLocalIP: true` for exactly this reason — it's a
   no-op once production points at a real domain (R2), but without it every
   locally-uploaded image 400s.
+- `src/components/about` — the `/about` page's parts (CNP-66): `AboutHero`,
+  `AboutStory`, `AboutClosing`. Same shape as `src/components/home` — sync,
+  prop-taking, `siteContent`-driven, returns `null` when it has nothing to
+  show — but with its own `about_*` registry fields rather than reusing
+  `maker_*`, so the homepage teaser and the About page's story can read
+  differently. `AboutHero` owns the page's only `h1`; the other two use `h2`.
+  `AboutStory`'s paragraphs come from a single `longText` field split on blank
+  lines (`splitAboutParagraphs` in `src/lib/about-content.ts`) rather than
+  fixed per-paragraph fields, so the maker can write as many paragraphs as she
+  wants without a code change.
 - `src/components/nav` — the global header, footer, and their parts, rendered
   once in `layout.tsx`. There is no horizontal desktop nav — the drawer is the
   site's only navigation at every breakpoint. `Navbar` and `Footer` both take
@@ -147,10 +158,12 @@ what's inside, just what a reader wouldn't get from the code:
   the pure mapping from that same `SiteContent` to `WorkshopGallery`'s and
   `MakerIntro`'s props, and the one place the "hide when there's nothing to
   show" rules live — a gallery tile with no image is dropped, not rendered
-  with a placeholder. `auth.ts` (CNP-56/57/58) is
-  the session cookie's shape and options, a dependency-free JWT payload
-  decoder (the token comes from a trusted server-to-server exchange, so this
-  only reads it — it does not verify a signature), and `getCustomer()`, which
+  with a placeholder. `about-content.ts` (CNP-66) is the same kind of mapping
+  for the About page's three sections, plus `splitAboutParagraphs`. `auth.ts`
+  (CNP-56/57/58) is the session cookie's shape and options, a dependency-free
+  JWT payload decoder (the token comes from a trusted server-to-server
+  exchange, so this only reads it — it does not verify a signature), and
+  `getCustomer()`, which
   follows the same never-throws convention. `medusa.ts`'s `createAuthFlowSdk`
   is a **fresh** `Medusa` instance per call, used only for `sdk.auth.login` /
   `.callback` / `.refresh` — never call those on the module-scope `sdk`
@@ -460,5 +473,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **519** of the repo's 583 tests. A smaller number
+The storefront currently holds **546** of the repo's 613 tests. A smaller number
 after your change means something was dropped.
