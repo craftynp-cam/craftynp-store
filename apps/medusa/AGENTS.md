@@ -90,10 +90,19 @@ settings, not code** — there is nothing in this repo to point to for CNP-56
 AC1 (the documented password policy) or AC6 (rate limiting) beyond this
 paragraph:
 
-- Database connection password policy: _[fill in from the Auth0 dashboard once
-  set — this is what CNP-56 AC1 means by "documented"]_.
-- Attack Protection → Brute-force Protection and Suspicious IP Throttling are
-  enabled, which is the entirety of CNP-56 AC6.
+- Database connection password policy is Auth0's **"Good"** level (the
+  tenant's default) — at least 8 characters, containing at least 3 of: lower
+  case letters, upper case letters, numbers, special characters. This is what
+  CNP-56 AC1 means by "the documented policy."
+- Email verification is enforced by Auth0's own **"Require Email
+  Verification"** marketplace Action, bound into the tenant's Post Login flow
+  (Actions → Flows → Login) — not the deprecated per-connection toggle. It
+  blocks an unverified customer's login before Auth0 ever issues a code, ahead
+  of and independent of `mapUserInfoToIdentity`'s own `email_verified` check
+  above.
+- Attack Protection → Brute-force Protection, Suspicious IP Throttling, and
+  Breached Password Detection are all enabled, which is the entirety of
+  CNP-56 AC6.
 - The Google social connection ships on Auth0's shared **dev keys** on a fresh
   tenant — rate-limited and showing Auth0's own consent screen rather than
   ours. Fine for local development; needs real Google Cloud OAuth credentials
