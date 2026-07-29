@@ -57,6 +57,7 @@ export function AboutHero({
               src={imageUrl}
               alt={imageAlt}
               fill
+              priority
               sizes="(min-width: 768px) 50vw, 100vw"
               className="object-cover"
             />
