@@ -32,12 +32,20 @@ what's inside, just what a reader wouldn't get from the code:
   targets. Add both to any new page's `<main>`. Catalog URLs are
   `/products` (all products), `/{category}` (CNP-31), and
   `/{category}/{product}` (CNP-33). `src/app/products/page.tsx` is a literal
-  segment, so it — and `/design` — shadow any Medusa category whose handle is
-  `products` or `design`; a category can't use those handles. A product 404s
-  if its handle resolves but the URL's category segment doesn't match, so it
-  isn't reachable at more than one path; a category 404s if its handle doesn't
-  resolve at all.
+  segment, so it — and `/design`, `/sign-in`, `/account`, and `/auth` (CNP-56)
+  — shadow any Medusa category whose handle matches; a category can't use
+  those handles. A product 404s if its handle resolves but the URL's category
+  segment doesn't match, so it isn't reachable at more than one path; a
+  category 404s if its handle doesn't resolve at all. `src/app/auth/*` are
+  route handlers, not pages — see [Auth](#auth-cnp-565758) below for why they
+  have to live there specifically and not under `/api`.
 - `src/components/ui` — the HeroUI-backed primitives.
+- `src/components/account` — `/sign-in` and `/account`'s parts (CNP-56/57/58).
+  Both are sync components taking props (`SignInPanel`, `AccountPanel`), the
+  same reason `Navbar` takes `categories` rather than fetching — the pages
+  that render them are async server components RTL cannot render. Neither
+  "Continue with…" control is HeroUI's `Button`: it renders a real `<button>`,
+  and these navigate to a route handler, so they're styled `Link`s instead.
 - `src/components/cards` — higher-level, product-facing components built on
   those primitives.
 - `src/components/catalog` — the product listing page's parts (CNP-31):
@@ -112,7 +120,18 @@ what's inside, just what a reader wouldn't get from the code:
   Medusa site content module's resolved values, `next: { revalidate: 60 }` so
   an admin edit shows up without a redeploy; like `categories.ts` and
   `region.ts` it never throws — an outage falls back to the registry's
-  defaults, which leave the announcement bar off.
+  defaults, which leave the announcement bar off. `auth.ts` (CNP-56/57/58) is
+  the session cookie's shape and options, a dependency-free JWT payload
+  decoder (the token comes from a trusted server-to-server exchange, so this
+  only reads it — it does not verify a signature), and `getCustomer()`, which
+  follows the same never-throws convention. `medusa.ts`'s `createAuthFlowSdk`
+  is a **fresh** `Medusa` instance per call, used only for `sdk.auth.login` /
+  `.callback` / `.refresh` — never call those on the module-scope `sdk`
+  singleton, which is shared across concurrent server requests and would leak
+  one customer's token into another's render. A call made on behalf of an
+  already-signed-in customer doesn't need a scoped client at all: pass an
+  `Authorization` header on that one call, on the singleton `sdk`, since a
+  per-call header doesn't mutate it.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -125,6 +144,13 @@ Copy `.env.example` to `.env.local`. It needs
 `NEXT_PUBLIC_DEFAULT_REGION`. The publishable key does not exist until
 `pnpm run db:migrate` has run — the seed is a migration script and prints the
 `pk_…` value in that command's output.
+
+For Auth0 (CNP-56/57/58): `AUTH0_DOMAIN` and `AUTH0_CLIENT_ID`, both
+server-side only (not `NEXT_PUBLIC_`) — used only to build the sign-out URL,
+never sent to the browser — and `NEXT_PUBLIC_SITE_URL`, this site's own base
+URL, used to build the absolute `callback_url` sent to Medusa and the
+`returnTo` sent to Auth0's logout endpoint. The client secret lives only in
+`apps/medusa/.env`; the storefront never holds it.
 
 ## Design tokens
 
@@ -292,6 +318,33 @@ name anywhere in the header).
 file's own comment — swap it for the real artwork and nothing else changes.
 `src/components/nav/logo.tsx` references it by path only.
 
+## Auth (CNP-56/57/58)
+
+Customer sign-in, registration, "Continue with Google", and password reset all
+run through **Auth0 Universal Login** — this app never renders a credential
+form itself. `/sign-in` links to `/auth/login`, a route handler that asks
+Medusa's Auth0 provider for a redirect URL and sends the customer there;
+Auth0 redirects back to `/auth/callback`, which exchanges the code for a
+Medusa JWT, creates the customer on a first sign-in, and sets the session
+cookie. See `apps/medusa/AGENTS.md`'s own Auth section for the backend half —
+the verified-email identity decision that makes CNP-57 AC4 hold lives there.
+
+**`next.config.ts` rewrites `/api/:path*` to the Medusa backend.** A route
+handler mounted under `/api` would be proxied away and never run — this is
+why every auth route lives at `/auth/*` instead. There is deliberately no
+`middleware.ts`: `/account` guards itself server-side by redirecting when
+`getCustomer()` returns null, and a broad middleware matcher would intercept
+the same `/api/*` and `/app/*` rewrites.
+
+The session cookie (`src/lib/auth.ts`) is `httpOnly`, `sameSite: "lax"` —
+not `"strict"`, or a customer arriving via the top-level redirect from Auth0
+would look signed-out on the very page meant to prove sign-in worked —
+`secure` only in production, and its `maxAge` is read off the Medusa JWT's
+own `exp`. A second, short-lived cookie (`cnp_auth_return_to`, scoped to
+`/auth`) carries the post-sign-in destination between `/auth/login` and
+`/auth/callback`; it exists because Medusa's own OAuth `state` is opaque
+server-side storage the storefront has no way to read back.
+
 ## Component imports
 
 `src/components/index.ts` is the barrel: it re-exports everything under
@@ -371,5 +424,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **457** of the repo's 498 tests. A smaller number
+The storefront currently holds **486** of the repo's 540 tests. A smaller number
 after your change means something was dropped.

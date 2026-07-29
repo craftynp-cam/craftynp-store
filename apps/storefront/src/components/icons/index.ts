@@ -28,5 +28,6 @@ export {
   Sun,
   Moon,
   TiktokLogo,
+  WarningCircle,
   X,
 } from "@phosphor-icons/react/dist/ssr";

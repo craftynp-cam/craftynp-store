@@ -120,6 +120,14 @@ Leave `NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY` as `pk_replace_me` for now — that k
 does not exist until the database is migrated. See the next section. The
 `.env.example` files are the source of truth for what every variable means.
 
+Customer accounts (CNP-56/57/58) run through Auth0, so `apps/medusa/.env` also
+needs `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, and
+`AUTH0_CALLBACK_URL` from the tenant's application settings, and
+`apps/storefront/.env.local` needs `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, and
+`NEXT_PUBLIC_SITE_URL` — Medusa boots the auth module explicitly now, so it
+will not start without its three. See `apps/medusa/AGENTS.md`'s Auth section
+for what each does and where they come from.
+
 ### First run
 
 ```bash
