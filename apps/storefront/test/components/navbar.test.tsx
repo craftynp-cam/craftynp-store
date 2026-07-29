@@ -25,6 +25,31 @@ describe("Navbar", () => {
     expect(focusable[0]).toHaveAccessibleName("Skip to content");
   });
 
+  it("renders the announcement bar above the header when set", () => {
+    render(
+      <Navbar categories={categories} announcement="Now Selling: GLITTER!" />,
+    );
+
+    expect(screen.getAllByText("Now Selling: GLITTER!").length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("renders no announcement bar when unset", () => {
+    const { container } = render(<Navbar categories={categories} />);
+
+    expect(container.querySelector(".bg-ink")).not.toBeInTheDocument();
+  });
+
+  it("keeps the skip link the first focusable control even with the announcement bar shown", () => {
+    const { container } = render(
+      <Navbar categories={categories} announcement="Now Selling: GLITTER!" />,
+    );
+
+    const focusable = container.querySelectorAll("a,button,input");
+    expect(focusable[0]).toHaveAccessibleName("Skip to content");
+  });
+
   it("exposes the menu button with an accessible name and no assistive-tech noise from the glyph", () => {
     render(<Navbar categories={categories} />);
 

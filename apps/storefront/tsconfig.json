@@ -13,11 +13,15 @@
     // `@craftynp/types` points at the package's build output, not its source:
     // the source uses NodeNext `./customization.js` specifiers that Turbopack's
     // Bundler-mode resolver cannot follow. Turbo builds the package first
-    // (`dependsOn: ["^build"]`), so `dist/` is always present. TypeScript picks
-    // up the adjacent `index.d.ts` for types.
+    // (`dependsOn: ["^build"]`), so `dist/` is always present. The mapping
+    // targets `index.d.ts` directly, not the adjacent `index.js` — with
+    // `allowJs` on, pointing at the `.js` file makes TypeScript infer the
+    // module's exports from that file's own (value-only) re-exports, silently
+    // dropping every type-only `export type { ... }` that has no JS-emit
+    // trace, such as `SiteContent`.
     "paths": {
       "@/*": ["./src/*"],
-      "@craftynp/types": ["../../packages/types/dist/index.js"]
+      "@craftynp/types": ["../../packages/types/dist/index.d.ts"]
     }
   },
   "include": [
