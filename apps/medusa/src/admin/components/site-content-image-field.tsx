@@ -5,12 +5,52 @@ import { Photo } from "@medusajs/icons";
 import { sdk } from "../lib/client";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2000;
+const RESIZED_JPEG_QUALITY = 0.82;
 
 type SiteContentImageFieldProps = {
   id: string;
   value: string;
   onChange: (value: string) => void;
 };
+
+async function resizeImage(file: File): Promise<File> {
+  if (file.type === "image/svg+xml") {
+    return file;
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(
+    1,
+    MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height),
+  );
+  if (scale === 1) {
+    bitmap.close();
+    return file;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bitmap.close();
+    return file;
+  }
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", RESIZED_JPEG_QUALITY),
+  );
+  if (!blob) {
+    return file;
+  }
+
+  return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", {
+    type: "image/jpeg",
+  });
+}
 
 export function SiteContentImageField({
   id,
@@ -38,7 +78,8 @@ export function SiteContentImageField({
 
     setIsUploading(true);
     try {
-      const { files } = await sdk.admin.upload.create({ files: [file] });
+      const resized = await resizeImage(file);
+      const { files } = await sdk.admin.upload.create({ files: [resized] });
       const uploaded = files[0];
       if (!uploaded) {
         throw new Error("Upload returned no file");

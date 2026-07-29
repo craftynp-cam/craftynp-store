@@ -137,6 +137,35 @@ describe("resolveSiteContent for the new fields", () => {
   });
 });
 
+describe("resolveSiteContent for the about page", () => {
+  it("fills defaults for the about page fields", () => {
+    const result = resolveSiteContent([]);
+    expect(result.about_heading).toBe(
+      "Hi, I'm Katherine — every order is made by my hands",
+    );
+    expect(result.about_image).toBe("");
+    expect(result.about_story_heading).toBe("How it started");
+  });
+});
+
+describe("validateSiteContentValue for about_story_body", () => {
+  it("accepts text at exactly maxLength", () => {
+    const result = validateSiteContentValue(
+      "about_story_body",
+      "a".repeat(1200),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects text longer than maxLength", () => {
+    const result = validateSiteContentValue(
+      "about_story_body",
+      "a".repeat(1201),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("siteContentKeySchema", () => {
   it("accepts every registered key", () => {
     for (const key of SITE_CONTENT_KEYS) {
