@@ -1,6 +1,7 @@
 import {
   AUTH_COOKIE_NAME,
   classifyAuthCallbackError,
+  customerNameFromUserMetadata,
   decodeJwtPayload,
   getCustomer,
   returnToCookieOptions,
@@ -118,6 +119,34 @@ describe("classifyAuthCallbackError", () => {
 
   it("falls back to cancelled when there is no description at all", () => {
     expect(classifyAuthCallbackError(undefined)).toBe("cancelled");
+  });
+});
+
+describe("customerNameFromUserMetadata", () => {
+  it("maps given_name and family_name to first_name and last_name", () => {
+    expect(
+      customerNameFromUserMetadata({
+        given_name: "Cam",
+        family_name: "Slash",
+      }),
+    ).toEqual({ first_name: "Cam", last_name: "Slash" });
+  });
+
+  it("omits a name field that is missing", () => {
+    expect(customerNameFromUserMetadata({ given_name: "Cam" })).toEqual({
+      first_name: "Cam",
+    });
+  });
+
+  it("returns an empty object for undefined or empty user_metadata", () => {
+    expect(customerNameFromUserMetadata(undefined)).toEqual({});
+    expect(customerNameFromUserMetadata({})).toEqual({});
+  });
+
+  it("ignores non-string or empty-string values", () => {
+    expect(
+      customerNameFromUserMetadata({ given_name: "", family_name: 42 }),
+    ).toEqual({});
   });
 });
 

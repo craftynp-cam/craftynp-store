@@ -4,6 +4,7 @@ import {
   AUTH_COOKIE_NAME,
   RETURN_TO_COOKIE_NAME,
   classifyAuthCallbackError,
+  customerNameFromUserMetadata,
   decodeJwtPayload,
   sessionCookieOptions,
 } from "@/lib/auth";
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     try {
       await sdk.store.customer.create(
-        { email },
+        { email, ...customerNameFromUserMetadata(decoded.user_metadata) },
         {},
         { Authorization: `Bearer ${token}` },
       );

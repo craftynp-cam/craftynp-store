@@ -65,6 +65,22 @@ export function classifyAuthCallbackError(
   return "cancelled";
 }
 
+export function customerNameFromUserMetadata(
+  userMetadata: Record<string, unknown> | undefined,
+): { first_name?: string; last_name?: string } {
+  const givenName = userMetadata?.given_name;
+  const familyName = userMetadata?.family_name;
+
+  return {
+    ...(typeof givenName === "string" && givenName
+      ? { first_name: givenName }
+      : {}),
+    ...(typeof familyName === "string" && familyName
+      ? { last_name: familyName }
+      : {}),
+  };
+}
+
 export type AuthedCustomer = {
   id: string;
   email: string;

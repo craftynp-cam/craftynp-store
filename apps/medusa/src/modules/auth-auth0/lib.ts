@@ -54,6 +54,8 @@ export type Auth0UserInfo = {
   email?: string;
   email_verified?: boolean;
   name?: string;
+  given_name?: string;
+  family_name?: string;
   picture?: string;
 };
 
@@ -91,6 +93,8 @@ export function mapUserInfoToIdentity(
       user_metadata: {
         email: userInfo.email,
         name: userInfo.name,
+        given_name: userInfo.given_name,
+        family_name: userInfo.family_name,
         picture: userInfo.picture,
       },
       provider_metadata: {

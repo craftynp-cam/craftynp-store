@@ -118,11 +118,29 @@ describe("mapUserInfoToIdentity", () => {
         user_metadata: {
           email: "Cam@Example.com",
           name: "Cam",
+          given_name: undefined,
+          family_name: undefined,
           picture: undefined,
         },
         provider_metadata: { auth0_sub: "auth0|abc" },
       },
     });
+  });
+
+  it("carries given_name and family_name into user_metadata", () => {
+    const result = mapUserInfoToIdentity({
+      sub: "google-oauth2|abc",
+      email: "cam@example.com",
+      email_verified: true,
+      given_name: "Cam",
+      family_name: "Slash",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.identity.user_metadata.given_name).toBe("Cam");
+      expect(result.identity.user_metadata.family_name).toBe("Slash");
+    }
   });
 
   it("maps two different subs with the same verified email to the same entity_id", () => {
