@@ -1,5 +1,6 @@
 import { Footer, Navbar } from "@/components";
 import { fetchNavCategories } from "@/lib/categories";
+import { fetchSiteContent } from "@/lib/site-content";
 import { themeInitScript } from "@/lib/theme";
 import type { Metadata } from "next";
 import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
@@ -29,7 +30,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const categories = await fetchNavCategories();
+  const [categories, siteContent] = await Promise.all([
+    fetchNavCategories(),
+    fetchSiteContent(),
+  ]);
+  const announcement =
+    siteContent.banner_enabled && siteContent.banner_text
+      ? siteContent.banner_text
+      : null;
 
   return (
     // themeInitScript sets data-theme on this element before React hydrates,
@@ -44,8 +52,15 @@ export default async function RootLayout({
         {/* Blocking on purpose: a pinned theme must land on <html> before paint. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-full flex flex-col">
-        <Navbar categories={categories} />
+      <body
+        className="min-h-full flex flex-col"
+        style={
+          {
+            "--announcement-height": announcement ? "2.5rem" : "0rem",
+          } as React.CSSProperties
+        }
+      >
+        <Navbar categories={categories} announcement={announcement} />
         <div className="flex-1">{children}</div>
         <Footer categories={categories} />
       </body>

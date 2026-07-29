@@ -83,6 +83,8 @@
  */
 :root {
   --header-height: 5rem;
+  --announcement-height: 0rem;
+  --chrome-height: calc(var(--header-height) + var(--announcement-height));
 }
 
 /*
@@ -296,5 +298,14 @@
   }
   to {
     stroke-dashoffset: 119.4; /* 2 * PI * 19 — must match the ring's r in category-carousel.tsx */
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }

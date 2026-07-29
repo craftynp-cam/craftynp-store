@@ -28,7 +28,7 @@ const arrowButtonClassName =
 // load; the subtracted 4rem on desktop leaves a hint of the page beneath to
 // imply scrolling.
 const shellClassName =
-  "relative aspect-square w-full overflow-hidden md:aspect-auto md:h-[calc(100svh-var(--header-height)-4rem)] md:min-h-[28rem]";
+  "relative aspect-square w-full overflow-hidden md:aspect-auto md:h-[calc(100svh-var(--chrome-height)-4rem)] md:min-h-[28rem]";
 
 type CategoryCarouselProps = { categories: readonly ShowcaseCategory[] };
 
