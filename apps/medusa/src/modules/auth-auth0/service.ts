@@ -159,10 +159,6 @@ class Auth0AuthProviderService extends AbstractAuthModuleProvider {
 
     try {
       authIdentity = await authIdentityProviderService.retrieve({ entity_id });
-      authIdentity = await authIdentityProviderService.update(entity_id, {
-        user_metadata,
-        provider_metadata,
-      });
     } catch (error) {
       if ((error as MedusaError).type !== MedusaError.Types.NOT_FOUND) {
         throw error;

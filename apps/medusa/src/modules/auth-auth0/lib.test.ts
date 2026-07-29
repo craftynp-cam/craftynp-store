@@ -125,9 +125,6 @@ describe("mapUserInfoToIdentity", () => {
     });
   });
 
-  // This is the CNP-57 AC4 guarantee itself: an address that registers by
-  // email/password (auth0|…) and later signs in with Google
-  // (google-oauth2|…) must resolve to the same Medusa customer, not two.
   it("maps two different subs with the same verified email to the same entity_id", () => {
     const database = mapUserInfoToIdentity({
       sub: "auth0|abc123",

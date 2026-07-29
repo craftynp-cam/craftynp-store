@@ -46,11 +46,6 @@ describe("SignInPanel", () => {
     expect(alert.querySelector("svg")).toBeInTheDocument();
   });
 
-  // `on-danger`/`danger` is the registered, AA-tested pairing for text on a
-  // danger-coloured surface (src/lib/design-tokens.ts's onPairs) — the same
-  // pattern as on-primary/primary. `danger-foreground` is a different token,
-  // meant for standalone error text on the page's normal background, and
-  // reads at close to 1:1 contrast when stacked on bg-danger instead.
   it("pairs the danger surface with on-danger text, not danger-foreground", () => {
     render(<SignInPanel error="cancelled" />);
 
