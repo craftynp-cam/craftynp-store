@@ -81,7 +81,6 @@ describe("WorkshopGallery", () => {
       />,
     );
     expect(screen.getByAltText("")).toBeInTheDocument();
-    // Three of the four tiles have a caption; the blank one gets no <p>.
     const captions = container.querySelectorAll("li > p");
     expect(captions).toHaveLength(3);
   });

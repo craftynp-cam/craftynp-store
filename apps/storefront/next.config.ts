@@ -21,9 +21,6 @@ const nextConfig: NextConfig = {
     ];
   },
   images: {
-    // The Medusa backend is local dev infrastructure — its host resolves to
-    // a loopback address, which Next's image optimizer blocks by default as
-    // SSRF protection, independent of remotePatterns below matching it.
     dangerouslyAllowLocalIP: true,
     // Product thumbnails are served from the Medusa backend, wherever it is
     // hosted — derived from the same URL the rewrites above already use.
