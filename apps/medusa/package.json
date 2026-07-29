@@ -17,6 +17,7 @@
     "start": "medusa start",
     "db:migrate": "medusa db:migrate",
     "seed": "medusa exec ./src/migration-scripts/initial-data-seed.ts",
+    "reset-auth0-account": "medusa exec ./src/scripts/reset-auth0-test-account.ts",
     "test": "jest",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit && tsc -p src/admin --noEmit"

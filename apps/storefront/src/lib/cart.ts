@@ -52,12 +52,6 @@ function parseCart(raw: string | null): Cart {
   }
 }
 
-/**
- * `useSyncExternalStore` requires a referentially stable snapshot — returning
- * a freshly parsed object on every call causes an infinite render loop. This
- * cache is invalidated only by a write in this tab (`writeCart`) or a
- * `storage` event from another tab, never by a plain read.
- */
 let cachedCart: Cart | null = null;
 
 function readCartFromStorage(): Cart {
@@ -66,7 +60,6 @@ function readCartFromStorage(): Cart {
   try {
     cachedCart = parseCart(window.localStorage.getItem(CART_STORAGE_KEY));
   } catch {
-    // Safari in private mode throws on localStorage access.
     cachedCart = EMPTY_CART;
   }
 
@@ -77,23 +70,12 @@ export function readCart(): Cart {
   return readCartFromStorage();
 }
 
-/**
- * A stable empty cart for `useSyncExternalStore`'s `getServerSnapshot` — the
- * server can never know the client's cart, so every page renders empty and
- * the client corrects it on hydration, the same pattern `cart-count.ts` used.
- */
 export function readServerCart(): Cart {
   return EMPTY_CART;
 }
 
 const listeners = new Set<() => void>();
 
-/**
- * Backs `useSyncExternalStore`, mirroring `subscribeToTheme` in
- * `src/lib/theme.ts`. The `storage` event keeps other tabs in step and also
- * invalidates this tab's cache so the next read reflects the other tab's
- * write.
- */
 export function subscribeToCart(listener: () => void): () => void {
   const onStorage = () => {
     cachedCart = null;
@@ -114,18 +96,11 @@ function writeCart(cart: Cart): void {
 
   try {
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cachedCart));
-  } catch {
-    // Cart is still updated in memory for this page view.
-  }
+  } catch {}
 
   for (const listener of listeners) listener();
 }
 
-/**
- * Merges into an existing line with the same `id` by incrementing quantity
- * (an identical configuration added twice is one line, per CNP-45 AC 3);
- * otherwise appends a new line.
- */
 export function addCartLine(line: CartLine): void {
   const current = readCartFromStorage();
   const existing = current.lines.find((candidate) => candidate.id === line.id);

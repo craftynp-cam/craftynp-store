@@ -5,11 +5,6 @@ import { useState } from "react";
 import { CartCard } from "@/components";
 import type { CartLine } from "@/lib/cart";
 
-/**
- * A tiny client-only stand-in for the cart store, so the demo cards on
- * /design/components are actually interactive (stepper, remove) without
- * touching the real `cart.ts` store the header drawer reads from.
- */
 export function CartCardDemo({
   initialLines,
 }: {

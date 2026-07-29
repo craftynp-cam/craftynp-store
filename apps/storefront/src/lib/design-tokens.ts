@@ -1,11 +1,5 @@
 import { contrastRatio, mixOver, parseHex, toHex } from "@/lib/contrast";
 
-/**
- * A TypeScript mirror of the tokens defined in `src/app/globals.css`, so the
- * reference page can measure and document them. `design-tokens.test.ts` fails
- * if the two ever drift, and enforces the contrast floor in both modes.
- */
-
 export const brandColors = {
   gold: "#ebb805",
   mint: "#85dfc3",
@@ -14,7 +8,6 @@ export const brandColors = {
   "off-white": "#fbfaf7",
   "muted-black": "#1f1e1c",
   alert: "#b4574a",
-  // Tailwind's own --color-white. Not a brand colour; the light-mode card surface.
   white: "#ffffff",
 } as const;
 
@@ -23,7 +16,6 @@ export type BrandName = keyof typeof brandColors;
 export type ColorSpec =
   { brand: BrandName } | { mix: BrandName; percent: number; over: BrandName };
 
-/** The exact CSS the token declares, for the drift check. */
 export function cssValue(spec: ColorSpec): string {
   if ("brand" in spec) return `var(--color-${spec.brand})`;
   return `color-mix(in srgb, var(--color-${spec.mix}) ${spec.percent}%, var(--color-${spec.over}))`;
@@ -78,10 +70,6 @@ export type SemanticToken = {
   dark: ColorSpec;
 };
 
-/**
- * Light composites ink navy over off-white; dark composites off-white over ink
- * navy. Same seven colours, mirrored.
- */
 export const semanticTokens: readonly SemanticToken[] = [
   {
     token: "background",
@@ -187,11 +175,6 @@ export const semanticTokens: readonly SemanticToken[] = [
   },
 ];
 
-/**
- * The exact declaration globals.css should carry. Tokens whose value is the
- * same in both modes are written plainly rather than as a light-dark() with
- * two identical arms.
- */
 export function tokenDeclaration(token: SemanticToken): string {
   const light = cssValue(token.light);
   const dark = cssValue(token.dark);
@@ -213,15 +196,10 @@ export function tokenHex(name: string, mode: Mode): string {
   throw new Error(`Unknown token "${name}"`);
 }
 
-/** Every token that paints a background other text sits on. */
 export const surfaceTokens = ["background", "surface", "surface-soft"] as const;
 
 type Role = { name: string; note?: string };
 
-/**
- * Which colours may carry text on each mode's surfaces. `text` roles are held
- * to 4.5:1 by the test suite; `decorative` roles are exempt and must say why.
- */
 const roles: Record<
   Mode,
   { text: readonly Role[]; decorative: readonly Role[] }
@@ -287,7 +265,6 @@ const roles: Record<
   },
 };
 
-/** Pairs that must hold whatever surface they sit on. */
 const onPairs = [
   ["on-primary", "primary"],
   ["on-accent", "accent"],
@@ -328,7 +305,6 @@ function pair(
   };
 }
 
-/** Every sanctioned pairing for a mode, measured. */
 export function pairingsFor(mode: Mode): readonly Pairing[] {
   const { text, decorative } = roles[mode];
 
@@ -415,7 +391,6 @@ export const typeScale: readonly TypeStep[] = [
 
 export type ScaleStep = { utility: string; value: string };
 
-/** `--spacing` is 0.25rem; utilities multiply it. These are the sanctioned steps. */
 export const spacingScale: readonly ScaleStep[] = [
   { utility: "1", value: "0.25rem" },
   { utility: "2", value: "0.5rem" },

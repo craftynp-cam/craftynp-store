@@ -10,7 +10,7 @@ import {
   type ThemePreference,
 } from "@/lib/theme";
 
-import { Moon, Monitor, Sun } from "../icons";
+import { Monitor, Moon, Sun } from "../icons";
 
 const labels: Record<ThemePreference, string> = {
   system: "System",
@@ -25,18 +25,10 @@ const compactIcons: Record<ThemePreference, typeof Monitor> = {
 };
 
 type ThemeToggleProps = {
-  /**
-   * "group" is the labelled three-button control shown on /design.
-   * "compact" is a single icon button that cycles system → light → dark,
-   * sized to sit in the navbar (CNP-24).
-   */
   variant?: "group" | "compact";
 };
 
 export function ThemeToggle({ variant = "group" }: ThemeToggleProps) {
-  // The server cannot know the stored preference, so it renders "system" and
-  // the client corrects the highlight on hydration. The inline head script has
-  // already applied the real theme by then, so no colour changes here.
   const preference = useSyncExternalStore(
     subscribeToTheme,
     readStoredTheme,

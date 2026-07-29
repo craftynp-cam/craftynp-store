@@ -3,11 +3,6 @@ import type { ProductCardData } from "@/components";
 import { formatMoney } from "./money";
 import { productHref } from "./routes";
 
-/**
- * A narrow structural type rather than the SDK's generated product type, so
- * this stays testable without a live backend and only names the fields it
- * actually reads.
- */
 export type ProductCardSourceProduct = {
   handle: string | null;
   title: string;
@@ -54,11 +49,6 @@ export function cheapestPrice(
   );
 }
 
-/**
- * Maps a Medusa store product onto the card's presentational props: the
- * lowest variant price (marked "from" when variants disagree), sale detection
- * against each variant's original amount, and the first category name.
- */
 export function toProductCardProps(
   product: ProductCardSourceProduct,
 ): ProductCardData {
@@ -97,8 +87,6 @@ export function toProductCardProps(
         ? formatMoney(cheapest.original_amount, cheapest.currency_code)
         : undefined,
     isFromPrice,
-    // Release 1 has only ready-to-ship products (see CNP-28's release note);
-    // the configurator that produces customizable products ships in Release 3.
     isCustomizable: false,
   };
 }

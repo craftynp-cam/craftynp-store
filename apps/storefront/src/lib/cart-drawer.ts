@@ -1,11 +1,3 @@
-/**
- * Ephemeral, unpersisted open state for the cart drawer (CNP-47) — separate
- * from `cart.ts` because UI state and the cart's contents have different
- * lifetimes; a reload should never leave the drawer open. `openCartDrawer` is
- * the seam CNP-45 uses to open the drawer on a successful add-to-cart (AC 1),
- * without the drawer or its trigger reaching into `useOverlayState`, which
- * does not resolve under Jest (see apps/storefront/AGENTS.md).
- */
 let isOpen = false;
 
 const listeners = new Set<() => void>();

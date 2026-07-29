@@ -13,18 +13,12 @@ export function readStoredTheme(): ThemePreference {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     return isThemePreference(stored) ? stored : "system";
   } catch {
-    // Safari in private mode throws on localStorage access.
     return "system";
   }
 }
 
 const listeners = new Set<() => void>();
 
-/**
- * Backs `useSyncExternalStore`, which is what lets the control read the stored
- * preference without setting state from an effect. The `storage` event keeps
- * other tabs in step.
- */
 export function subscribeToTheme(listener: () => void): () => void {
   listeners.add(listener);
   window.addEventListener("storage", listener);
@@ -35,10 +29,6 @@ export function subscribeToTheme(listener: () => void): () => void {
   };
 }
 
-/**
- * `system` clears the attribute so the page falls back to `color-scheme:
- * light dark`, which follows the OS.
- */
 export function applyTheme(preference: ThemePreference): void {
   const root = document.documentElement;
 
@@ -50,18 +40,11 @@ export function applyTheme(preference: ThemePreference): void {
 
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, preference);
-  } catch {
-    // Preference is still applied for this page view.
-  }
+  } catch {}
 
   for (const listener of listeners) listener();
 }
 
-/**
- * Runs before first paint, from a blocking inline script in the document
- * head, so a pinned theme is set on <html> before anything renders. Without
- * it a reader who pinned dark gets a flash of the OS mode.
- */
 export const themeInitScript = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
 )});if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}}catch(e){}})()`;

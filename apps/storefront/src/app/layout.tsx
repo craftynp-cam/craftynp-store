@@ -40,16 +40,12 @@ export default async function RootLayout({
       : null;
 
   return (
-    // themeInitScript sets data-theme on this element before React hydrates,
-    // so the server markup cannot match. Suppression is scoped to <html>'s own
-    // attributes and does not reach any child.
     <html
       lang="en"
       suppressHydrationWarning
       className={`${libreBaskerville.variable} ${sourceSans3.variable} h-full antialiased`}
     >
       <head>
-        {/* Blocking on purpose: a pinned theme must land on <html> before paint. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body

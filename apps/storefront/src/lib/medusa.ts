@@ -16,3 +16,12 @@ export const sdk = new Medusa({
   publishableKey,
   debug: process.env.NODE_ENV === "development",
 });
+
+export function createAuthFlowSdk(): Medusa {
+  return new Medusa({
+    baseUrl: backendUrl!,
+    publishableKey: publishableKey!,
+    debug: process.env.NODE_ENV === "development",
+    auth: { type: "jwt", jwtTokenStorageMethod: "nostore" },
+  });
+}

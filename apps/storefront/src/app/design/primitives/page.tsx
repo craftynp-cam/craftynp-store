@@ -14,16 +14,6 @@ import {
   ThemeToggle,
 } from "@/components";
 
-/**
- * The reference page for CNP-22's primitives. Every variant and every state is
- * on screen at once so the acceptance criteria can be checked by looking:
- * focus rings by tabbing, disabled and loading by reading rather than by
- * colour, and the whole page at 375px and 1280px.
- *
- * It is a client component because the controls are interactive — the
- * checkbox, radio group and select need real state to demonstrate anything.
- */
-
 function Section({
   title,
   description,
@@ -57,7 +47,6 @@ function Row({
   );
 }
 
-/** Fields are shown at a readable measure rather than stretched to the grid. */
 function FieldRow({
   label,
   children,

@@ -11,12 +11,6 @@ export const metadata: Metadata = {
     "Reference page for higher-level, product-facing components built on the UI primitives.",
 };
 
-/**
- * The reference page for higher-level components — built on the primitives
- * shown at /design/primitives, rather than directly on HeroUI. CNP-28's
- * ProductCard is the first entry.
- */
-
 function Section({
   title,
   description,
@@ -35,11 +29,6 @@ function Section({
   );
 }
 
-/**
- * One entry per component demoed below, in the order they appear. Add to
- * this list — and wrap the new demo in a `<div id={…}>` — as components join
- * the page; the nav needs no other changes.
- */
 const componentNavEntries = [
   { id: "product-card", label: "Product Card" },
   { id: "cart-card", label: "Cart Card" },

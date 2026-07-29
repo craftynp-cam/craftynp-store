@@ -13,13 +13,7 @@ type ButtonProps = Omit<
 > & {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  /**
-   * Blocks activation and shows a spinner. Distinct from `isDisabled`: React
-   * Aria marks a pending button aria-disabled rather than disabled, so it
-   * stays focusable and the reader is not dropped when a press starts work.
-   */
   isLoading?: boolean;
-  /** Announced while loading. Overridable for buttons with a specific verb. */
   loadingLabel?: string;
   children: ReactNode;
 };

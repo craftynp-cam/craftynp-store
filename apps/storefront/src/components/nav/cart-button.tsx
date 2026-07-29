@@ -9,19 +9,9 @@ import {
   subscribeToCart,
 } from "@/lib/cart";
 
-import { DrawerTrigger } from "../ui";
 import { ShoppingCartSimple } from "../icons";
+import { DrawerTrigger } from "../ui";
 
-/**
- * The trigger for `CartDrawer` (CNP-47) — its count is genuinely live: it
- * reads `cart.ts` through `useSyncExternalStore`, the same pattern
- * `ThemeToggle` uses for the theme preference. The server cannot know the
- * cart, so it renders empty and the client corrects it on hydration — that's
- * also the correct empty state, so there's nothing to flash.
- *
- * No badge renders at all when the count is 0, and the accessible name always
- * carries the number so a screen-reader user gets it without the glyph.
- */
 export function CartButton() {
   const count = useSyncExternalStore(
     subscribeToCart,

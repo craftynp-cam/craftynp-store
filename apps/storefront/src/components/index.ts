@@ -1,3 +1,4 @@
+export * from "./account";
 export * from "./cards";
 export * from "./catalog";
 export * from "./home";

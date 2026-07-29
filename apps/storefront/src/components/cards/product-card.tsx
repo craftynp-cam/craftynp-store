@@ -17,22 +17,11 @@ export type ProductCardData = {
   isCustomizable?: boolean;
 };
 
-/**
- * While loading there is no product yet to describe, so `isLoading` excludes
- * every other prop rather than making them optional alongside it — a caller
- * cannot accidentally pair a real href with a skeleton.
- */
 export type ProductCardProps = { isLoading: true } | ProductCardData;
 
 const cardShellClassName =
   "group focus-within:ring-primary relative overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition hover:border-border-strong hover:shadow-md focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-background";
 
-/**
- * The shared product card — reused by the category listing, search results,
- * and any future grid (CNP-28). Presentational only: callers pass already
- * formatted prices and pick the badge state; `toProductCardProps` in
- * `@/lib/product-card` derives these from a Medusa product.
- */
 export function ProductCard(props: ProductCardProps) {
   if (props.isLoading) {
     return (

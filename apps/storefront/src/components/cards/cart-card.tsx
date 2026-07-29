@@ -7,8 +7,8 @@ import Link from "next/link";
 import type { CartLine } from "@/lib/cart";
 import { formatMoney } from "@/lib/money";
 
-import { Badge, QuantityStepper } from "../ui";
 import { X } from "../icons";
+import { Badge, QuantityStepper } from "../ui";
 
 export type CartCardData = {
   isLoading?: false;
@@ -17,22 +17,10 @@ export type CartCardData = {
   onRemove: (id: string) => void;
 };
 
-/**
- * While loading there is no line yet to describe, so `isLoading` excludes
- * every other prop rather than making them optional alongside it — mirrors
- * `ProductCardProps`.
- */
 export type CartCardProps = { isLoading: true } | CartCardData;
 
 const cardShellClassName = "rounded-xl border border-border bg-surface p-4";
 
-/**
- * The cart's line-item card (CNP-47) — deliberately mirrors `ProductCard`'s
- * badge, image-placeholder, and loading-skeleton treatment (CNP-27) so a line
- * in the cart visibly matches the card it came from. `details` is dormant
- * until the configurator (CNP-9) ships customizable products in Release 3;
- * until then every line renders with `isCustomizable` false and no `details`.
- */
 export function CartCard(props: CartCardProps) {
   if (props.isLoading) {
     return (

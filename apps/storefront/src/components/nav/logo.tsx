@@ -1,10 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 
-/**
- * Links home. The monogram is a fixed-size `next/image` so it never causes
- * layout shift (CNP-24 AC 6) — see `public/logo.svg` for the placeholder note.
- */
 export function Logo() {
   return (
     <Link

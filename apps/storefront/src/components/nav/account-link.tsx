@@ -2,11 +2,6 @@ import Link from "next/link";
 
 import { UserCircle } from "../icons";
 
-/**
- * Entry point only. Accounts were pulled into Release 1 (CNP-11), so this
- * links to a real destination, but the auth flow and `/account` route
- * themselves are that epic's work, not CNP-24's.
- */
 export function AccountLink() {
   return (
     <Link
