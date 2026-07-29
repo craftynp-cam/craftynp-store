@@ -123,10 +123,15 @@ it nulls out `app_metadata.customer_id` rather than removing the key, and
 a new customer id into that slot once the key is present at all — present but
 `null` reads the same as "already linked." Every later sign-in for that
 address then 404s (`getCustomer()` finds a customer id that no longer
-exists) with no error surfaced anywhere the customer can see. To reset a test
-account, delete its `provider_identity`/`auth_identity` rows directly, or use
-a fresh email each time. If this happens, the repair is a single query:
-`UPDATE auth_identity SET app_metadata = '{}'::jsonb WHERE id = '...';`
+exists) with no error surfaced anywhere the customer can see. Prefer a fresh
+email per test run; if you need to reuse one, `pnpm run reset-auth0-account
+<email>` (`src/scripts/reset-auth0-test-account.ts`) removes the
+`provider_identity`, any now-orphaned `auth_identity`, and the `customer` row
+for that address in one step — pass the email as a bare trailing argument,
+with no `--` before it (pnpm forwards it automatically; a literal `--` gets
+swallowed by Medusa's own CLI parsing and the script sees no argument at
+all). It does not touch Auth0 itself — delete the user from the tenant
+dashboard too for a fully clean slate.
 
 ## React 18 — do not "fix" it
 
