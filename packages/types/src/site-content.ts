@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type SiteContentFieldType = "text" | "longText" | "boolean";
+export type SiteContentFieldType = "text" | "longText" | "boolean" | "image";
 
 export type SiteContentField = {
   key: string;
@@ -29,6 +29,157 @@ export const SITE_CONTENT_FIELDS = [
     description: "One line shown across the top of every page.",
     defaultValue: "",
     maxLength: 200,
+  },
+  {
+    key: "workshop_heading",
+    type: "text",
+    group: "Fresh from the workshop",
+    label: "Section heading",
+    description: "Sits above the gallery on the homepage.",
+    defaultValue: "Fresh from the workshop",
+    maxLength: 80,
+  },
+  {
+    key: "workshop_intro",
+    type: "text",
+    group: "Fresh from the workshop",
+    label: "Section intro",
+    description: "One line shown under the heading.",
+    defaultValue:
+      "Real pieces we've made — the customization result, not a mockup.",
+    maxLength: 160,
+  },
+  {
+    key: "workshop_image_1",
+    type: "image",
+    group: "Fresh from the workshop",
+    label: "Tile 1 image",
+    description:
+      "Square works best. Leave empty to hide this tile. Uploads immediately — shows on the site after Save.",
+    defaultValue: "",
+    maxLength: 512,
+  },
+  {
+    key: "workshop_caption_1",
+    type: "text",
+    group: "Fresh from the workshop",
+    label: "Tile 1 caption",
+    description: "Also used as the image's alt text.",
+    defaultValue: "",
+    maxLength: 80,
+  },
+  {
+    key: "workshop_image_2",
+    type: "image",
+    group: "Fresh from the workshop",
+    label: "Tile 2 image",
+    description:
+      "Square works best. Leave empty to hide this tile. Uploads immediately — shows on the site after Save.",
+    defaultValue: "",
+    maxLength: 512,
+  },
+  {
+    key: "workshop_caption_2",
+    type: "text",
+    group: "Fresh from the workshop",
+    label: "Tile 2 caption",
+    description: "Also used as the image's alt text.",
+    defaultValue: "",
+    maxLength: 80,
+  },
+  {
+    key: "workshop_image_3",
+    type: "image",
+    group: "Fresh from the workshop",
+    label: "Tile 3 image",
+    description:
+      "Square works best. Leave empty to hide this tile. Uploads immediately — shows on the site after Save.",
+    defaultValue: "",
+    maxLength: 512,
+  },
+  {
+    key: "workshop_caption_3",
+    type: "text",
+    group: "Fresh from the workshop",
+    label: "Tile 3 caption",
+    description: "Also used as the image's alt text.",
+    defaultValue: "",
+    maxLength: 80,
+  },
+  {
+    key: "workshop_image_4",
+    type: "image",
+    group: "Fresh from the workshop",
+    label: "Tile 4 image",
+    description:
+      "Square works best. Leave empty to hide this tile. Uploads immediately — shows on the site after Save.",
+    defaultValue: "",
+    maxLength: 512,
+  },
+  {
+    key: "workshop_caption_4",
+    type: "text",
+    group: "Fresh from the workshop",
+    label: "Tile 4 caption",
+    description: "Also used as the image's alt text.",
+    defaultValue: "",
+    maxLength: 80,
+  },
+  {
+    key: "maker_eyebrow",
+    type: "text",
+    group: "About the maker",
+    label: "Eyebrow",
+    description: "Small uppercase label shown above the heading.",
+    defaultValue: "About the maker",
+    maxLength: 40,
+  },
+  {
+    key: "maker_heading",
+    type: "text",
+    group: "About the maker",
+    label: "Heading",
+    description: "The section's main heading.",
+    defaultValue: "Hi, I'm the one behind every order",
+    maxLength: 100,
+  },
+  {
+    key: "maker_body",
+    type: "longText",
+    group: "About the maker",
+    label: "Body copy",
+    description: "One paragraph introducing the maker.",
+    defaultValue:
+      "The Crafty NP started as a kitchen-table hobby and grew into a full workshop. I cut, press, and pack every piece myself — and I'll always send you a proof before anything gets printed.",
+    maxLength: 600,
+  },
+  {
+    key: "maker_image",
+    type: "image",
+    group: "About the maker",
+    label: "Portrait",
+    description:
+      "Portrait orientation works best. Uploads immediately — shows on the site after Save.",
+    defaultValue: "",
+    maxLength: 512,
+  },
+  {
+    key: "maker_image_alt",
+    type: "text",
+    group: "About the maker",
+    label: "Portrait alt text",
+    description: "Describes the photo for screen readers.",
+    defaultValue: "The maker at her workbench",
+    maxLength: 120,
+  },
+  {
+    key: "maker_link_label",
+    type: "text",
+    group: "About the maker",
+    label: "Link label",
+    description: "Text for the link to the about page.",
+    defaultValue: "Read the full story",
+    maxLength: 40,
   },
 ] as const satisfies readonly SiteContentField[];
 
@@ -68,6 +219,10 @@ function findField(key: SiteContentKey): SiteContentField {
   return field;
 }
 
+function isAllowedImageUrl(value: string): boolean {
+  return value.startsWith("/") || /^https?:\/\//i.test(value);
+}
+
 export function validateSiteContentValue(
   key: SiteContentKey,
   value: string,
@@ -89,6 +244,13 @@ export function validateSiteContentValue(
     return {
       success: false,
       message: `${key} must be at most ${field.maxLength} characters`,
+    };
+  }
+
+  if (field.type === "image" && trimmed !== "" && !isAllowedImageUrl(trimmed)) {
+    return {
+      success: false,
+      message: `${key} must be an image URL`,
     };
   }
 
