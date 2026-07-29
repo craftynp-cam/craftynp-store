@@ -30,8 +30,9 @@ class Auth0AuthProviderService extends AbstractAuthModuleProvider {
   protected logger_: Logger;
   protected options_: Auth0ProviderOptions;
 
-  constructor({ logger }: InjectedDependencies, options: Auth0ProviderOptions) {
-    super(...arguments);
+  constructor(...args: [InjectedDependencies, Auth0ProviderOptions]) {
+    super(...(args as unknown as []));
+    const [{ logger }, options] = args;
     this.logger_ = logger;
     this.options_ = options;
   }
