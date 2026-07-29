@@ -14,7 +14,11 @@ import {
   toast,
 } from "@medusajs/ui";
 import { SITE_CONTENT_FIELDS } from "@craftynp/types";
-import type { SiteContent, SiteContentField, SiteContentKey } from "@craftynp/types";
+import type {
+  SiteContent,
+  SiteContentField,
+  SiteContentKey,
+} from "@craftynp/types";
 
 import { sdk } from "../../lib/client";
 
@@ -73,9 +77,7 @@ const SiteContentPage = () => {
   });
 
   const handleChange = (key: SiteContentKey, value: string) => {
-    setValues((current) =>
-      current ? { ...current, [key]: value } : current,
-    );
+    setValues((current) => (current ? { ...current, [key]: value } : current));
   };
 
   const handleSave = () => {

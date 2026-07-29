@@ -16,9 +16,7 @@ export function AnnouncementBar({ text }: AnnouncementBarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
-  const [durationSeconds, setDurationSeconds] = useState(
-    MIN_DURATION_SECONDS,
-  );
+  const [durationSeconds, setDurationSeconds] = useState(MIN_DURATION_SECONDS);
   const [isPausedByInteraction, setIsPausedByInteraction] = useState(false);
 
   const prefersReducedMotion = useSyncExternalStore(

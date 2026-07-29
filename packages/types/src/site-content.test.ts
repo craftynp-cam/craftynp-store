@@ -39,13 +39,10 @@ describe("resolveSiteContent", () => {
 });
 
 describe("validateSiteContentValue", () => {
-  it.each(["true", "false"])(
-    "accepts %s for a boolean field",
-    (value) => {
-      const result = validateSiteContentValue("banner_enabled", value);
-      expect(result.success).toBe(true);
-    },
-  );
+  it.each(["true", "false"])("accepts %s for a boolean field", (value) => {
+    const result = validateSiteContentValue("banner_enabled", value);
+    expect(result.success).toBe(true);
+  });
 
   it("rejects a non-boolean value for a boolean field", () => {
     const result = validateSiteContentValue("banner_enabled", "yes");

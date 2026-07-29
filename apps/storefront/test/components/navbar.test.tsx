@@ -30,9 +30,9 @@ describe("Navbar", () => {
       <Navbar categories={categories} announcement="Now Selling: GLITTER!" />,
     );
 
-    expect(
-      screen.getAllByText("Now Selling: GLITTER!").length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("Now Selling: GLITTER!").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("renders no announcement bar when unset", () => {
