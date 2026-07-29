@@ -80,6 +80,28 @@ export async function GET(request: NextRequest) {
       console.error("Could not create the customer after Auth0 sign-in", error);
       return failure("auth_failed");
     }
+  } else {
+    const name = customerNameFromUserMetadata(decoded.user_metadata);
+
+    if (name.first_name || name.last_name) {
+      try {
+        const { customer } = await sdk.store.customer.retrieve(
+          { fields: "id,first_name,last_name" },
+          { Authorization: `Bearer ${token}` },
+        );
+
+        if (!customer.first_name && !customer.last_name) {
+          await sdk.store.customer.update(name, undefined, {
+            Authorization: `Bearer ${token}`,
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Could not backfill the customer's name from Auth0",
+          error,
+        );
+      }
+    }
   }
 
   const response = NextResponse.redirect(new URL(returnTo, request.url));
