@@ -17,12 +17,6 @@ export type SignInPanelProps = {
 const linkButtonClassName =
   "inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
-/**
- * Sync component taking props, not fetching itself — RTL cannot render an
- * async page, the same reason Navbar takes `categories` as a prop. Neither
- * control is HeroUI's `Button`: it renders a real `<button>`, and these are
- * navigations to a route handler, so they're styled links instead.
- */
 export function SignInPanel({ error, returnTo }: SignInPanelProps) {
   const message = error
     ? (errorMessages[error] ?? errorMessages.auth_failed)

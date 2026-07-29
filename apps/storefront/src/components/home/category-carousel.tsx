@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import type { ShowcaseCategory } from "@/lib/categories";
 import { nextIndex, previousIndex } from "@/lib/carousel";
+import type { ShowcaseCategory } from "@/lib/categories";
 import { readAnyDrawerOpen, subscribeToDrawers } from "@/lib/drawer-open";
 import {
   readPrefersReducedMotion,
@@ -16,17 +16,12 @@ import { CategorySlide } from "./category-slide";
 
 const AUTO_ADVANCE_MS = 5000;
 
-// The pause/play button's progress ring. Must match the `to` keyframe in
-// globals.css (2 * PI * RING_RADIUS).
 const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 const arrowButtonClassName =
   "flex size-11 shrink-0 items-center justify-center rounded-full bg-off-white/90 text-ink transition-colors hover:bg-off-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
-// Fixed height rather than content-driven, so nothing reflows as slides
-// load; the subtracted 4rem on desktop leaves a hint of the page beneath to
-// imply scrolling.
 const shellClassName =
   "relative aspect-square w-full overflow-hidden md:aspect-auto md:h-[calc(100svh-var(--chrome-height)-4rem)] md:min-h-[28rem]";
 
@@ -56,11 +51,6 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Bumped whenever the carousel resumes from a pause on the same slide, so
-  // the progress ring — keyed on this alongside activeIndex — remounts and
-  // restarts in step with the timer below, which also restarts its full 5s
-  // wait on every resume. A guarded setState call in the render body (not an
-  // effect) avoids an extra, visible render pass.
   const [prevIsPaused, setPrevIsPaused] = useState(isPaused);
   const [runToken, setRunToken] = useState(0);
   if (prevIsPaused !== isPaused) {

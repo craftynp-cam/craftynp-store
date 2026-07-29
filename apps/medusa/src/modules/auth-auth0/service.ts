@@ -1,15 +1,15 @@
 import { randomBytes } from "node:crypto";
 
-import {
-  AbstractAuthModuleProvider,
-  MedusaError,
-} from "@medusajs/framework/utils";
-import type { Logger } from "@medusajs/framework/types";
 import type {
   AuthenticationInput,
   AuthenticationResponse,
   AuthIdentityProviderService,
+  Logger,
 } from "@medusajs/framework/types";
+import {
+  AbstractAuthModuleProvider,
+  MedusaError,
+} from "@medusajs/framework/utils";
 
 import {
   buildAuthorizeUrl,
@@ -31,11 +31,6 @@ class Auth0AuthProviderService extends AbstractAuthModuleProvider {
   protected options_: Auth0ProviderOptions;
 
   constructor({ logger }: InjectedDependencies, options: Auth0ProviderOptions) {
-    // The base class relies on the full, untyped `arguments` object (the
-    // module container plus options) rather than the two typed parameters
-    // above — see Medusa's own auth provider guide for this exact pattern.
-    // @ts-expect-error — arguments is not a tuple type.
-    // eslint-disable-next-line prefer-rest-params
     super(...arguments);
     this.logger_ = logger;
     this.options_ = options;
@@ -52,11 +47,6 @@ class Auth0AuthProviderService extends AbstractAuthModuleProvider {
     const state = randomBytes(32).toString("hex");
     const callbackUrl = data.body?.callback_url ?? this.options_.callbackUrl;
 
-    // Only the callback_url needs to survive the round trip to Auth0 and
-    // back — it has to match exactly what was sent to /authorize when we
-    // exchange the code for a token. Where to send the customer afterwards
-    // (`return_to`) is a storefront routing concern, not this provider's —
-    // the storefront tracks it itself, in its own short-lived cookie.
     await authIdentityProviderService.setState(state, {
       callback_url: callbackUrl,
     });

@@ -9,10 +9,6 @@ export const metadata: Metadata = {
   title: "Account",
 };
 
-// Reads the session cookie through getCustomer(), which Next's static
-// analysis doesn't see through the react `cache()` wrapper — force dynamic
-// rendering explicitly rather than risk this being prerendered once and
-// served to every visitor regardless of who is signed in.
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {

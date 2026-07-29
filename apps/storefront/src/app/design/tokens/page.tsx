@@ -44,11 +44,6 @@ function Section({
   );
 }
 
-/**
- * The page follows the reader's own mode, so the mode it is not currently in
- * has to be shown explicitly. These panes paint themselves from resolved hex
- * rather than from utilities, which is the one place that is legitimate.
- */
 function ModePane({
   mode,
   children,

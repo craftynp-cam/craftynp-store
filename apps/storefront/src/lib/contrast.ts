@@ -20,7 +20,6 @@ export function toHex(rgb: Rgb): string {
     .join("")}`;
 }
 
-/** Composites `foreground` at `alpha` over an opaque `background`. */
 export function mixOver(foreground: Rgb, background: Rgb, alpha: number): Rgb {
   return [
     foreground[0] * alpha + background[0] * (1 - alpha),
@@ -43,7 +42,6 @@ export function relativeLuminance(hex: string): number {
   );
 }
 
-/** WCAG 2.1 contrast ratio, 1–21. */
 export function contrastRatio(a: string, b: string): number {
   const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort(
     (x, y) => y - x,

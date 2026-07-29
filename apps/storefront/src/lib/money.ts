@@ -1,7 +1,3 @@
-/**
- * Medusa stores amounts as decimals (not minor units) and currency codes in
- * lowercase (`"usd"`); Intl.NumberFormat requires the ISO code uppercased.
- */
 export function formatMoney(amount: number, currencyCode: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",

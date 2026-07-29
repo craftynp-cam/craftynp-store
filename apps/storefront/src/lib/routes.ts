@@ -41,12 +41,6 @@ export function authLogoutHref(): string {
   return "/auth/logout";
 }
 
-/**
- * Only ever redirect within this site. `return_to` round-trips through a
- * query param and a cookie — both attacker-writable — so an unchecked value
- * would let a crafted `/auth/login?return_to=` link send a signed-in
- * customer to an external page.
- */
 export function sanitizeReturnTo(value: string | null | undefined): string {
   if (value && value.startsWith("/") && !value.startsWith("//")) {
     return value;

@@ -1,16 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { returnToCookieOptions, RETURN_TO_COOKIE_NAME } from "@/lib/auth";
+import { RETURN_TO_COOKIE_NAME, returnToCookieOptions } from "@/lib/auth";
 import { createAuthFlowSdk } from "@/lib/medusa";
 import { sanitizeReturnTo, signInHref } from "@/lib/routes";
 
-/**
- * Starts the customer sign-in flow. Both "Continue with email" and
- * "Continue with Google" on /sign-in point here, differing only in the
- * `connection` and `screen_hint` query params — Universal Login owns the
- * actual credential forms, this route only asks Medusa's Auth0 provider for
- * the URL to redirect to.
- */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const returnTo = sanitizeReturnTo(searchParams.get("return_to"));

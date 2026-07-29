@@ -160,7 +160,6 @@ export default async function initial_data_seed({
   });
 
   logger.info("Seeding fulfillment data...");
-  // This is created by a migration script in core.
   const { data: shippingProfileResult } = await query.graph({
     entity: "shipping_profile",
     fields: ["id"],

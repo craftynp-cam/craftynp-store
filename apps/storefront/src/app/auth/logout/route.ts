@@ -2,12 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { AUTH_COOKIE_NAME } from "@/lib/auth";
 
-/**
- * POST, not GET — a prefetch or a stray `<img>` pointed at a GET logout
- * route can sign a customer out as a side effect. Clears the session cookie
- * and hands off to Auth0's own logout endpoint so its session cookie clears
- * too, landing back on the homepage (CNP-56 AC5).
- */
 export async function POST(request: NextRequest) {
   const domain = process.env.AUTH0_DOMAIN;
   const clientId = process.env.AUTH0_CLIENT_ID;

@@ -9,7 +9,6 @@ import { Select as HeroSelect } from "@heroui/react/select";
 import type { FieldProps } from ".";
 
 export type SelectOption = {
-  /** Submitted value, and the React key. */
   id: string;
   label: string;
   isDisabled?: boolean;
@@ -36,10 +35,6 @@ export function Select({
     <HeroSelect placeholder={placeholder} {...rest}>
       <Label>{label}</Label>
       <HeroSelect.Trigger>
-        {/* Left bare on purpose: React Aria's SelectValue already renders the
-            selected item's text, falling back to the Select's placeholder. A
-            render prop here has to resolve the text itself, which it cannot do
-            before the listbox has ever been opened. */}
         <HeroSelect.Value />
         <HeroSelect.Indicator />
       </HeroSelect.Trigger>
@@ -51,9 +46,6 @@ export function Select({
             <ListBox.Item
               key={option.id}
               id={option.id}
-              // HeroUI wraps the label alongside a selection indicator, so the
-              // children are not plain text and React Aria cannot infer the
-              // string it needs for type-to-select.
               textValue={option.label}
               isDisabled={option.isDisabled}
             >

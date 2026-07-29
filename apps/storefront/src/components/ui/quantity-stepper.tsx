@@ -7,7 +7,6 @@ type QuantityStepperProps = {
   onChange: (next: number) => void;
   min?: number;
   max?: number;
-  /** Names the control for assistive tech, e.g. "Quantity for Wildflower Acrylic Keychain". */
   label: string;
 };
 
@@ -16,12 +15,6 @@ const buttonClassName =
 const decrementButtonClassName = `${buttonClassName} rounded-l-lg`;
 const incrementButtonClassName = `${buttonClassName} rounded-r-lg`;
 
-/**
- * Shared by the cart drawer (CNP-47) and, later, the configurator's own
- * stepper (CNP-43) — built here first so that story reuses it rather than
- * duplicating. Decrementing below `min` is not how a line is removed; that is
- * the card's own remove control.
- */
 export function QuantityStepper({
   value,
   onChange,

@@ -67,17 +67,6 @@ export type MapUserInfoResult =
   | { success: true; identity: MappedAuth0Identity }
   | { success: false; error: string };
 
-/**
- * Keys the Medusa auth identity on the verified email rather than the Auth0
- * `sub`. That is what makes an address that registers by email/password and
- * later signs in with Google resolve to one auth identity — and therefore one
- * Medusa customer — instead of relying on an Auth0 Action to link them. See
- * apps/medusa/AGENTS.md for the full rationale (CNP-57 AC4/AC5).
- *
- * `provider_metadata` deliberately holds only `auth0_sub`, not the Auth0
- * access/refresh/id tokens — nothing in this flow reads them back, and they
- * are credentials at rest.
- */
 export function mapUserInfoToIdentity(
   userInfo: Auth0UserInfo,
 ): MapUserInfoResult {

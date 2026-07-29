@@ -1,8 +1,8 @@
 import {
-  loadEnv,
-  defineConfig,
-  Modules,
   ContainerRegistrationKeys,
+  defineConfig,
+  loadEnv,
+  Modules,
 } from "@medusajs/framework/utils";
 
 loadEnv(process.env.NODE_ENV || "development", process.cwd());
@@ -16,8 +16,6 @@ module.exports = defineConfig({
       authCors: process.env.AUTH_CORS!,
       jwtSecret: process.env.JWT_SECRET,
       cookieSecret: process.env.COOKIE_SECRET,
-      // Customers authenticate through Auth0; emailpass stays registered so
-      // the admin dashboard (the `user` actor) keeps its own sign-in.
       authMethodsPerActor: {
         user: ["emailpass"],
         customer: ["auth0"],

@@ -22,11 +22,6 @@ type RadioGroupProps = Omit<
     options: readonly RadioOption[];
   };
 
-/**
- * The group — not the individual radio — owns the label, helper, and error, so
- * the description is announced once when focus enters rather than on each
- * option.
- */
 export function RadioGroup({
   label,
   description,

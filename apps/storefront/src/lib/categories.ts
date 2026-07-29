@@ -54,8 +54,6 @@ export function toShowcaseSources(
     const source = sources.find(
       (candidate) => categoryHref(candidate.handle) === category.href,
     );
-    // toNavCategories only returns entries built from a matching source, so
-    // this is always found; the fallback keeps the function total.
     return { id: source?.id ?? "", ...category };
   });
 }

@@ -26,13 +26,6 @@ import { CartButton } from "./cart-button";
 const ctaClassName =
   "inline-flex w-full items-center justify-center rounded-full px-6 py-3 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
-/**
- * The header's cart drawer (CNP-47). Its open state is bound to
- * `cart-drawer.ts` rather than left as HeroUI's own internal state, so
- * `openCartDrawer()` (used by CNP-45 after a successful add-to-cart) can open
- * it programmatically, and so Escape/close/backdrop dismissal all funnel back
- * through the same store.
- */
 export function CartDrawer() {
   const isOpen = useSyncExternalStore(
     subscribeToCartDrawer,

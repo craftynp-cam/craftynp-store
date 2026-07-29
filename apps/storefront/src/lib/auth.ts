@@ -1,16 +1,10 @@
-import { cache } from "react";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 import { sdk } from "./medusa";
 
 export const AUTH_COOKIE_NAME = "cnp_customer_token";
 
-/**
- * Holds the post-sign-in destination between the storefront's own
- * `/auth/login` and `/auth/callback` routes. Kept separate from Medusa's
- * opaque OAuth `state` — the callback route has no way to read that back —
- * and short-lived, since it only needs to survive one redirect round trip.
- */
 export const RETURN_TO_COOKIE_NAME = "cnp_auth_return_to";
 const RETURN_TO_MAX_AGE_SECONDS = 5 * 60;
 
@@ -22,12 +16,6 @@ export type SessionCookieOptions = {
   maxAge?: number;
 };
 
-/**
- * `sameSite: "lax"`, not `"strict"` — a customer arriving at the callback
- * route via a top-level redirect from Auth0 (or clicking a link from any
- * external page) must still carry the cookie, or every sign-in looks
- * signed-out on the very page that's supposed to prove it worked.
- */
 export function sessionCookieOptions(maxAge?: number): SessionCookieOptions {
   return {
     httpOnly: true,
@@ -51,12 +39,6 @@ export type DecodedAuthToken = {
   exp?: number;
 };
 
-/**
- * The token comes from a trusted, server-to-server exchange with Medusa —
- * this only reads the payload, it does not verify the signature. Returns
- * `null` for anything malformed rather than throwing, so a bad or expired
- * token degrades to "signed out" instead of a 500.
- */
 export function decodeJwtPayload(token: string): DecodedAuthToken | null {
   const segments = token.split(".");
   if (segments.length !== 3) return null;
@@ -81,11 +63,6 @@ export type AuthedCustomer = {
   last_name?: string | null;
 };
 
-/**
- * Never throws — a Medusa outage or an expired/invalid cookie both degrade
- * to "signed out" rather than taking the page down, the same convention
- * `categories.ts`, `region.ts`, and `site-content.ts` already follow.
- */
 export const getCustomer = cache(async (): Promise<AuthedCustomer | null> => {
   const store = await cookies();
   const token = store.get(AUTH_COOKIE_NAME)?.value;

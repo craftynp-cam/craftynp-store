@@ -2,10 +2,6 @@ import Link from "next/link";
 
 import { UserCircle } from "../icons";
 
-/**
- * `/account` (CNP-56/57/58) redirects to sign-in when signed out, so this
- * link always resolves to something real regardless of session state.
- */
 export function AccountLink() {
   return (
     <Link
