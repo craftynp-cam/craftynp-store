@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { authLoginHref } from "@/lib/routes";
 
 import { WarningCircle } from "../icons";
@@ -44,18 +42,18 @@ export function SignInPanel({ error, returnTo }: SignInPanelProps) {
       ) : null}
 
       <div className="flex flex-col gap-3">
-        <Link
+        <a
           href={authLoginHref({ returnTo })}
           className={`${linkButtonClassName} bg-primary text-on-primary hover:opacity-90`}
         >
           Continue with email
-        </Link>
-        <Link
+        </a>
+        <a
           href={authLoginHref({ returnTo, connection: "google-oauth2" })}
           className={`${linkButtonClassName} border border-foreground/20 bg-surface text-foreground hover:bg-surface-soft`}
         >
           Continue with Google
-        </Link>
+        </a>
       </div>
     </div>
   );

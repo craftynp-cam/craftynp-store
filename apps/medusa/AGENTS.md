@@ -116,6 +116,18 @@ development and a single instance; a multi-instance deployment needs the Redis
 cache module wired up (`REDIS_URL` is already provisioned but unused —
 tracked with the infrastructure work, CNP-16).
 
+**Never delete a test customer from the admin while testing Auth0 sign-in.**
+Medusa's own delete-customer flow leaves the linked `auth_identity` poisoned:
+it nulls out `app_metadata.customer_id` rather than removing the key, and
+`set-auth-app-metadata` (Medusa core, `@medusajs/core-flows`) refuses to write
+a new customer id into that slot once the key is present at all — present but
+`null` reads the same as "already linked." Every later sign-in for that
+address then 404s (`getCustomer()` finds a customer id that no longer
+exists) with no error surfaced anywhere the customer can see. To reset a test
+account, delete its `provider_identity`/`auth_identity` rows directly, or use
+a fresh email each time. If this happens, the repair is a single query:
+`UPDATE auth_identity SET app_metadata = '{}'::jsonb WHERE id = '...';`
+
 ## React 18 — do not "fix" it
 
 The admin dashboard runs **React 18**, and this app declares `react`,
