@@ -15,8 +15,9 @@ export async function POST(request: NextRequest) {
             client_id: clientId,
             returnTo: siteUrl,
           }).toString()}`,
+          303,
         )
-      : NextResponse.redirect(new URL("/", request.url));
+      : NextResponse.redirect(new URL("/", request.url), 303);
 
   response.cookies.delete(AUTH_COOKIE_NAME);
   return response;
