@@ -450,25 +450,59 @@ up but hasn't clicked the verification link yet (blocked by the tenant's
 cancelled" — the two look identical at the OAuth-error-code level but call for
 opposite next steps.
 
-## Checkout (CNP-50, CNP-51)
+## Checkout (CNP-50, CNP-51, CNP-52)
 
-`/checkout` builds the contact/delivery-address and shipping-method steps —
-sections 1–3 of the eventual page, plus the sticky cart summary. Section 4
-(Payment) is still out of scope; the decisions below should hold until the
-stories that supersede them:
+`/checkout` builds the contact/delivery-address, shipping-method, and tax
+steps — sections 1–3 of the eventual page, plus the sticky cart summary.
+Section 4 (Payment) is still out of scope; the decisions below should hold
+until the stories that supersede them:
 
 - **There is still no Medusa cart, and no `sdk.store.cart.*` call anywhere in
   the storefront.** The checkout form is a client-only draft persisted to
   `localStorage` (`checkout-draft.ts`); it is not wired to a Medusa cart or
-  payment session. Shipping rates work without one — see below — but
+  payment session. Shipping rates and tax work without one — see below — but
   creating a real cart at checkout time is still future work, alongside
-  Stripe.
-- **The cart summary shows Subtotal, Shipping, and Total** — no Tax row yet.
-  Shipping reads `"Calculated above"` until the shopper has a rate selected,
-  never a guessed number. `checkoutTotals(cart, draft)` sums the draft's
-  `shippingRateAmount` once `shippingRateId` is set; `CheckoutSummary` gets
-  there via its own `useSyncExternalStore` on the checkout draft, not a prop,
-  so wiring a new total source needs no prop drilling from `CheckoutView`.
+  Stripe payments.
+- **The cart summary shows Subtotal, Shipping, Tax, and Total.** Both
+  Shipping and Tax read `"Calculated above"` until resolved, never a guessed
+  number. `checkoutTotals(cart, draft)` sums the draft's `shippingRateAmount`
+  once `shippingRateId` is set, and `taxAmount` once `taxQuoteToken` is set;
+  `CheckoutSummary` gets there via its own `useSyncExternalStore` on the
+  checkout draft, not a prop, so wiring a new total source needs no prop
+  drilling from `CheckoutView`.
+- **Sales tax (CNP-52) is real, calculated by Stripe Tax**, not a
+  placeholder, and mirrors CNP-51's shape below because it has the same
+  underlying cause: no Medusa cart yet, so no cart-based Stripe Tax call.
+  `src/components/checkout/use-tax-quote.ts` is the fetch hook — same
+  derived-key/cached-state/`AbortController`/`latestRef` structure as
+  `use-shipping-rates.ts`, debouncing `TAX_QUOTE_DEBOUNCE_MS` (500ms, in
+  `src/lib/tax-quote.ts`) after `isDestinationReadyForTax` is true. That
+  readiness gate is stricter than shipping's: it requires
+  `draft.shippingRateId !== ""` in addition to a clean address, since AC1
+  means shipping itself gets taxed, so tax can't be calculated until a rate
+  is chosen — the hook runs *after* step 3 resolves, not alongside it, and
+  re-runs when the shopper picks a different rate. `src/lib/tax-quote-cache.ts`
+  is the matching `sessionStorage` cache (same TTL/size shape as
+  `shipping-rates-cache.ts`), keyed by `taxQuoteKey` on destination +
+  `shippingRateId` + sorted cart lines. On success the hook writes
+  `taxAmount`/`taxCurrency`/`taxQuoteToken` onto the draft, the same
+  commit-on-resolve pattern `use-shipping-rates.ts` uses for the rate fields.
+  A failed calculation shows the same error-plus-Retry treatment as a failed
+  shipping-rate call, rendered inline in `CheckoutView` below step 3 (there
+  is no step 4 for tax — it isn't a shopper choice) — and
+  `validateCheckoutDraft` requires a non-blank `taxQuoteToken` once a
+  shipping rate is chosen, so Continue is blocked the same way a missing
+  shipping rate blocks it: a wrong or missing tax number is worse than a
+  shopper hitting Retry.
+- `src/app/checkout/tax/route.ts` is a POST-only route handler, the same
+  reason `checkout/shipping-rates/route.ts` is: it proxies to Medusa's
+  `POST /store/tax-quote` (see `apps/medusa/AGENTS.md`'s own Sales tax
+  section for that side), and has to live outside `/api` since
+  `next.config.ts` rewrites `/api/:path*` to Medusa.
+- **`src/lib/tax-quote.ts` and `tax-quote-cache.ts` carry no `medusa.ts`
+  import**, the same reason `shipping-rates.ts` doesn't — a client component
+  importing them directly must not drag in `medusa.ts`'s module-eval throw
+  when env vars are unset.
 - **Shipping method (CNP-51) is real, live USPS rates from ShipStation**, not
   a placeholder. `src/components/checkout/use-shipping-rates.ts` is the
   fetch hook: it debounces `SHIPPING_RATE_DEBOUNCE_MS` (500ms) after the
@@ -618,5 +652,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **725** of the repo's 898 tests. A smaller number
+The storefront currently holds **752** of the repo's 966 tests. A smaller number
 after your change means something was dropped.

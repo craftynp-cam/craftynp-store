@@ -32,7 +32,7 @@ export function CheckoutSummary({ onEditCart }: CheckoutSummaryProps) {
     readServerCheckoutDraft,
   );
   const count = cartLineCount(cart);
-  const { subtotal, shipping, total, currencyCode } = checkoutTotals(
+  const { subtotal, shipping, tax, total, currencyCode } = checkoutTotals(
     cart,
     draft,
   );
@@ -77,6 +77,12 @@ export function CheckoutSummary({ onEditCart }: CheckoutSummaryProps) {
             {shipping == null
               ? "Calculated above"
               : formatMoney(shipping, currencyCode)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-foreground-muted">
+          <span>Tax</span>
+          <span>
+            {tax == null ? "Calculated above" : formatMoney(tax, currencyCode)}
           </span>
         </div>
         <div className="flex items-center justify-between font-display text-xl text-foreground">

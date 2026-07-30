@@ -23,6 +23,7 @@ function makeDraft(overrides: Partial<CheckoutDraft> = {}): CheckoutDraft {
     postalCode: "62704",
     countryCode: "us",
     shippingRateId: "rate_standard",
+    taxQuoteToken: "token.signature",
     ...overrides,
   };
 }
@@ -126,6 +127,20 @@ describe("validateCheckoutDraft", () => {
   it("requires a shipping rate to be chosen", () => {
     const errors = validateCheckoutDraft(makeDraft({ shippingRateId: "" }));
     expect(errors.shippingRateId).toBe("Choose a delivery option.");
+  });
+
+  it("requires a resolved tax quote once a shipping rate is chosen", () => {
+    const errors = validateCheckoutDraft(makeDraft({ taxQuoteToken: "" }));
+    expect(errors.taxQuoteToken).toBe(
+      "We couldn't calculate tax for your address.",
+    );
+  });
+
+  it("does not require a tax quote while no shipping rate is chosen yet", () => {
+    const errors = validateCheckoutDraft(
+      makeDraft({ shippingRateId: "", taxQuoteToken: "" }),
+    );
+    expect(errors.taxQuoteToken).toBeUndefined();
   });
 
   it("skips billing validation while billingSameAsDelivery is true", () => {
@@ -313,6 +328,7 @@ describe("checkoutTotals", () => {
     expect(checkoutTotals(cart)).toEqual({
       subtotal: 1.5,
       shipping: null,
+      tax: null,
       total: 1.5,
       currencyCode: "usd",
     });
@@ -360,9 +376,64 @@ describe("checkoutTotals", () => {
     expect(totals).toEqual({
       subtotal: 1.5,
       shipping: 7.42,
+      tax: null,
       total: 8.92,
       currencyCode: "usd",
     });
+  });
+
+  it("sums the resolved tax quote into the total", () => {
+    const cart = makeCart({
+      lines: [
+        {
+          id: "sticker",
+          href: "/products/sticker",
+          title: "Sticker",
+          unitPrice: 0.75,
+          currencyCode: "usd",
+          quantity: 2,
+        },
+      ],
+    });
+
+    const totals = checkoutTotals(cart, {
+      ...EMPTY_CHECKOUT_DRAFT,
+      shippingRateId: "rate_standard",
+      shippingRateAmount: 7.42,
+      taxQuoteToken: "token.signature",
+      taxAmount: 0.68,
+    });
+
+    expect(totals).toEqual({
+      subtotal: 1.5,
+      shipping: 7.42,
+      tax: 0.68,
+      total: 9.6,
+      currencyCode: "usd",
+    });
+  });
+
+  it("has no tax when the draft has no resolved tax quote", () => {
+    const cart = makeCart({
+      lines: [
+        {
+          id: "sticker",
+          href: "/products/sticker",
+          title: "Sticker",
+          unitPrice: 0.75,
+          currencyCode: "usd",
+          quantity: 2,
+        },
+      ],
+    });
+
+    const totals = checkoutTotals(cart, {
+      ...EMPTY_CHECKOUT_DRAFT,
+      shippingRateId: "rate_standard",
+      shippingRateAmount: 7.42,
+    });
+
+    expect(totals.tax).toBeNull();
   });
 
   it("still adds shipping for a large cart (no free-shipping threshold)", () => {
@@ -410,6 +481,7 @@ describe("checkoutTotals", () => {
     expect(checkoutTotals(makeCart())).toEqual({
       subtotal: 0,
       shipping: null,
+      tax: null,
       total: 0,
       currencyCode: "usd",
     });

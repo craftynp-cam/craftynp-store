@@ -59,7 +59,7 @@ describe("CheckoutSummary", () => {
     );
   });
 
-  it("renders a shipping placeholder and no tax row when no rate is chosen", () => {
+  it("renders shipping and tax placeholders when neither is calculated yet", () => {
     addLine();
     render(<CheckoutSummary onEditCart={jest.fn()} />);
 
@@ -67,7 +67,32 @@ describe("CheckoutSummary", () => {
     expect(within(totals).getByText("Shipping").nextSibling).toHaveTextContent(
       "Calculated above",
     );
-    expect(within(totals).queryByText(/Tax/)).not.toBeInTheDocument();
+    expect(within(totals).getByText("Tax").nextSibling).toHaveTextContent(
+      "Calculated above",
+    );
+  });
+
+  it("shows the calculated tax and sums it into the total", () => {
+    addLine({ unitPrice: 0.75, quantity: 2 });
+    act(() => {
+      patchCheckoutDraft({
+        shippingRateId: "rate_standard",
+        shippingRateAmount: 7.42,
+        shippingRateCurrency: "usd",
+        taxQuoteToken: "token.signature",
+        taxAmount: 0.68,
+        taxCurrency: "usd",
+      });
+    });
+    render(<CheckoutSummary onEditCart={jest.fn()} />);
+
+    const totals = totalsRegion();
+    expect(within(totals).getByText("Tax").nextSibling).toHaveTextContent(
+      "$0.68",
+    );
+    expect(within(totals).getByText("Total").nextSibling).toHaveTextContent(
+      "$9.60",
+    );
   });
 
   it("sets the total equal to the subtotal when no rate is chosen", () => {

@@ -13,3 +13,4 @@ export {
 } from "./shipping-method-fields";
 export { shippingRateToOption } from "./shipping-rate-option";
 export { useShippingRates } from "./use-shipping-rates";
+export { useTaxQuote } from "./use-tax-quote";
