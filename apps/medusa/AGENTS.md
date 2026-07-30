@@ -196,7 +196,23 @@ first admin widget in this repo) follows it with one authenticated call to
 `setAuthAppMetadataStep` (`@medusajs/medusa/core-flows`) — **there is no
 auto-provisioning.** A Workspace account with no matching `user` row is
 refused outright. Create the admin user first with the Medusa CLI (see the
-`medusa-dev:new-user` skill), the same as any other admin.
+`medusa-dev:new-user` skill), the same as any other admin — a new team member
+gets Google Workspace access by having the owner run the CLI with their
+`@<allowed domain>` email, then having them sign in once with Google
+themselves to complete the link.
+
+**`medusa user` needs `emailpass` registered even though no admin ever logs in
+with it.** The CLI command calls `authService.register("emailpass", …)`
+in-process, bypassing the HTTP layer (and therefore `authMethodsPerActor`)
+entirely, so `medusa-config.ts` keeps `@medusajs/medusa/auth-emailpass`
+registered but leaves it out of `authMethodsPerActor.user` — every
+`/auth/user/emailpass/*` route (login, register, callback, reset-password)
+stays closed over HTTP, since `validateScopeProviderAssociation` checks that
+config on all of them regardless of whether the provider is registered. One
+consequence: the dashboard's own "Accept invite" flow calls
+`POST /auth/user/emailpass/register` over HTTP and is therefore **not usable**
+for admins — `--invite` is not the CLI path to use here; use the plain
+`medusa user -e <email>` form instead.
 
 `/admin-sso/link` intentionally sits outside `/admin/*`: that prefix's default
 protection requires a _registered_ actor, which is exactly what an actorless
