@@ -17,7 +17,7 @@ module.exports = defineConfig({
       jwtSecret: process.env.JWT_SECRET,
       cookieSecret: process.env.COOKIE_SECRET,
       authMethodsPerActor: {
-        user: ["emailpass"],
+        user: ["google-workspace"],
         customer: ["auth0"],
       },
     },
@@ -43,7 +43,6 @@ module.exports = defineConfig({
       dependencies: [Modules.CACHE, ContainerRegistrationKeys.LOGGER],
       options: {
         providers: [
-          { resolve: "@medusajs/medusa/auth-emailpass", id: "emailpass" },
           {
             resolve: "./src/modules/auth-auth0",
             id: "auth0",
@@ -54,7 +53,21 @@ module.exports = defineConfig({
               callbackUrl: process.env.AUTH0_CALLBACK_URL,
             },
           },
+          {
+            resolve: "./src/modules/auth-google-workspace",
+            id: "google-workspace",
+            options: {
+              clientId: process.env.GOOGLE_ADMIN_CLIENT_ID,
+              clientSecret: process.env.GOOGLE_ADMIN_CLIENT_SECRET,
+              callbackUrl: process.env.GOOGLE_ADMIN_CALLBACK_URL,
+              allowedDomain: process.env.GOOGLE_ADMIN_ALLOWED_DOMAIN,
+            },
+          },
         ],
+        mfa: {
+          encryption_key: process.env.MFA_ENCRYPTION_KEY,
+          providers: [{ id: "totp", options: { issuer: "The Crafty NP" } }],
+        },
       },
     },
   ],
