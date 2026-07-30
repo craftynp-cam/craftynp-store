@@ -8,14 +8,6 @@ export const TAX_QUOTE_DEBOUNCE_MS = 500;
 
 const TAX_FIELDS = ["city", "state", "postalCode", "countryCode"] as const;
 
-/**
- * `shippingReady` must come from the live shipping-rates hook's own status
- * (`status === "ready"`), not from `draft.shippingRateId` alone — the draft
- * still holds the previous address's rate and quote token for a moment
- * after an edit, until ShipStation re-quotes and commits a fresh one. Gating
- * on the draft field alone fires a tax request signed against the old
- * postal code, which the server correctly rejects as a cart mismatch.
- */
 export function isDestinationReadyForTax(
   draft: CheckoutDraft,
   shippingReady: boolean,
