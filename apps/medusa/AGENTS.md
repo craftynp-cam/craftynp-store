@@ -12,9 +12,12 @@ Shared zod schemas and types come from `@craftynp/types`.
 Layout under `src/`:
 
 - `api/` — custom store (`api/store/*`) and admin (`api/admin/*`) routes, plus
-  `api/middlewares.ts` (validation middleware registration).
+  `api/middlewares.ts` (validation middleware registration). `api/admin-sso/`
+  sits outside `/admin/*` on purpose — see [Admin SSO](#admin-sso-cnp-72).
 - `admin/` — admin dashboard extensions. `admin/routes/site-content` (CNP-23)
-  is the first UI route in the repo; `admin/lib/client.ts` is its SDK
+  is the first UI route in the repo; `admin/widgets/google-workspace-login.tsx`
+  (CNP-72) is the first widget, see [Admin SSO](#admin-sso-cnp-72).
+  `admin/lib/client.ts` is its SDK
   instance, configured per Medusa's own admin pattern (session auth,
   `VITE_BACKEND_URL`). `admin/components/site-content-image-field.tsx`
   (CNP-30) is the control behind the registry's `image` field type: it uploads
@@ -35,7 +38,9 @@ Layout under `src/`:
   still a plain string (the uploaded file's URL), so adding an image field
   needs no migration either. `workflows/upsert-site-content.ts` is the
   one mutation path; its step validates each entry against the registry and
-  keeps prior values for compensation. `subscribers/`, `jobs/`, `links/`
+  keeps prior values for compensation. `modules/auth-google-workspace` and
+  `workflows/link-admin-auth-identity.ts` (CNP-72) are covered in
+  [Admin SSO](#admin-sso-cnp-72). `subscribers/`, `jobs/`, `links/`
   remain scaffolding only.
 - `lib/` — plain helpers such as `validate-customization.ts`.
 - `migration-scripts/initial-data-seed.ts` — the initial data seed.
@@ -84,11 +89,11 @@ sign-in, sign-up, "Continue with Google", and password reset. This module only
 exchanges the resulting authorization code for a Medusa JWT.
 
 `projectConfig.http.authMethodsPerActor` is now set explicitly —
-`{ user: ["emailpass"], customer: ["auth0"] }` — which closes
-`/auth/customer/emailpass/*` so a customer cannot bypass Auth0, while the admin
-dashboard (`user`) keeps its own emailpass sign-in untouched. Registering the
-auth module explicitly is also what makes `emailpass` have to be re-declared at
-all: before this change it existed only as Medusa's implicit default.
+`{ user: ["google-workspace"], customer: ["auth0"] }` — which closes both
+`/auth/customer/emailpass/*` (a customer cannot bypass Auth0) and
+`/auth/user/emailpass/*` (an admin cannot bypass Google Workspace SSO; see
+[Admin SSO](#admin-sso-cnp-72) below). Neither actor has an `emailpass`
+provider registered anymore.
 
 **The auth identity is keyed on the verified email, not the Auth0 `sub`**
 (`src/modules/auth-auth0/lib.ts`, `mapUserInfoToIdentity`). A userinfo response
@@ -152,6 +157,87 @@ swallowed by Medusa's own CLI parsing and the script sees no argument at
 all). It does not touch Auth0 itself — delete the user from the tenant
 dashboard too for a fully clean slate.
 
+## Admin SSO (CNP-72)
+
+Admin (`user`) sign-in runs through a custom Google Workspace OAuth provider,
+`src/modules/auth-google-workspace/` — the same four-file shape as
+`auth-auth0/` (`lib.ts` pure helpers, `service.ts`'s
+`AbstractAuthModuleProvider` subclass, `lib.test.ts`, `index.ts`). This is
+CNP-72 AC1 only; CNP-72's other acceptance criteria (Cloudflare Access, rate
+limiting, R2 credential scoping, secret rotation) need deployed environments
+and are tracked separately against CNP-16/CNP-17.
+
+**Not `@medusajs/auth-google`.** That package is a dependency of this app but
+is deliberately never registered. Its `verify_` accepts any Google account
+with a verified email — it never reads the `hd` (hosted domain) claim — so a
+personal Gmail account would authenticate as an admin. It also keys identities
+on Google's `sub` rather than email, which cannot be matched to an existing
+Medusa `user`, and it puts `client_secret` in the token-exchange query string.
+The gaps live in `private`/`protected` internals not meant to be subclassed,
+so a sibling module was cheaper and more honest than patching around them.
+
+**The `hd` query param on the authorize URL is a UI hint, not the gate.** A
+signed-in Google user can still switch accounts after Google redirects them
+there. The real check is `mapUserInfoToIdentity` in
+`auth-google-workspace/lib.ts`, run server-side against the verified userinfo
+response after the token exchange: it rejects unless `hd` equals
+`GOOGLE_ADMIN_ALLOWED_DOMAIN` **and** the email's own domain matches too.
+
+**A successful Google sign-in does not, by itself, grant admin access.** The
+auth identity provider service can only write `provider_metadata` and
+`user_metadata` — never `app_metadata`, which is what actually associates an
+auth identity with a Medusa `user` id. So the first callback produces an
+_actorless_ token, and `src/admin/widgets/google-workspace-login.tsx` (the
+"Continue with Google Workspace" button on the `login.before` zone — the
+first admin widget in this repo) follows it with one authenticated call to
+`POST /admin-sso/link`. That route runs `linkAdminAuthIdentityWorkflow`
+(`src/workflows/link-admin-auth-identity.ts`), whose step looks up a Medusa
+`user` by the auth identity's verified email and links them with
+`setAuthAppMetadataStep` (`@medusajs/medusa/core-flows`) — **there is no
+auto-provisioning.** A Workspace account with no matching `user` row is
+refused outright. Create the admin user first with the Medusa CLI (see the
+`medusa-dev:new-user` skill), the same as any other admin.
+
+`/admin-sso/link` intentionally sits outside `/admin/*`: that prefix's default
+protection requires a _registered_ actor, which is exactly what an actorless
+post-Google token isn't yet. Its middleware
+(`src/api/admin-sso/link/middlewares.ts`) uses
+`authenticate("user", ["session", "bearer"], { allowUnregistered: true })` for
+that reason, and the route itself never reads an email or user id from the
+request body — only `req.auth_context.auth_identity_id`, so a caller cannot
+name who they want to be linked as.
+
+**`setAuthAppMetadataStep` throws if `app_metadata.user_id` is merely
+_present_, including present-and-`null`** — the same poisoning this file
+already documents for `customer_id` after a customer delete (see
+[above](#auth-cnp-565758)). Deleting an admin `user` will strand its Google
+auth identity the same way; there is no equivalent reset script for admins
+yet.
+
+**MFA is Medusa's built-in TOTP provider, not custom code.** `medusa-config.ts`
+sets `mfa.encryption_key` (`MFA_ENCRYPTION_KEY`) and registers the `totp`
+provider id, which is enough to light up the dashboard's own enrolment UI
+(Profile → MFA: QR setup, recovery codes) — no code here implements
+enrolment. MFA is opt-in _per identity_, not enforceable by config: Medusa
+only challenges an identity that already has an enabled factor. The actual
+enforcement layer is the Google Workspace org's 2-Step Verification policy —
+a Google Admin console setting with no in-repo representation, the same
+category as the Auth0 tenant-settings paragraph above. Enrol Medusa TOTP as
+an independent second factor once signed in.
+
+**Lockout recovery.** With `emailpass` closed for `user`, a misconfigured
+Google OAuth client (wrong redirect URI, wrong domain) leaves no way into
+`/app`. Recovery is to temporarily restore `user: ["emailpass"]` and the
+`@medusajs/medusa/auth-emailpass` provider in `medusa-config.ts` and restart —
+one local revert, no data loss — fix the Google Cloud client configuration,
+then reapply the Google-only config.
+
+**Manual setup with no in-repo representation:** a Google Cloud OAuth 2.0 Web
+application client (`GOOGLE_ADMIN_CLIENT_ID`/`_CLIENT_SECRET`, redirect URI
+`http://localhost:9000/app/login` locally) and Workspace org-wide 2-Step
+Verification enforcement. Both are prerequisites before the first Google
+sign-in will work at all.
+
 ## React 18 — do not "fix" it
 
 The admin dashboard runs **React 18**, and this app declares `react`,
@@ -177,6 +263,14 @@ storefront's own `/auth/callback`, not a Medusa URL). `JWT_SECRET` and
 regenerated (`openssl rand -base64 32`). The Auth0 client secret has no
 scripted path to a local `.env` — the Management API never returns it in full
 — so it's copied from the Auth0 dashboard by hand.
+
+For [Admin SSO](#admin-sso-cnp-72): `GOOGLE_ADMIN_CLIENT_ID`,
+`GOOGLE_ADMIN_CLIENT_SECRET`, `GOOGLE_ADMIN_CALLBACK_URL` (the admin
+dashboard's own `/app/login`, not a storefront URL), `GOOGLE_ADMIN_ALLOWED_DOMAIN`,
+and `MFA_ENCRYPTION_KEY` (`replace-me-…` placeholder, regenerate the same way
+as `JWT_SECRET`). Like the Auth0 client secret, the Google client secret has
+no scripted path to `.env` and is copied from the Google Cloud console by
+hand.
 
 Postgres is on host port **5433**, Redis on 6379 — both from the root
 `docker-compose.yml`, started by `pnpm run services:up`.
@@ -213,7 +307,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **23** of the repo's 583 tests. The `siteContent`
+This app currently holds **36** of the repo's 744 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including
