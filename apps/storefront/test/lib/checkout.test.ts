@@ -120,6 +120,70 @@ describe("validateCheckoutDraft", () => {
   it("reports no errors for a fully valid draft", () => {
     expect(validateCheckoutDraft(makeDraft())).toEqual({});
   });
+
+  it("skips billing validation while billingSameAsDelivery is true", () => {
+    const errors = validateCheckoutDraft(
+      makeDraft({ billingSameAsDelivery: true, billingAddress1: "" }),
+    );
+    expect(errors.billingAddress1).toBeUndefined();
+  });
+
+  it("requires billing fields once billingSameAsDelivery is false", () => {
+    const errors = validateCheckoutDraft(
+      makeDraft({ billingSameAsDelivery: false }),
+    );
+
+    expect(errors).toEqual({
+      billingAddress1: "Enter the billing street address.",
+      billingCity: "Enter the billing city.",
+      billingState: "Enter the billing state.",
+      billingPostalCode: "Enter the billing ZIP code.",
+    });
+  });
+
+  it("requires a 5-digit billing ZIP code for a US billing address", () => {
+    const errors = validateCheckoutDraft(
+      makeDraft({
+        billingSameAsDelivery: false,
+        billingAddress1: "1 Elm St",
+        billingCity: "Portland",
+        billingState: "OR",
+        billingPostalCode: "9720",
+        billingCountryCode: "us",
+      }),
+    );
+    expect(errors.billingPostalCode).toBe(
+      "Enter a 5-digit billing ZIP code, like 12345.",
+    );
+  });
+
+  it("does not apply the US ZIP pattern to a non-US billing address", () => {
+    const errors = validateCheckoutDraft(
+      makeDraft({
+        billingSameAsDelivery: false,
+        billingAddress1: "1 Elm St",
+        billingCity: "Toronto",
+        billingState: "ON",
+        billingPostalCode: "M5V 2T6",
+        billingCountryCode: "ca",
+      }),
+    );
+    expect(errors.billingPostalCode).toBeUndefined();
+  });
+
+  it("reports no errors for a fully valid billing address", () => {
+    const errors = validateCheckoutDraft(
+      makeDraft({
+        billingSameAsDelivery: false,
+        billingAddress1: "1 Elm St",
+        billingCity: "Portland",
+        billingState: "OR",
+        billingPostalCode: "97201",
+        billingCountryCode: "us",
+      }),
+    );
+    expect(errors).toEqual({});
+  });
 });
 
 describe("isCheckoutDraftValid", () => {

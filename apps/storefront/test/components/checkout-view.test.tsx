@@ -195,6 +195,36 @@ describe("CheckoutView", () => {
     ).toBeInTheDocument();
   });
 
+  it("unfurls a billing address block when the checkbox is unchecked, and validates it on submit", () => {
+    render(
+      <CheckoutView
+        customer={null}
+        savedAddresses={[]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Billing Street address")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Billing address is the same as delivery",
+      }),
+    );
+
+    expect(screen.getByLabelText("Billing Street address")).toBeInTheDocument();
+
+    fillValidForm();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      screen.getByText("Enter the billing street address."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Details saved" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the saved-address picker for a customer with addresses and fills the fields on selection", () => {
     render(
       <CheckoutView

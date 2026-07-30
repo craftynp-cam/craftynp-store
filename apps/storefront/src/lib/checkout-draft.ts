@@ -13,6 +13,12 @@ const STRING_FIELDS = [
   "state",
   "postalCode",
   "countryCode",
+  "billingAddress1",
+  "billingAddress2",
+  "billingCity",
+  "billingState",
+  "billingPostalCode",
+  "billingCountryCode",
   "savedAddressId",
 ] as const satisfies readonly (keyof CheckoutDraft)[];
 

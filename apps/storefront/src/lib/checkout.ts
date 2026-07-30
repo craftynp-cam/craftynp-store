@@ -15,6 +15,12 @@ export type CheckoutDraft = {
   postalCode: string;
   countryCode: string;
   billingSameAsDelivery: boolean;
+  billingAddress1: string;
+  billingAddress2: string;
+  billingCity: string;
+  billingState: string;
+  billingPostalCode: string;
+  billingCountryCode: string;
   savedAddressId: string;
   saveAddress: boolean;
 };
@@ -28,7 +34,12 @@ export type CheckoutTextField =
   | "city"
   | "state"
   | "postalCode"
-  | "countryCode";
+  | "countryCode"
+  | "billingAddress1"
+  | "billingCity"
+  | "billingState"
+  | "billingPostalCode"
+  | "billingCountryCode";
 
 export type CheckoutErrors = Partial<Record<CheckoutTextField, string>>;
 
@@ -44,6 +55,12 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   postalCode: "",
   countryCode: "us",
   billingSameAsDelivery: true,
+  billingAddress1: "",
+  billingAddress2: "",
+  billingCity: "",
+  billingState: "",
+  billingPostalCode: "",
+  billingCountryCode: "us",
   savedAddressId: "",
   saveAddress: false,
 };
@@ -87,6 +104,34 @@ export function validateCheckoutDraft(draft: CheckoutDraft): CheckoutErrors {
   }
 
   if (isBlank(draft.countryCode)) errors.countryCode = "Choose a country.";
+
+  if (!draft.billingSameAsDelivery) {
+    if (isBlank(draft.billingAddress1)) {
+      errors.billingAddress1 = "Enter the billing street address.";
+    }
+    if (isBlank(draft.billingCity))
+      errors.billingCity = "Enter the billing city.";
+    if (isBlank(draft.billingState)) {
+      errors.billingState = "Enter the billing state.";
+    }
+
+    const isBillingUs = draft.billingCountryCode === "us";
+    if (isBlank(draft.billingPostalCode)) {
+      errors.billingPostalCode = isBillingUs
+        ? "Enter the billing ZIP code."
+        : "Enter the billing postal code.";
+    } else if (
+      isBillingUs &&
+      !US_ZIP_PATTERN.test(draft.billingPostalCode.trim())
+    ) {
+      errors.billingPostalCode =
+        "Enter a 5-digit billing ZIP code, like 12345.";
+    }
+
+    if (isBlank(draft.billingCountryCode)) {
+      errors.billingCountryCode = "Choose a billing country.";
+    }
+  }
 
   return errors;
 }

@@ -450,6 +450,16 @@ should hold until the stories that supersede them:
   placeholder cards, no inert card-number inputs. `CheckoutSection` exists so
   adding them later is additive (see the `src/components/checkout` bullet
   above).
+- **Unchecking "Billing address is the same as delivery" unfurls a real
+  billing-address block**, not an inert checkbox — `AddressFields` holds a
+  shared internal `AddressBlock` used for both, and `CheckoutDraft` carries
+  a full `billing*`-prefixed set of address fields alongside the delivery
+  ones. Billing fields validate (with their own messages) only when the
+  checkbox is unchecked; `autoComplete` tokens are scoped with the HTML
+  spec's `shipping`/`billing` prefix so browser autofill can tell the two
+  address blocks apart. The billing address is not yet sent anywhere — no
+  payment session exists to send it to — so it currently only round-trips
+  through the same `localStorage` draft the delivery address does.
 - The submit button reads **"Continue"**, is a real, enabled
   `<button type="submit">`, and never says "Pay $x" — it takes no money.
   It stays enabled deliberately: it is the only event AC4's inline
@@ -541,5 +551,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **649** of the repo's 716 tests. A smaller number
+The storefront currently holds **660** of the repo's 727 tests. A smaller number
 after your change means something was dropped.
