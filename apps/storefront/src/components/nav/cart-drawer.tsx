@@ -18,6 +18,7 @@ import {
   subscribeToCartDrawer,
 } from "@/lib/cart-drawer";
 import { formatMoney } from "@/lib/money";
+import { checkoutHref } from "@/lib/routes";
 
 import { CartCard } from "../cards";
 import { Drawer, DrawerCloseButton, DrawerPanel, DrawerTitle } from "../ui";
@@ -100,7 +101,7 @@ export function CartDrawer() {
                 </span>
               ) : (
                 <Link
-                  href="/checkout"
+                  href={checkoutHref()}
                   className={`${ctaClassName} bg-accent text-on-accent hover:bg-accent/90`}
                 >
                   Checkout

@@ -4,7 +4,11 @@ import { sdk } from "./medusa";
 
 export type RegionSource = {
   id: string;
-  countries?: readonly { iso_2?: string | null }[] | null;
+  countries?: readonly {
+    iso_2?: string | null;
+    display_name?: string | null;
+    name?: string | null;
+  }[] | null;
 };
 
 export function selectDefaultRegion<T extends RegionSource>(

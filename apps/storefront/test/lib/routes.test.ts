@@ -3,6 +3,7 @@ import {
   authLoginHref,
   authLogoutHref,
   categoryHref,
+  checkoutHref,
   productHref,
   sanitizeReturnTo,
   signInHref,
@@ -25,6 +26,12 @@ describe("productHref", () => {
 describe("accountHref", () => {
   it("points at /account", () => {
     expect(accountHref()).toBe("/account");
+  });
+});
+
+describe("checkoutHref", () => {
+  it("points at /checkout", () => {
+    expect(checkoutHref()).toBe("/checkout");
   });
 });
 
