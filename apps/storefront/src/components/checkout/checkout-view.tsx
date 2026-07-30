@@ -67,7 +67,11 @@ export function CheckoutView({
 
   const cart = useSyncExternalStore(subscribeToCart, readCart, readServerCart);
   const shippingRates = useShippingRates(values, cart);
-  const taxQuote = useTaxQuote(values, cart);
+  const taxQuote = useTaxQuote(
+    values,
+    cart,
+    shippingRates.status === "ready",
+  );
 
   const [errors, setErrors] = useState<CheckoutErrors>({});
   const [status, setStatus] = useState<SubmitStatus>("idle");

@@ -24,29 +24,40 @@ function makeCart(overrides: Partial<Cart> = {}): Cart {
 }
 
 describe("isDestinationReadyForTax", () => {
-  it("is true once the address is valid and a shipping rate is chosen", () => {
-    expect(isDestinationReadyForTax(makeDraft())).toBe(true);
+  it("is true once the address is valid, a shipping rate is chosen, and shipping is ready", () => {
+    expect(isDestinationReadyForTax(makeDraft(), true)).toBe(true);
   });
 
   it("is false when no shipping rate has been chosen yet", () => {
-    expect(isDestinationReadyForTax(makeDraft({ shippingRateId: "" }))).toBe(
-      false,
-    );
+    expect(
+      isDestinationReadyForTax(makeDraft({ shippingRateId: "" }), true),
+    ).toBe(false);
+  });
+
+  it("is false while the shipping rate is still resolving for the current address, even if the draft still holds a rate from a previous address", () => {
+    // The draft can carry a stale shippingRateId/shippingQuoteToken from a
+    // prior address for a moment after an edit — isDestinationReadyForTax
+    // must not treat that as ready until the live shipping hook reports
+    // "ready" for the current key, or the tax request is signed against a
+    // token issued for a different postal code.
+    expect(isDestinationReadyForTax(makeDraft(), false)).toBe(false);
   });
 
   it("is false when the city is blank", () => {
-    expect(isDestinationReadyForTax(makeDraft({ city: "" }))).toBe(false);
+    expect(isDestinationReadyForTax(makeDraft({ city: "" }), true)).toBe(
+      false,
+    );
   });
 
   it("is false when the postal code is a 4-digit ZIP", () => {
-    expect(isDestinationReadyForTax(makeDraft({ postalCode: "1234" }))).toBe(
-      false,
-    );
+    expect(
+      isDestinationReadyForTax(makeDraft({ postalCode: "1234" }), true),
+    ).toBe(false);
   });
 
   it("is true even when unrelated fields (email, phone) are blank", () => {
     expect(
-      isDestinationReadyForTax(makeDraft({ email: "", phone: "" })),
+      isDestinationReadyForTax(makeDraft({ email: "", phone: "" }), true),
     ).toBe(true);
   });
 });

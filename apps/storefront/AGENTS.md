@@ -477,11 +477,25 @@ until the stories that supersede them:
   derived-key/cached-state/`AbortController`/`latestRef` structure as
   `use-shipping-rates.ts`, debouncing `TAX_QUOTE_DEBOUNCE_MS` (500ms, in
   `src/lib/tax-quote.ts`) after `isDestinationReadyForTax` is true. That
-  readiness gate is stricter than shipping's: it requires
-  `draft.shippingRateId !== ""` in addition to a clean address, since AC1
-  means shipping itself gets taxed, so tax can't be calculated until a rate
-  is chosen — the hook runs *after* step 3 resolves, not alongside it, and
-  re-runs when the shopper picks a different rate. `src/lib/tax-quote-cache.ts`
+  readiness gate is stricter than shipping's: it requires a clean address
+  *and* `shippingRates.status === "ready"`, passed into `useTaxQuote` as a
+  `shippingReady` argument from `CheckoutView` rather than being derived
+  from `draft.shippingRateId` alone. **This distinction is load-bearing, not
+  stylistic** — the draft still holds the *previous* address's rate and
+  signed `shippingQuoteToken` for a moment after an edit, until ShipStation
+  re-quotes and `useShippingRates` commits a fresh one; gating on
+  `shippingRateId !== ""` alone (an earlier version of this code did) fires
+  a tax request signed against the old postal code, which the server
+  correctly rejects as a cart-signature mismatch and the shopper sees as a
+  generic "we couldn't calculate tax" error a few hundred milliseconds after
+  every address edit. Requiring the *live* hook status, not the draft field,
+  closes that window — see the regression test in
+  `test/components/checkout-view.test.tsx` ("does not fire a tax request
+  against a stale quote token…") for the exact race. Since AC1 means
+  shipping itself gets taxed, tax genuinely can't be calculated until a rate
+  is chosen and settled — the hook runs *after* step 3 resolves, not
+  alongside it, and re-runs when the shopper picks a different rate.
+  `src/lib/tax-quote-cache.ts`
   is the matching `sessionStorage` cache (same TTL/size shape as
   `shipping-rates-cache.ts`), keyed by `taxQuoteKey` on destination +
   `shippingRateId` + sorted cart lines. On success the hook writes
@@ -652,5 +666,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **752** of the repo's 966 tests. A smaller number
+The storefront currently holds **754** of the repo's 968 tests. A smaller number
 after your change means something was dropped.

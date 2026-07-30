@@ -1094,5 +1094,106 @@ describe("CheckoutView", () => {
       });
       await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
     });
+
+    it("does not fire a tax request against a stale quote token while the shipping rate is re-resolving for a changed address", async () => {
+      const secondRateResponse = {
+        rates: [
+          {
+            rateId: "se-2",
+            carrierName: "USPS",
+            serviceName: "USPS Ground Advantage",
+            serviceCode: "usps_ground_advantage",
+            amount: 5.16,
+            currencyCode: "usd",
+            deliveryDays: 2,
+            estimatedDeliveryDate: null,
+            quoteToken: "second-token.signature",
+          },
+        ],
+      };
+
+      let shippingCallCount = 0;
+      const pendingSecondCall: { resolve: (() => void) | null } = {
+        resolve: null,
+      };
+
+      const fetchMock = jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          shippingCallCount += 1;
+          if (shippingCallCount === 1) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve(singleRateResponse),
+            });
+          }
+          // The second call (for the changed address) hangs until released
+          // below, simulating a still-resolving shipping rate.
+          return new Promise((resolve) => {
+            pendingSecondCall.resolve = () =>
+              resolve({
+                ok: true,
+                json: () => Promise.resolve(secondRateResponse),
+              });
+          });
+        }
+        if (url === "/checkout/tax") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(taxQuoteResponse),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
+
+      const taxCallsBeforeEdit = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/tax",
+      ).length;
+
+      fireEvent.change(screen.getByLabelText("ZIP code"), {
+        target: { value: "60605" },
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      const taxCallsWhileShippingLoading = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/tax",
+      ).length;
+      expect(taxCallsWhileShippingLoading).toBe(taxCallsBeforeEdit);
+
+      pendingSecondCall.resolve?.();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      await waitFor(() =>
+        expect(
+          fetchMock.mock.calls.filter(([url]) => url === "/checkout/tax")
+            .length,
+        ).toBeGreaterThan(taxCallsBeforeEdit),
+      );
+    });
   });
 });

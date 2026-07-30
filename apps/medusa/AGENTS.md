@@ -565,7 +565,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **148** of the repo's 966 tests. The `siteContent`
+This app currently holds **148** of the repo's 968 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including

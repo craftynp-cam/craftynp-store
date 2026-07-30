@@ -44,13 +44,17 @@ function commitQuote(quote: CachedTaxQuote) {
   });
 }
 
-export function useTaxQuote(draft: CheckoutDraft, cart: Cart): TaxQuoteState {
+export function useTaxQuote(
+  draft: CheckoutDraft,
+  cart: Cart,
+  shippingReady: boolean,
+): TaxQuoteState {
   const [fetchState, setFetchState] = useState<FetchState | null>(null);
   const [retryToken, setRetryToken] = useState(0);
   const committedKeyRef = useRef<string | null>(null);
   const activeKeyRef = useRef<string | null>(null);
 
-  const ready = isDestinationReadyForTax(draft);
+  const ready = isDestinationReadyForTax(draft, shippingReady);
   const key = ready ? taxQuoteKey(draft, cart) : null;
   const cachedQuote = key ? readCachedTaxQuote(key) : null;
 
