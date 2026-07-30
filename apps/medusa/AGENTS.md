@@ -199,7 +199,13 @@ refused outright. Create the admin user first with the Medusa CLI (see the
 `medusa-dev:new-user` skill), the same as any other admin — a new team member
 gets Google Workspace access by having the owner run the CLI with their
 `@<allowed domain>` email, then having them sign in once with Google
-themselves to complete the link.
+themselves to complete the link. That same first link also backfills the
+Medusa user's `first_name`/`last_name` from the Google profile's
+`given_name`/`family_name` (via `updateUsersStep`, also from
+`@medusajs/medusa/core-flows`) if Google returned them — `medusa user` itself
+only ever sets `email`, so without this a new admin's name stays blank until
+someone edits it by hand. This only runs once, on the linking sign-in; it
+will not overwrite a name changed later in the dashboard.
 
 **`medusa user` needs `emailpass` registered even though no admin ever logs in
 with it.** The CLI command calls `authService.register("emailpass", …)`

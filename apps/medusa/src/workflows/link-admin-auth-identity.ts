@@ -4,7 +4,10 @@ import {
   when,
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk";
-import { setAuthAppMetadataStep } from "@medusajs/medusa/core-flows";
+import {
+  setAuthAppMetadataStep,
+  updateUsersStep,
+} from "@medusajs/medusa/core-flows";
 
 import { linkAdminAuthIdentityStep } from "./steps/link-admin-auth-identity";
 
@@ -27,6 +30,22 @@ const linkAdminAuthIdentityWorkflow = createWorkflow(
         );
 
         setAuthAppMetadataStep(metadataInput);
+
+        const userUpdateInput = transform({ linkResult }, ({ linkResult }) => {
+          if (!linkResult.firstName && !linkResult.lastName) {
+            return [];
+          }
+
+          return [
+            {
+              id: linkResult.userId,
+              first_name: linkResult.firstName,
+              last_name: linkResult.lastName,
+            },
+          ];
+        });
+
+        updateUsersStep(userUpdateInput);
       },
     );
 

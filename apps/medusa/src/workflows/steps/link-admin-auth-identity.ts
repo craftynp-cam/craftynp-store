@@ -8,7 +8,12 @@ import type { IAuthModuleService } from "@medusajs/framework/types";
 
 type StepInput = { authIdentityId: string };
 
-type StepOutput = { userId: string; alreadyLinked: boolean };
+type StepOutput = {
+  userId: string;
+  alreadyLinked: boolean;
+  firstName?: string;
+  lastName?: string;
+};
 
 export const linkAdminAuthIdentityStep = createStep(
   "link-admin-auth-identity",
@@ -24,7 +29,7 @@ export const linkAdminAuthIdentityStep = createStep(
     );
 
     if (authIdentity.app_metadata?.user_id) {
-      return new StepResponse({
+      return new StepResponse<StepOutput>({
         userId: authIdentity.app_metadata.user_id as string,
         alreadyLinked: true,
       });
@@ -56,9 +61,14 @@ export const linkAdminAuthIdentityStep = createStep(
       );
     }
 
+    const { given_name: firstName, family_name: lastName } =
+      providerIdentity.user_metadata ?? {};
+
     return new StepResponse<StepOutput>({
       userId: user.id,
       alreadyLinked: false,
+      firstName: typeof firstName === "string" ? firstName : undefined,
+      lastName: typeof lastName === "string" ? lastName : undefined,
     });
   },
 );
