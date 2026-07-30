@@ -30,3 +30,10 @@ export function toProductJsonLd(
     offers: offers.length === 0 ? undefined : offers,
   };
 }
+
+// For embedding in a <script> tag: "<" must be escaped or a value containing
+// "</script>" (e.g. an admin-entered product description) breaks out of the
+// JSON-LD block and executes as markup.
+export function serializeJsonLd(value: Record<string, unknown>): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}

@@ -1,4 +1,4 @@
-import { toProductJsonLd } from "@/lib/structured-data";
+import { serializeJsonLd, toProductJsonLd } from "@/lib/structured-data";
 import type { ProductDetail } from "@/lib/product";
 
 function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
@@ -118,5 +118,20 @@ describe("toProductJsonLd", () => {
     );
 
     expect(jsonLd.offers).toBeUndefined();
+  });
+});
+
+describe("serializeJsonLd", () => {
+  it("escapes < so a description cannot close the script tag", () => {
+    const serialized = serializeJsonLd(
+      toProductJsonLd(
+        makeProduct({ description: "</script><script>alert(1)</script>" }),
+      ),
+    );
+
+    expect(serialized).not.toContain("<");
+    expect(JSON.parse(serialized)).toMatchObject({
+      description: "</script><script>alert(1)</script>",
+    });
   });
 });

@@ -9,7 +9,7 @@ import {
 } from "@/components";
 import { fetchProductByHandle } from "@/lib/product";
 import { fetchRegion } from "@/lib/region";
-import { toProductJsonLd } from "@/lib/structured-data";
+import { serializeJsonLd, toProductJsonLd } from "@/lib/structured-data";
 
 type ProductPageProps = {
   params: Promise<{ category: string; product: string }>;
@@ -46,7 +46,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(toProductJsonLd(product)),
+          __html: serializeJsonLd(toProductJsonLd(product)),
         }}
       />
 

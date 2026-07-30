@@ -46,7 +46,9 @@ export function authLogoutHref(): string {
 }
 
 export function sanitizeReturnTo(value: string | null | undefined): string {
-  if (value && value.startsWith("/") && !value.startsWith("//")) {
+  // WHATWG URL parsing treats "\" as "/" in http(s) URLs, so "/\evil.com"
+  // resolves protocol-relative, exactly like "//evil.com".
+  if (value && value.startsWith("/") && !/^\/[/\\]/.test(value)) {
     return value;
   }
   return accountHref();

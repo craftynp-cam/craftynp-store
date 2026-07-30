@@ -80,6 +80,11 @@ describe("sanitizeReturnTo", () => {
     expect(sanitizeReturnTo("//evil.example.com")).toBe("/account");
   });
 
+  it("falls back to /account for a backslash protocol-relative URL", () => {
+    expect(sanitizeReturnTo("/\\evil.example.com")).toBe("/account");
+    expect(sanitizeReturnTo("/\\/evil.example.com")).toBe("/account");
+  });
+
   it("falls back to /account for an absolute URL", () => {
     expect(sanitizeReturnTo("https://evil.example.com")).toBe("/account");
   });
