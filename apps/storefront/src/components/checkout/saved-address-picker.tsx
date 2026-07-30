@@ -1,4 +1,4 @@
-import type { SavedAddress } from "@/lib/addresses";
+import { NEW_ADDRESS_ID, type SavedAddress } from "@/lib/saved-address";
 
 import { RadioGroup } from "../ui";
 
@@ -7,8 +7,6 @@ export type SavedAddressPickerProps = {
   selectedId: string;
   onSelect: (id: string) => void;
 };
-
-const NEW_ADDRESS_VALUE = "";
 
 export function SavedAddressPicker({
   addresses,
@@ -22,7 +20,7 @@ export function SavedAddressPicker({
       value: address.id,
       label: address.label,
     })),
-    { value: NEW_ADDRESS_VALUE, label: "Enter a new address" },
+    { value: NEW_ADDRESS_ID, label: "Enter a new address" },
   ];
 
   return (

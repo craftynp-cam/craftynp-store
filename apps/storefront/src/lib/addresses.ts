@@ -1,7 +1,13 @@
 import { cache } from "react";
 
-import type { CheckoutDraft } from "./checkout";
 import { sdk } from "./medusa";
+import { type SavedAddress } from "./saved-address";
+
+export {
+  draftFromSavedAddress,
+  NEW_ADDRESS_ID,
+  type SavedAddress,
+} from "./saved-address";
 
 export type CustomerAddressSource = {
   id: string;
@@ -17,21 +23,6 @@ export type CustomerAddressSource = {
   country_code: string | null;
   phone: string | null;
   created_at?: string;
-};
-
-export type SavedAddress = {
-  id: string;
-  label: string;
-  firstName: string;
-  lastName: string;
-  address1: string;
-  address2: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  countryCode: string;
-  phone: string;
-  isDefaultShipping: boolean;
 };
 
 export function toSavedAddress(source: CustomerAddressSource): SavedAddress {
@@ -63,22 +54,6 @@ export function savedAddressLabel(source: CustomerAddressSource): string {
   const address = parts.join(", ");
 
   return source.address_name ? `${source.address_name} — ${address}` : address;
-}
-
-export function draftFromSavedAddress(
-  address: SavedAddress,
-): Partial<CheckoutDraft> {
-  return {
-    firstName: address.firstName,
-    lastName: address.lastName,
-    phone: address.phone,
-    address1: address.address1,
-    address2: address.address2,
-    city: address.city,
-    state: address.state,
-    postalCode: address.postalCode,
-    countryCode: address.countryCode,
-  };
 }
 
 export const fetchCustomerAddresses = cache(

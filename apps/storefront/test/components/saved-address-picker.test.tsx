@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { SavedAddressPicker } from "@/components";
-import type { SavedAddress } from "@/lib/addresses";
+import { NEW_ADDRESS_ID, type SavedAddress } from "@/lib/saved-address";
 
 function makeAddress(overrides: Partial<SavedAddress> = {}): SavedAddress {
   return {
@@ -80,7 +80,7 @@ describe("SavedAddressPicker", () => {
     expect(onSelect).toHaveBeenCalledWith("caddr_1");
   });
 
-  it("reports an empty id for 'Enter a new address'", () => {
+  it("reports the new-address sentinel for 'Enter a new address'", () => {
     const onSelect = jest.fn();
     render(
       <SavedAddressPicker
@@ -92,7 +92,7 @@ describe("SavedAddressPicker", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "Enter a new address" }));
 
-    expect(onSelect).toHaveBeenCalledWith("");
+    expect(onSelect).toHaveBeenCalledWith(NEW_ADDRESS_ID);
   });
 
   it("checks the pre-selected address", () => {

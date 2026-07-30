@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { CheckoutView } from "@/components";
-import type { SavedAddress } from "@/lib/addresses";
+import type { SavedAddress } from "@/lib/saved-address";
 import type { AuthedCustomer } from "@/lib/auth";
 import { CHECKOUT_STORAGE_KEY, clearCheckoutDraft } from "@/lib/checkout-draft";
 import { clearCart } from "@/lib/cart";
@@ -32,6 +32,21 @@ const savedAddress: SavedAddress = {
   postalCode: "62704",
   countryCode: "us",
   phone: "5551234567",
+  isDefaultShipping: true,
+};
+
+const otherAddress: SavedAddress = {
+  id: "caddr_2",
+  label: "456 Oak Avenue, Portland, OR 97201",
+  firstName: "Jamie",
+  lastName: "Rivera",
+  address1: "456 Oak Avenue",
+  address2: "",
+  city: "Portland",
+  state: "OR",
+  postalCode: "97201",
+  countryCode: "us",
+  phone: "5559876543",
   isDefaultShipping: false,
 };
 
@@ -259,21 +274,20 @@ describe("CheckoutView", () => {
     expect(screen.getByText("Check 8 fields below.")).toBeInTheDocument();
   });
 
-  it("renders the saved-address picker for a customer with addresses and fills the fields on selection", () => {
+  it("preselects the customer's default saved address on load, with no click required", () => {
     render(
       <CheckoutView
         customer={customer}
-        savedAddresses={[savedAddress]}
+        savedAddresses={[savedAddress, otherAddress]}
         countryOptions={countryOptions}
       />,
     );
 
-    fireEvent.click(
+    expect(
       screen.getByRole("radio", {
         name: "123 Maple Street, Springfield, IL 62704",
       }),
-    );
-
+    ).toBeChecked();
     expect(screen.getByLabelText("Street address")).toHaveValue(
       "123 Maple Street",
     );
@@ -282,7 +296,30 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("ZIP code")).toHaveValue("62704");
   });
 
-  it("clears the address fields when 'Enter a new address' is selected", () => {
+  it("fills the fields for the address the shopper manually selects", () => {
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[savedAddress, otherAddress]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("radio", {
+        name: "456 Oak Avenue, Portland, OR 97201",
+      }),
+    );
+
+    expect(screen.getByLabelText("Street address")).toHaveValue(
+      "456 Oak Avenue",
+    );
+    expect(screen.getByLabelText("City")).toHaveValue("Portland");
+    expect(screen.getByLabelText("State")).toHaveValue("OR");
+    expect(screen.getByLabelText("ZIP code")).toHaveValue("97201");
+  });
+
+  it("clears the address fields when 'Enter a new address' is selected, and does not revert to the default", () => {
     render(
       <CheckoutView
         customer={customer}
@@ -291,11 +328,6 @@ describe("CheckoutView", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("radio", {
-        name: "123 Maple Street, Springfield, IL 62704",
-      }),
-    );
     expect(screen.getByLabelText("Street address")).toHaveValue(
       "123 Maple Street",
     );
@@ -306,6 +338,12 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("City")).toHaveValue("");
     expect(screen.getByLabelText("State")).toHaveValue("");
     expect(screen.getByLabelText("ZIP code")).toHaveValue("");
+
+    fireEvent.change(screen.getByLabelText("First name"), {
+      target: { value: "Someone" },
+    });
+
+    expect(screen.getByLabelText("Street address")).toHaveValue("");
   });
 
   it("hides the saved-address picker and save checkbox for a guest even when addresses are passed", () => {

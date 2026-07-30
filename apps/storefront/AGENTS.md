@@ -208,6 +208,17 @@ what's inside, just what a reader wouldn't get from the code:
   addresses (`sdk.store.customer.listAddress`), never throws, and is the one
   place that maps Medusa's `province` field to the draft's `state` — that
   mapping stays local to this file rather than leaking into components.
+  **`saved-address.ts` holds the parts of that same domain a client
+  component is allowed to import as values** — `NEW_ADDRESS_ID` and
+  `draftFromSavedAddress` — split out specifically so `checkout-view.tsx`
+  never has to `import` (not `import type`) anything from `addresses.ts`.
+  `addresses.ts` itself pulls in `sdk` from `medusa.ts`, which throws at
+  module-eval time if the Medusa env vars are unset; a client component
+  value-importing from it drags that throw into every test that imports
+  anything from the `@/components` barrel, not just checkout's own tests —
+  this broke 47 test suites at once before the split. `addresses.ts`
+  re-exports both names for convenience, so server-side code and tests that
+  already mock `medusa.ts` can keep importing everything from one place.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -460,6 +471,19 @@ should hold until the stories that supersede them:
   address blocks apart. The billing address is not yet sent anywhere — no
   payment session exists to send it to — so it currently only round-trips
   through the same `localStorage` draft the delivery address does.
+- **A signed-in customer's default saved address is preselected on load**
+  (CNP-50 AC — moved here from CNP-61, which only owns add/edit/delete).
+  `CheckoutView` commits it with a `useEffect` that calls
+  `patchCheckoutDraft`, not a render-time overlay like
+  `prefillCheckoutDraft` — a render-only overlay would get silently
+  reverted the moment the shopper edited just one field of the preselected
+  address and reloaded, since only that one field would have actually been
+  written to the draft. The guard is `draft.savedAddressId === ""`, meaning
+  "no choice made yet," which only `useEffect` can commit once. Explicitly
+  choosing "Enter a new address" writes `NEW_ADDRESS_ID` (`"new"`), not
+  `""` — reusing `""` there would make the effect indistinguishable from
+  "untouched" and re-preselect the default the instant the shopper picked
+  "new," undoing their choice.
 - The submit button reads **"Continue"**, is a real, enabled
   `<button type="submit">`, and never says "Pay $x" — it takes no money.
   It stays enabled deliberately: it is the only event AC4's inline
@@ -551,5 +575,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **663** of the repo's 730 tests. A smaller number
+The storefront currently holds **664** of the repo's 731 tests. A smaller number
 after your change means something was dropped.

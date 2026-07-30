@@ -1,9 +1,13 @@
 "use client";
 
 import { flushSync } from "react-dom";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import type { SavedAddress } from "@/lib/addresses";
+import {
+  draftFromSavedAddress,
+  NEW_ADDRESS_ID,
+  type SavedAddress,
+} from "@/lib/saved-address";
 import type { AuthedCustomer } from "@/lib/auth";
 import {
   type CheckoutDraft,
@@ -61,6 +65,21 @@ export function CheckoutView({
   const [status, setStatus] = useState<SubmitStatus>("idle");
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Runs once the shopper has a choice to make and hasn't made one yet
+  // (savedAddressId is "" — neither a saved address nor NEW_ADDRESS_ID).
+  // fetchCustomerAddresses already sorts the default-shipping address
+  // first, so savedAddresses[0] is the one to preselect.
+  useEffect(() => {
+    if (!isSignedIn || draft.savedAddressId !== "") return;
+    const defaultAddress = savedAddresses[0];
+    if (!defaultAddress) return;
+
+    patchCheckoutDraft({
+      savedAddressId: defaultAddress.id,
+      ...draftFromSavedAddress(defaultAddress),
+    });
+  }, [isSignedIn, savedAddresses, draft.savedAddressId]);
 
   function handleChange(patch: Partial<CheckoutDraft>) {
     patchCheckoutDraft(patch);
@@ -169,19 +188,11 @@ export function CheckoutView({
                   if (selected) {
                     patchCheckoutDraft({
                       savedAddressId: id,
-                      firstName: selected.firstName,
-                      lastName: selected.lastName,
-                      phone: selected.phone,
-                      address1: selected.address1,
-                      address2: selected.address2,
-                      city: selected.city,
-                      state: selected.state,
-                      postalCode: selected.postalCode,
-                      countryCode: selected.countryCode,
+                      ...draftFromSavedAddress(selected),
                     });
                   } else {
                     patchCheckoutDraft({
-                      savedAddressId: "",
+                      savedAddressId: NEW_ADDRESS_ID,
                       address1: EMPTY_CHECKOUT_DRAFT.address1,
                       address2: EMPTY_CHECKOUT_DRAFT.address2,
                       city: EMPTY_CHECKOUT_DRAFT.city,
