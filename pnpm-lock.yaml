@@ -113,9 +113,6 @@ importers:
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@20.19.43)(ts-node@10.9.2(@swc/core@1.15.46(@swc/helpers@0.5.23))(@types/node@20.19.43)(typescript@5.9.3))
-      prop-types:
-        specifier: ^15.8.1
-        version: 15.8.1
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -131,9 +128,6 @@ importers:
       vite:
         specifier: ^5.4.14
         version: 5.4.21(@types/node@20.19.43)(lightningcss@1.32.0)
-      yalc:
-        specifier: ^1.0.0-pre.53
-        version: 1.0.0-pre.53
 
   apps/storefront:
     dependencies:
@@ -12845,6 +12839,7 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
+    optional: true
 
   cliui@8.0.1:
     dependencies:
@@ -13126,7 +13121,8 @@ snapshots:
 
   destroy@1.2.0: {}
 
-  detect-indent@6.1.0: {}
+  detect-indent@6.1.0:
+    optional: true
 
   detect-libc@2.1.2: {}
 
@@ -13795,6 +13791,7 @@ snapshots:
       graceful-fs: 4.2.11
       jsonfile: 4.0.0
       universalify: 0.1.2
+    optional: true
 
   fs.realpath@1.0.0: {}
 
@@ -14018,6 +14015,7 @@ snapshots:
   ignore-walk@3.0.4:
     dependencies:
       minimatch: 3.1.5
+    optional: true
 
   ignore@5.3.2: {}
 
@@ -14058,7 +14056,8 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ini@2.0.0: {}
+  ini@2.0.0:
+    optional: true
 
   input-otp@1.4.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
@@ -14753,6 +14752,7 @@ snapshots:
   jsonfile@4.0.0:
     optionalDependencies:
       graceful-fs: 4.2.11
+    optional: true
 
   jsonfile@6.2.1:
     dependencies:
@@ -15222,8 +15222,10 @@ snapshots:
   npm-bundled@1.1.2:
     dependencies:
       npm-normalize-package-bin: 1.0.1
+    optional: true
 
-  npm-normalize-package-bin@1.0.1: {}
+  npm-normalize-package-bin@1.0.1:
+    optional: true
 
   npm-packlist@2.2.2:
     dependencies:
@@ -15231,6 +15233,7 @@ snapshots:
       ignore-walk: 3.0.4
       npm-bundled: 1.1.2
       npm-normalize-package-bin: 1.0.1
+    optional: true
 
   npm-run-path@4.0.1:
     dependencies:
@@ -16661,7 +16664,8 @@ snapshots:
     dependencies:
       crypto-random-string: 2.0.0
 
-  universalify@0.1.2: {}
+  universalify@0.1.2:
+    optional: true
 
   universalify@0.2.0: {}
 
@@ -16922,6 +16926,7 @@ snapshots:
       ini: 2.0.0
       npm-packlist: 2.2.2
       yargs: 16.2.2
+    optional: true
 
   yallist@3.1.1: {}
 
@@ -16934,7 +16939,8 @@ snapshots:
       camelcase: 5.3.1
       decamelize: 1.2.0
 
-  yargs-parser@20.2.9: {}
+  yargs-parser@20.2.9:
+    optional: true
 
   yargs-parser@21.1.1: {}
 
@@ -16961,6 +16967,7 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 20.2.9
+    optional: true
 
   yargs@17.7.2:
     dependencies:
