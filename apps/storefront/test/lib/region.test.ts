@@ -62,6 +62,28 @@ describe("fetchRegion", () => {
     });
   });
 
+  it("passes country display names through unchanged", async () => {
+    const { sdk } = jest.requireMock<{
+      sdk: { store: { region: { list: jest.Mock } } };
+    }>("../../src/lib/medusa");
+    sdk.store.region.list.mockResolvedValue({
+      regions: [
+        {
+          id: "reg_us",
+          countries: [{ iso_2: "us", display_name: "United States" }],
+        },
+      ],
+      count: 1,
+      offset: 0,
+      limit: 100,
+    });
+
+    expect(await fetchRegion()).toEqual({
+      id: "reg_us",
+      countries: [{ iso_2: "us", display_name: "United States" }],
+    });
+  });
+
   it("returns null and does not throw when the SDK rejects", async () => {
     const { sdk } = jest.requireMock<{
       sdk: { store: { region: { list: jest.Mock } } };

@@ -32,14 +32,19 @@ what's inside, just what a reader wouldn't get from the code:
   targets. Add both to any new page's `<main>`. Catalog URLs are
   `/products` (all products), `/{category}` (CNP-31), and
   `/{category}/{product}` (CNP-33). `src/app/products/page.tsx` is a literal
-  segment, so it — and `/design`, `/sign-in`, `/account`, `/auth` (CNP-56), and
-  `/about` (CNP-66) — shadow any Medusa category whose handle matches; a
-  category can't use those handles. A product 404s if its handle resolves but
-  the URL's category segment doesn't match, so it isn't reachable at more than
-  one path; a category 404s if its handle doesn't resolve at all.
+  segment, so it — and `/design`, `/sign-in`, `/account`, `/auth` (CNP-56),
+  `/about` (CNP-66), and `/checkout` (CNP-50) — shadow any Medusa category
+  whose handle matches; a category can't use those handles. A product 404s if
+  its handle resolves but the URL's category segment doesn't match, so it
+  isn't reachable at more than one path; a category 404s if its handle
+  doesn't resolve at all.
   `src/app/auth/*` are route handlers, not pages — see
   [Auth](#auth-cnp-565758) below for why they
   have to live there specifically and not under `/api`.
+  `src/app/checkout/addresses/route.ts` is the same kind of route handler
+  (POST only), for the same reason: `next.config.ts` rewrites `/api/:path*`
+  to Medusa, so a handler that saves a customer's address has to live outside
+  `/api` or it would be proxied away and never run.
 - `src/components/ui` — the HeroUI-backed primitives.
 - `src/components/account` — `/sign-in` and `/account`'s parts (CNP-56/57/58).
   Both are sync components taking props (`SignInPanel`, `AccountPanel`), the
@@ -64,6 +69,20 @@ what's inside, just what a reader wouldn't get from the code:
   `Breadcrumbs` (`src/components/nav/breadcrumbs.tsx`) is strictly
   URL-derived — it reads `usePathname()` and title-cases each segment, with no
   per-page override.
+- `src/components/checkout` — the `/checkout` page's parts (CNP-50):
+  `CheckoutView` is a `"use client"` component taking `customer`,
+  `savedAddresses`, and `countryOptions` as props, the same reason `Navbar`
+  and `SignInPanel` take props rather than fetching — the page that renders
+  it is an async server component RTL cannot render. `CheckoutSection` takes
+  `step`/`title` as props and appears nowhere else, so adding the shipping
+  method and payment sections later (CNP-51/52 or similar) is purely
+  additive — insert `<CheckoutSection step={3} …>` / `step={4}` into the same
+  stack in `CheckoutView` and nothing else has to change. `CheckoutSummary`
+  reuses `CartCard` from `src/components/cards`, and its "Edit" control opens
+  the cart drawer (`openCartDrawer()`) rather than linking to `/cart`, since
+  there is no such route — the cart is a drawer, not a page. See
+  [Checkout](#checkout-cnp-50) below for the release-1 scope this directory
+  deliberately stops at.
 - `src/components/home` — the homepage category carousel (CNP-29) and its
   slide. Rendered on a fixed navy surface (`bg-ink`/`text-off-white`), the same
   fixed-in-both-modes treatment the footer uses, so its focus ring is
@@ -171,7 +190,35 @@ what's inside, just what a reader wouldn't get from the code:
   one customer's token into another's render. A call made on behalf of an
   already-signed-in customer doesn't need a scoped client at all: pass an
   `Authorization` header on that one call, on the singleton `sdk`, since a
-  per-call header doesn't mutate it.
+  per-call header doesn't mutate it. `checkout.ts` (CNP-50) is the checkout
+  form's pure logic — the draft shape, per-field validation with a specific
+  message for each rule (not a shared "This field is required"), the
+  customer-prefill overlay, `countryOptions`, and the summary's totals. It is
+  hand-written functions rather than a zod schema in `@craftynp/types`: the
+  storefront carries no zod dependency today, and the per-field wording AC4
+  needs would still be hand-written either way. When the order-placement
+  story needs the address shape shared with Medusa, promote the _type_ into
+  `@craftynp/types` and swap `validateCheckoutDraft`'s body for a schema
+  behind the same signature — don't reopen that decision from scratch.
+  `checkout-draft.ts` persists the form to `localStorage` under
+  `craftynp-checkout`, structured exactly like `cart.ts`: a module-scope
+  cached snapshot for `useSyncExternalStore`'s referential-stability
+  requirement, and a constant (never a fresh literal) server snapshot so
+  hydration doesn't warn. `addresses.ts` fetches a signed-in customer's saved
+  addresses (`sdk.store.customer.listAddress`), never throws, and is the one
+  place that maps Medusa's `province` field to the draft's `state` — that
+  mapping stays local to this file rather than leaking into components.
+  **`saved-address.ts` holds the parts of that same domain a client
+  component is allowed to import as values** — `NEW_ADDRESS_ID` and
+  `draftFromSavedAddress` — split out specifically so `checkout-view.tsx`
+  never has to `import` (not `import type`) anything from `addresses.ts`.
+  `addresses.ts` itself pulls in `sdk` from `medusa.ts`, which throws at
+  module-eval time if the Medusa env vars are unset; a client component
+  value-importing from it drags that throw into every test that imports
+  anything from the `@/components` barrel, not just checkout's own tests —
+  this broke 47 test suites at once before the split. `addresses.ts`
+  re-exports both names for convenience, so server-side code and tests that
+  already mock `medusa.ts` can keep importing everything from one place.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -394,6 +441,61 @@ up but hasn't clicked the verification link yet (blocked by the tenant's
 cancelled" — the two look identical at the OAuth-error-code level but call for
 opposite next steps.
 
+## Checkout (CNP-50)
+
+`/checkout` builds the contact and delivery-address step only — sections 1
+and 2 of the eventual page, plus the sticky cart summary. This is a
+deliberate scope boundary, not an oversight, and the standing decisions below
+should hold until the stories that supersede them:
+
+- **There is no Medusa cart, and no `sdk.store.cart.*` call anywhere in the
+  storefront.** The checkout form is a client-only draft persisted to
+  `localStorage` (`checkout-draft.ts`); it is not wired to a Medusa cart,
+  shipping option, or payment session. Creating a real cart at checkout time
+  is future work, alongside ShipStation and Stripe.
+- The cart summary shows **Subtotal and Total only** — no Shipping or Tax
+  row. Total equals Subtotal. Adding a shipping row means giving
+  `checkoutTotals` a real shipping amount to sum, not hardcoding one; a
+  guessed number would be a wrong price shown to a shopper.
+- Sections 3 (Shipping method) and 4 (Payment) are not rendered at all — no
+  placeholder cards, no inert card-number inputs. `CheckoutSection` exists so
+  adding them later is additive (see the `src/components/checkout` bullet
+  above).
+- **Unchecking "Billing address is the same as delivery" unfurls a real
+  billing-address block**, not an inert checkbox — `AddressFields` holds a
+  shared internal `AddressBlock` used for both, and `CheckoutDraft` carries
+  a full `billing*`-prefixed set of address fields alongside the delivery
+  ones. Billing fields validate (with their own messages) only when the
+  checkbox is unchecked; `autoComplete` tokens are scoped with the HTML
+  spec's `shipping`/`billing` prefix so browser autofill can tell the two
+  address blocks apart. The billing address is not yet sent anywhere — no
+  payment session exists to send it to — so it currently only round-trips
+  through the same `localStorage` draft the delivery address does.
+- **A signed-in customer's default saved address is preselected on load**
+  (CNP-50 AC — moved here from CNP-61, which only owns add/edit/delete).
+  `CheckoutView` commits it with a `useEffect` that calls
+  `patchCheckoutDraft`, not a render-time overlay like
+  `prefillCheckoutDraft` — a render-only overlay would get silently
+  reverted the moment the shopper edited just one field of the preselected
+  address and reloaded, since only that one field would have actually been
+  written to the draft. The guard is `draft.savedAddressId === ""`, meaning
+  "no choice made yet," which only `useEffect` can commit once. Explicitly
+  choosing "Enter a new address" writes `NEW_ADDRESS_ID` (`"new"`), not
+  `""` — reusing `""` there would make the effect indistinguishable from
+  "untouched" and re-preselect the default the instant the shopper picked
+  "new," undoing their choice.
+- The submit button reads **"Continue"**, is a real, enabled
+  `<button type="submit">`, and never says "Pay $x" — it takes no money.
+  It stays enabled deliberately: it is the only event AC4's inline
+  validation can hang off (a shopper who never focuses an empty field would
+  otherwise never see its message), and the only thing that can reach
+  `/checkout/addresses`. A permanently disabled CTA was considered and
+  rejected for exactly this reason.
+- **Guest checkout is the default and is never blocked.** Nothing in the form
+  asks for a password or account creation; a signed-out shopper sees only a
+  plain "Sign in" text link, an offer rather than a gate. Account creation
+  belongs to the post-purchase flow of a later story, per the ticket's AC3.
+
 ## Component imports
 
 `src/components/index.ts` is the barrel: it re-exports everything under
@@ -473,5 +575,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **546** of the repo's 613 tests. A smaller number
+The storefront currently holds **664** of the repo's 731 tests. A smaller number
 after your change means something was dropped.

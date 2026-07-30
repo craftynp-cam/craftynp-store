@@ -131,6 +131,16 @@ describe("CartDrawer", () => {
     expect(within(dialog).getByText(/cart is empty/i)).toBeInTheDocument();
   });
 
+  it("closes when Checkout is clicked", () => {
+    addLine();
+    render(<CartDrawer />);
+    const dialog = open();
+
+    fireEvent.click(within(dialog).getByRole("link", { name: "Checkout" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("closes when Keep shopping is clicked", () => {
     render(<CartDrawer />);
     const dialog = open();
