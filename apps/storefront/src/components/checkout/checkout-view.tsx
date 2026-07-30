@@ -36,6 +36,7 @@ import { ContactFields } from "./contact-fields";
 import { SavedAddressPicker } from "./saved-address-picker";
 import { ShippingMethodFields } from "./shipping-method-fields";
 import { useShippingRates } from "./use-shipping-rates";
+import { useTaxQuote } from "./use-tax-quote";
 
 export type CheckoutViewProps = {
   customer: AuthedCustomer | null;
@@ -66,6 +67,11 @@ export function CheckoutView({
 
   const cart = useSyncExternalStore(subscribeToCart, readCart, readServerCart);
   const shippingRates = useShippingRates(values, cart);
+  const taxQuote = useTaxQuote(
+    values,
+    cart,
+    shippingRates.status === "ready",
+  );
 
   const [errors, setErrors] = useState<CheckoutErrors>({});
   const [status, setStatus] = useState<SubmitStatus>("idle");
@@ -254,6 +260,21 @@ export function CheckoutView({
               }}
             />
           </CheckoutSection>
+
+          {taxQuote.status === "error" ? (
+            <div aria-live="polite" className="space-y-3">
+              <p className="text-sm text-danger-foreground">
+                {taxQuote.error ?? "We couldn't calculate tax for your address."}
+              </p>
+              <button
+                type="button"
+                onClick={taxQuote.retry}
+                className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
 
           <div
             aria-live="polite"

@@ -127,6 +127,18 @@ describe("checkout draft", () => {
     expect(draft.shippingRateAmount).toBe(7.42);
   });
 
+  it("persists the tax fields, including the numeric amount", () => {
+    patchCheckoutDraft({
+      taxAmount: 0.68,
+      taxCurrency: "usd",
+      taxQuoteToken: "token.signature",
+    });
+
+    const draft = readCheckoutDraft();
+    expect(draft.taxAmount).toBe(0.68);
+    expect(draft.taxQuoteToken).toBe("token.signature");
+  });
+
   it("falls back to zero when the stored amount is not a number", async () => {
     window.localStorage.setItem(
       CHECKOUT_STORAGE_KEY,

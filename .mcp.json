@@ -16,6 +16,10 @@
       "command": "npx",
       "args": ["-y", "@auth0/auth0-mcp-server", "run"],
       "capabilities": ["tools"]
+    },
+    "stripe": {
+      "type": "http",
+      "url": "https://mcp.stripe.com"
     }
   }
 }

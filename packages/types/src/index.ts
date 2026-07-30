@@ -21,6 +21,7 @@ export {
   shippingRateSchema,
   shippingRatesResponseSchema,
 } from "./shipping-rates.js";
+export { taxQuoteRequestSchema, taxQuoteResponseSchema } from "./tax.js";
 
 export type {
   ArtworkReference,
@@ -44,3 +45,4 @@ export type {
   ShippingRateRequest,
   ShippingRatesResponse,
 } from "./shipping-rates.js";
+export type { TaxQuoteRequest, TaxQuoteResponse } from "./tax.js";

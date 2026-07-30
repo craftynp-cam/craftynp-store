@@ -86,7 +86,9 @@
       "mcp__chrome-devtools__type_text",
       "mcp__chrome-devtools__upload_file",
       "mcp__chrome-devtools__performance_start_trace",
-      "mcp__chrome-devtools__performance_stop_trace"
+      "mcp__chrome-devtools__performance_stop_trace",
+      "Read(**/.env.example)",
+      "Edit(**/.env.example)"
     ],
     "ask": [
       "mcp__atlassian-mcp-server__addCommentToJiraIssue",
@@ -129,7 +131,8 @@
       "Bash(git branch --delete*)",
       "Bash(git reset --hard*)",
       "Read(./.env)",
-      "Read(./.env.*)",
+      "Read(./apps/medusa/.env)",
+      "Read(./apps/storefront/.env.local)",
       "mcp__claude_ai_Atlassian_Rovo__getCompassComponent",
       "mcp__claude_ai_Atlassian_Rovo__getCompassComponents",
       "mcp__claude_ai_Atlassian_Rovo__getCompassCustomFieldDefinitions",

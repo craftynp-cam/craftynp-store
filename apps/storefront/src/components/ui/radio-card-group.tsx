@@ -40,7 +40,7 @@ export function RadioCardGroup({
             key={option.value}
             value={option.value}
             isDisabled={option.isDisabled}
-            className="rounded-xl border border-border bg-surface p-4 data-[selected]:border-2 data-[selected]:border-primary data-[selected]:bg-surface-soft"
+            className="mt-0 rounded-xl border border-border bg-surface p-4 data-[selected]:border-2 data-[selected]:border-primary data-[selected]:bg-surface-soft"
           >
             <Radio.Content className="flex w-full items-center justify-between gap-4">
               <div className="flex items-center gap-3">

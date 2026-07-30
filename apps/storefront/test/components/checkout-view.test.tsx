@@ -72,6 +72,12 @@ const singleRateResponse = {
   ],
 };
 
+const taxQuoteResponse = {
+  taxAmount: 0.68,
+  currencyCode: "usd",
+  quoteToken: "tax-token.signature",
+};
+
 function mockFetchWithRatesAnd(addressResponse: {
   ok: boolean;
   status: number;
@@ -81,6 +87,12 @@ function mockFetchWithRatesAnd(addressResponse: {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(singleRateResponse),
+      });
+    }
+    if (url === "/checkout/tax") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(taxQuoteResponse),
       });
     }
     return Promise.resolve(addressResponse);
@@ -164,10 +176,8 @@ describe("CheckoutView", () => {
   });
 
   it("lets a guest complete the form with no account controls", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(singleRateResponse),
-    }) as unknown as typeof fetch;
+    const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     render(
       <CheckoutView
@@ -184,12 +194,20 @@ describe("CheckoutView", () => {
     await waitFor(() =>
       expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
     );
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/tax",
+          expect.anything(),
+        ),
+      { timeout: 2000 },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(
       screen.getByRole("button", { name: "Details saved" }),
     ).toBeInTheDocument();
-  });
+  }, 15000);
 
   it("shows a specific message for every required field left blank", () => {
     render(
@@ -476,10 +494,8 @@ describe("CheckoutView", () => {
   });
 
   it("submits as a real button described by the payment note, with no navigation", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(singleRateResponse),
-    }) as unknown as typeof fetch;
+    const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     render(
       <CheckoutView
@@ -500,12 +516,20 @@ describe("CheckoutView", () => {
     await waitFor(() =>
       expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
     );
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/tax",
+          expect.anything(),
+        ),
+      { timeout: 2000 },
+    );
     fireEvent.click(button);
 
     expect(
       screen.getByText(/Your details are saved on this device/),
     ).toBeInTheDocument();
-  });
+  }, 15000);
 
   it("posts the mapped address once when the save checkbox is checked", async () => {
     const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
@@ -522,6 +546,14 @@ describe("CheckoutView", () => {
     fillValidForm();
     await waitFor(() =>
       expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+    );
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/tax",
+          expect.anything(),
+        ),
+      { timeout: 2000 },
     );
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Save this address to my account" }),
@@ -545,13 +577,11 @@ describe("CheckoutView", () => {
       state: "IL",
       postalCode: "62704",
     });
-  });
+  }, 15000);
 
   it("shows a non-blocking notice and still completes when the save request fails", async () => {
-    global.fetch = mockFetchWithRatesAnd({
-      ok: false,
-      status: 502,
-    }) as unknown as typeof fetch;
+    const fetchMock = mockFetchWithRatesAnd({ ok: false, status: 502 });
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     render(
       <CheckoutView
@@ -564,6 +594,14 @@ describe("CheckoutView", () => {
     fillValidForm();
     await waitFor(() =>
       expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+    );
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/tax",
+          expect.anything(),
+        ),
+      { timeout: 2000 },
     );
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Save this address to my account" }),
@@ -578,7 +616,7 @@ describe("CheckoutView", () => {
         screen.getByText(/We couldn't save this address/),
       ).toBeInTheDocument(),
     );
-  });
+  }, 15000);
 
   it("fires no fetch when the save checkbox is left unchecked", async () => {
     const fetchMock = jest.fn();
@@ -621,6 +659,12 @@ describe("CheckoutView", () => {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve(rateResponse),
+          });
+        }
+        if (url === "/checkout/tax") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(taxQuoteResponse),
           });
         }
         return Promise.resolve({ ok: true, status: 201 });
@@ -752,6 +796,16 @@ describe("CheckoutView", () => {
         expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
       );
 
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/tax",
+          expect.anything(),
+        ),
+      );
+
       fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
       expect(
@@ -838,6 +892,307 @@ describe("CheckoutView", () => {
       });
       await waitFor(() =>
         expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+    });
+  });
+
+  describe("tax", () => {
+    function mockRatesAndTaxFetch(
+      taxResponse: { ok: boolean; status: number } = { ok: true, status: 200 },
+    ) {
+      return jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(singleRateResponse),
+          });
+        }
+        if (url === "/checkout/tax") {
+          if (!taxResponse.ok) return Promise.resolve(taxResponse);
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(taxQuoteResponse),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers({ legacyFakeTimers: false });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("fires no tax request until a shipping rate is chosen", async () => {
+      const fetchMock = jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          // Never resolves, so a shipping rate is never chosen.
+          return new Promise(() => {});
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      expect(fetchMock).not.toHaveBeenCalledWith(
+        "/checkout/tax",
+        expect.anything(),
+      );
+    });
+
+    it("makes one tax request after the shipping rate resolves", async () => {
+      const fetchMock = mockRatesAndTaxFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      const taxCalls = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/tax",
+      );
+      expect(taxCalls).toHaveLength(1);
+    });
+
+    it("shows the calculated tax in the order summary once resolved", async () => {
+      const fetchMock = mockRatesAndTaxFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
+    });
+
+    it("shows an error and blocks submission when Stripe Tax is unavailable", async () => {
+      const fetchMock = mockRatesAndTaxFetch({ ok: false, status: 502 });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "We couldn't calculate tax for your address right now.",
+          ),
+        ).toBeInTheDocument(),
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(
+        screen.queryByRole("button", { name: "Details saved" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText("Check 1 field below.")).toBeInTheDocument();
+    });
+
+    it("retries the tax call when Try again is clicked", async () => {
+      let shouldFail = true;
+      const fetchMock = jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(singleRateResponse),
+          });
+        }
+        if (url === "/checkout/tax") {
+          if (shouldFail) return Promise.resolve({ ok: false, status: 502 });
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(taxQuoteResponse),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Try again" }),
+        ).toBeInTheDocument(),
+      );
+
+      shouldFail = false;
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
+    });
+
+    it("does not fire a tax request against a stale quote token while the shipping rate is re-resolving for a changed address", async () => {
+      const secondRateResponse = {
+        rates: [
+          {
+            rateId: "se-2",
+            carrierName: "USPS",
+            serviceName: "USPS Ground Advantage",
+            serviceCode: "usps_ground_advantage",
+            amount: 5.16,
+            currencyCode: "usd",
+            deliveryDays: 2,
+            estimatedDeliveryDate: null,
+            quoteToken: "second-token.signature",
+          },
+        ],
+      };
+
+      let shippingCallCount = 0;
+      const pendingSecondCall: { resolve: (() => void) | null } = {
+        resolve: null,
+      };
+
+      const fetchMock = jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          shippingCallCount += 1;
+          if (shippingCallCount === 1) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve(singleRateResponse),
+            });
+          }
+          // The second call (for the changed address) hangs until released
+          // below, simulating a still-resolving shipping rate.
+          return new Promise((resolve) => {
+            pendingSecondCall.resolve = () =>
+              resolve({
+                ok: true,
+                json: () => Promise.resolve(secondRateResponse),
+              });
+          });
+        }
+        if (url === "/checkout/tax") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(taxQuoteResponse),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
+
+      const taxCallsBeforeEdit = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/tax",
+      ).length;
+
+      fireEvent.change(screen.getByLabelText("ZIP code"), {
+        target: { value: "60605" },
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      const taxCallsWhileShippingLoading = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/tax",
+      ).length;
+      expect(taxCallsWhileShippingLoading).toBe(taxCallsBeforeEdit);
+
+      pendingSecondCall.resolve?.();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      await waitFor(() =>
+        expect(
+          fetchMock.mock.calls.filter(([url]) => url === "/checkout/tax")
+            .length,
+        ).toBeGreaterThan(taxCallsBeforeEdit),
       );
     });
   });

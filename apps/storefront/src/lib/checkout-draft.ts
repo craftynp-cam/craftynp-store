@@ -24,6 +24,8 @@ const STRING_FIELDS = [
   "shippingRateLabel",
   "shippingRateCurrency",
   "shippingQuoteToken",
+  "taxCurrency",
+  "taxQuoteToken",
 ] as const satisfies readonly (keyof CheckoutDraft)[];
 
 const BOOLEAN_FIELDS = [
@@ -33,6 +35,7 @@ const BOOLEAN_FIELDS = [
 
 const NUMBER_FIELDS = [
   "shippingRateAmount",
+  "taxAmount",
 ] as const satisfies readonly (keyof CheckoutDraft)[];
 
 function parseDraft(raw: string | null): CheckoutDraft {

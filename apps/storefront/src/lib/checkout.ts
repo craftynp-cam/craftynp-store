@@ -28,6 +28,9 @@ export type CheckoutDraft = {
   shippingRateAmount: number;
   shippingRateCurrency: string;
   shippingQuoteToken: string;
+  taxAmount: number;
+  taxCurrency: string;
+  taxQuoteToken: string;
 };
 
 export type CheckoutTextField =
@@ -45,7 +48,8 @@ export type CheckoutTextField =
   | "billingState"
   | "billingPostalCode"
   | "billingCountryCode"
-  | "shippingRateId";
+  | "shippingRateId"
+  | "taxQuoteToken";
 
 export type CheckoutErrors = Partial<Record<CheckoutTextField, string>>;
 
@@ -74,6 +78,9 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   shippingRateAmount: 0,
   shippingRateCurrency: "",
   shippingQuoteToken: "",
+  taxAmount: 0,
+  taxCurrency: "",
+  taxQuoteToken: "",
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -146,6 +153,8 @@ export function validateCheckoutDraft(draft: CheckoutDraft): CheckoutErrors {
 
   if (isBlank(draft.shippingRateId)) {
     errors.shippingRateId = "Choose a delivery option.";
+  } else if (isBlank(draft.taxQuoteToken)) {
+    errors.taxQuoteToken = "We couldn't calculate tax for your address.";
   }
 
   return errors;
@@ -202,6 +211,7 @@ export function countryOptions(
 export type CheckoutTotals = {
   subtotal: number;
   shipping: number | null;
+  tax: number | null;
   total: number;
   currencyCode: string;
 };
@@ -213,11 +223,13 @@ export function checkoutTotals(
   const { amount, currencyCode } = cartSubtotal(cart);
   const shipping =
     draft && draft.shippingRateId !== "" ? draft.shippingRateAmount : null;
+  const tax = draft && draft.taxQuoteToken !== "" ? draft.taxAmount : null;
 
   return {
     subtotal: amount,
     shipping,
-    total: amount + (shipping ?? 0),
+    tax,
+    total: amount + (shipping ?? 0) + (tax ?? 0),
     currencyCode,
   };
 }
