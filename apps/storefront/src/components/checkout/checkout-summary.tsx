@@ -11,6 +11,11 @@ import {
   subscribeToCart,
 } from "@/lib/cart";
 import { checkoutTotals } from "@/lib/checkout";
+import {
+  readCheckoutDraft,
+  readServerCheckoutDraft,
+  subscribeToCheckoutDraft,
+} from "@/lib/checkout-draft";
 import { formatMoney } from "@/lib/money";
 
 import { CartCard } from "../cards";
@@ -21,8 +26,16 @@ export type CheckoutSummaryProps = {
 
 export function CheckoutSummary({ onEditCart }: CheckoutSummaryProps) {
   const cart = useSyncExternalStore(subscribeToCart, readCart, readServerCart);
+  const draft = useSyncExternalStore(
+    subscribeToCheckoutDraft,
+    readCheckoutDraft,
+    readServerCheckoutDraft,
+  );
   const count = cartLineCount(cart);
-  const { subtotal, total, currencyCode } = checkoutTotals(cart);
+  const { subtotal, shipping, total, currencyCode } = checkoutTotals(
+    cart,
+    draft,
+  );
 
   return (
     <div className="mt-8 flex flex-col rounded-xl border border-border bg-surface lg:mt-0 lg:sticky lg:top-[calc(var(--chrome-height)+1.5rem)] lg:max-h-[calc(100svh-var(--chrome-height)-3rem)] lg:w-[22rem] lg:shrink-0 lg:self-start lg:overflow-y-auto">
@@ -57,6 +70,14 @@ export function CheckoutSummary({ onEditCart }: CheckoutSummaryProps) {
         <div className="flex items-center justify-between text-foreground-muted">
           <span>Subtotal</span>
           <span>{formatMoney(subtotal, currencyCode)}</span>
+        </div>
+        <div className="flex items-center justify-between text-foreground-muted">
+          <span>Shipping</span>
+          <span>
+            {shipping == null
+              ? "Calculated above"
+              : formatMoney(shipping, currencyCode)}
+          </span>
         </div>
         <div className="flex items-center justify-between font-display text-xl text-foreground">
           <span>Total</span>

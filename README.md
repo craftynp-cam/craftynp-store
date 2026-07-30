@@ -179,6 +179,34 @@ first-time setup wants). There is no `--name` or `--role`. This must be run from
 `apps/medusa`; there is no root script for it, and the CLI resolves the project
 from the working directory. The database must already be migrated.
 
+#### Shipping rates (ShipStation)
+
+Live shipping rates at checkout (CNP-51) need a ShipStation V2 API sandbox
+key — a separate product from the ShipStation app, Free tier, its own
+sandbox at `https://api.shipstation.com/v2`. Set `SHIPSTATION_API_KEY` in
+`apps/medusa/.env`, then find your connected USPS carrier's id:
+
+```bash
+pnpm run list-carriers
+```
+
+Paste the printed `carrier_id` into `SHIPSTATION_USPS_CARRIER_ID`. Also
+regenerate `SHIPPING_QUOTE_SECRET` the same way as `JWT_SECRET`
+(`openssl rand -base64 32`), and fill in `SHIP_FROM_ADDRESS_1`, `SHIP_FROM_CITY`,
+`SHIP_FROM_STATE`, `SHIP_FROM_POSTAL_CODE`, and `SHIP_FROM_COUNTRY_CODE` —
+these are the real ship-from address, so never commit real values to a
+shared example file. `db:migrate` seeds a second, USD `United States` region
+from these values (`seed-us-region.ts`), plus a flat `Standard Shipping`
+option priced from `SHIPPING_OPTION_DEFAULT_AMOUNT`/`SHIPPING_OPTION_DEFAULT_LABEL`
+— that price is a Medusa catalogue entry for the future cart-based checkout
+(CNP-53), **not** a checkout-time fallback: if ShipStation is unreachable or a
+rate can't be calculated, checkout shows an error and blocks Continue rather
+than quoting a guessed price. Point `NEXT_PUBLIC_DEFAULT_REGION` at the new
+region (its country, `us`) so the storefront quotes in the same currency its
+shipping rates come back in — the seed's original EUR `Europe` region is not
+a sensible pairing with USPS rates. Do not point automated tests at the
+ShipStation sandbox: its 20 requests/minute ceiling causes sporadic failures.
+
 ### Running locally
 
 ```bash

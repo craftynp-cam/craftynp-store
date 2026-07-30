@@ -371,6 +371,9 @@ export default async function initial_data_seed({
             "Reimagine the feeling of a classic T-shirt. With our cotton T-shirts, everyday essentials no longer have to be ordinary.",
           handle: "t-shirt",
           weight: 400,
+          length: 30,
+          width: 25,
+          height: 3,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [
@@ -549,6 +552,9 @@ export default async function initial_data_seed({
             "Reimagine the feeling of a classic sweatshirt. With our cotton sweatshirt, everyday essentials no longer have to be ordinary.",
           handle: "sweatshirt",
           weight: 400,
+          length: 35,
+          width: 30,
+          height: 5,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [
@@ -645,6 +651,9 @@ export default async function initial_data_seed({
             "Reimagine the feeling of classic sweatpants. With our cotton sweatpants, everyday essentials no longer have to be ordinary.",
           handle: "sweatpants",
           weight: 400,
+          length: 35,
+          width: 30,
+          height: 5,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [
@@ -741,6 +750,9 @@ export default async function initial_data_seed({
             "Reimagine the feeling of classic shorts. With our cotton shorts, everyday essentials no longer have to be ordinary.",
           handle: "shorts",
           weight: 400,
+          length: 30,
+          width: 25,
+          height: 3,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [

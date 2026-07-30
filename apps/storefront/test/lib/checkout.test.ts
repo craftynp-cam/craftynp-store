@@ -22,6 +22,7 @@ function makeDraft(overrides: Partial<CheckoutDraft> = {}): CheckoutDraft {
     state: "IL",
     postalCode: "62704",
     countryCode: "us",
+    shippingRateId: "rate_standard",
     ...overrides,
   };
 }
@@ -46,6 +47,7 @@ describe("validateCheckoutDraft", () => {
       city: "Enter your city.",
       state: "Enter your state.",
       postalCode: "Enter your ZIP code.",
+      shippingRateId: "Choose a delivery option.",
     });
   });
 
@@ -119,6 +121,11 @@ describe("validateCheckoutDraft", () => {
 
   it("reports no errors for a fully valid draft", () => {
     expect(validateCheckoutDraft(makeDraft())).toEqual({});
+  });
+
+  it("requires a shipping rate to be chosen", () => {
+    const errors = validateCheckoutDraft(makeDraft({ shippingRateId: "" }));
+    expect(errors.shippingRateId).toBe("Choose a delivery option.");
   });
 
   it("skips billing validation while billingSameAsDelivery is true", () => {
@@ -289,7 +296,7 @@ describe("checkoutTotals", () => {
     return { lines: [], ...overrides };
   }
 
-  it("sets the total equal to the subtotal", () => {
+  it("has no shipping and total equal to subtotal with no draft", () => {
     const cart = makeCart({
       lines: [
         {
@@ -305,9 +312,81 @@ describe("checkoutTotals", () => {
 
     expect(checkoutTotals(cart)).toEqual({
       subtotal: 1.5,
+      shipping: null,
       total: 1.5,
       currencyCode: "usd",
     });
+  });
+
+  it("has no shipping when the draft has not chosen a rate", () => {
+    const cart = makeCart({
+      lines: [
+        {
+          id: "sticker",
+          href: "/products/sticker",
+          title: "Sticker",
+          unitPrice: 0.75,
+          currencyCode: "usd",
+          quantity: 2,
+        },
+      ],
+    });
+
+    const totals = checkoutTotals(cart, EMPTY_CHECKOUT_DRAFT);
+    expect(totals.shipping).toBeNull();
+    expect(totals.total).toBe(1.5);
+  });
+
+  it("sums the chosen shipping rate into the total", () => {
+    const cart = makeCart({
+      lines: [
+        {
+          id: "sticker",
+          href: "/products/sticker",
+          title: "Sticker",
+          unitPrice: 0.75,
+          currencyCode: "usd",
+          quantity: 2,
+        },
+      ],
+    });
+
+    const totals = checkoutTotals(cart, {
+      ...EMPTY_CHECKOUT_DRAFT,
+      shippingRateId: "rate_standard",
+      shippingRateAmount: 7.42,
+    });
+
+    expect(totals).toEqual({
+      subtotal: 1.5,
+      shipping: 7.42,
+      total: 8.92,
+      currencyCode: "usd",
+    });
+  });
+
+  it("still adds shipping for a large cart (no free-shipping threshold)", () => {
+    const cart = makeCart({
+      lines: [
+        {
+          id: "big-order",
+          href: "/products/big-order",
+          title: "Big order",
+          unitPrice: 500,
+          currencyCode: "usd",
+          quantity: 1,
+        },
+      ],
+    });
+
+    const totals = checkoutTotals(cart, {
+      ...EMPTY_CHECKOUT_DRAFT,
+      shippingRateId: "rate_standard",
+      shippingRateAmount: 7.42,
+    });
+
+    expect(totals.shipping).toBe(7.42);
+    expect(totals.total).toBe(507.42);
   });
 
   it("takes the currency code from the first line", () => {
@@ -330,6 +409,7 @@ describe("checkoutTotals", () => {
   it("returns zero for an empty cart", () => {
     expect(checkoutTotals(makeCart())).toEqual({
       subtotal: 0,
+      shipping: null,
       total: 0,
       currencyCode: "usd",
     });

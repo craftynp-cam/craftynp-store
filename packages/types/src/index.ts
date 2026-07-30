@@ -14,6 +14,13 @@ export {
   siteContentUpdateSchema,
   validateSiteContentValue,
 } from "./site-content.js";
+export {
+  shippingRateDestinationSchema,
+  shippingRateItemSchema,
+  shippingRateRequestSchema,
+  shippingRateSchema,
+  shippingRatesResponseSchema,
+} from "./shipping-rates.js";
 
 export type {
   ArtworkReference,
@@ -30,3 +37,10 @@ export type {
   SiteContentKey,
   SiteContentUpdate,
 } from "./site-content.js";
+export type {
+  ShippingRate,
+  ShippingRateDestination,
+  ShippingRateItem,
+  ShippingRateRequest,
+  ShippingRatesResponse,
+} from "./shipping-rates.js";

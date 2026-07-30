@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
   const addressErrors = { ...errors };
   delete addressErrors.email;
   delete addressErrors.phone;
+  delete addressErrors.shippingRateId;
 
   if (Object.keys(addressErrors).length > 0) {
     return NextResponse.json(

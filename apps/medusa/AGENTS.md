@@ -260,6 +260,138 @@ application client (`GOOGLE_ADMIN_CLIENT_ID`/`_CLIENT_SECRET`, redirect URI
 Verification enforcement. Both are prerequisites before the first Google
 sign-in will work at all.
 
+## Shipping rates (CNP-51)
+
+Live USPS rates come from ShipStation's V2 API (a separate product from the
+ShipStation app — Free tier, its own pricing, `api.shipstation.com/v2`), via a
+custom store route rather than a Medusa fulfillment provider.
+
+**Why a store route, not `AbstractFulfillmentProviderService.calculatePrice`.**
+That path is only reachable through `listShippingOptionsForCartWorkflow` /
+`calculateShippingOptionsPricesWorkflow`, both of which need a `cart_id` and
+read `cart.shipping_address`/`cart.items`. The storefront has no Medusa cart
+today (see its own AGENTS.md) — creating one is CNP-53. So
+`POST /store/shipping-rates` (`src/api/store/shipping-rates/`) takes
+`{ destination, items: [{variantId, quantity}] }` directly, resolves every
+variant's weight/dimensions server-side via `query.graph` (never trusting a
+client-supplied weight), and returns normalized rates. All ShipStation logic
+lives in `src/modules/shipstation/` — `lib.ts` (pure: packing, request
+building, response normalization, cache key, rate-limit reducers, log tags),
+`service.ts` (the module service: cache read, rate-limited `fetch`, retry),
+`limiter.ts` (the global coordinator below), `index.ts`
+(`Module(SHIPSTATION_MODULE, …)`, registered in `medusa-config.ts`). A future
+CNP-53 fulfillment provider calls `ShipStationModuleService.getUspsRates`
+verbatim from its own `calculatePrice`, adapting a cart into the same two
+arguments — nothing here gets deleted when that lands.
+
+**Units: grams and centimetres, everywhere.** Medusa itself enforces no units
+on `weight`/`length`/`width`/`height` — the existing seeded `weight: 400` was
+already only _conventionally_ grams. `SHIPSTATION_WEIGHT_UNIT`/
+`SHIPSTATION_DIMENSION_UNIT` in `.env` must agree with what every product's
+dimensions are actually stored in, or a rate estimate silently quotes the
+wrong parcel size with no error from either side.
+
+**The global rate limiter (`limiter.ts`) is a token bucket plus one shared
+"blocked" promise, not a per-request retry.** AC10 exists because ShipStation
+warns that per-request retry logic causes many concurrent 429s to all retry at
+the same instant and re-trigger the limit; `blockFor(ms)` installs at most one
+timer that every waiting `acquire()` call awaits together, then lets the
+bucket re-stagger them. State lives at **file module scope**, not on the
+service instance, so DI lifetime can't hand out one bucket per request. This
+is per-process — correct for one Medusa instance, wrong the moment CNP-16
+scales horizontally. `REDIS_URL` is already provisioned but unused (the same
+gap the Auth0 `state` cache above notes); the Redis swap sits behind the same
+`acquire`/`blockFor` interface.
+
+**Caching is two layers doing different jobs.** The backend cache
+(`Modules.CACHE`) is keyed on destination + parcel weight/dimensions
+(`rateCacheKey` in `lib.ts`), TTL from `SHIPSTATION_RATE_CACHE_TTL_SECONDS`,
+and is shared across shoppers — rates aren't personal, and this is what
+actually protects the sandbox's 20 req/min ceiling. A failed call is **never**
+cached — only a genuine, priced response is. The storefront also keeps its
+own `sessionStorage`
+cache (`apps/storefront/src/lib/shipping-rates-cache.ts`) — that's where
+AC7's "for the checkout session" and back-navigation actually live, since the
+backend cache still costs a round trip and a loading flash. Both are needed;
+neither is redundant with the other.
+
+**The signed quote token (`src/lib/shipping-quote.ts`) is AC9's reusable
+piece.** Every rate returned to the storefront carries a `quoteToken` signing
+the rate id, amount, currency, service/carrier code, a cart signature (sha256
+over sorted `variantId:quantity` pairs plus destination), and a 30-minute
+expiry, under `SHIPPING_QUOTE_SECRET` — a dedicated secret, not `JWT_SECRET`,
+since the two have different blast radii. `verifyShippingQuote(token, secret,
+{ cartSignature })` is what CNP-53 must call at order placement. **Important:**
+ShipStation's `/v2/rates/estimate` response is not purchasable and excludes
+fuel/residential surcharges — its `rate_id` cannot simply be looked up again
+at placement. AC9 has to mean _re-estimate and compare the fresh amount
+against the signed one within a tolerance_, not replay the `rate_id`.
+
+**AC6 is deliberately overridden: there is no flat-rate fallback.** The
+ticket's own text ("falls back to a configured flat rate rather than blocking
+checkout") was superseded by an explicit product decision — a wrong shipping
+charge is worse than a shopper hitting Retry, so `POST /store/shipping-rates`
+returns `502 { error: "shipping_unavailable", reason }` on a missing-dimension
+parcel or any `ShipStationRateError`, and the storefront shows a real error
+with a Retry button and **no price**, blocking the Continue button (there is
+no rate for `validateCheckoutDraft`'s `shippingRateId` check to accept). There
+is no `buildFallbackRate`, no `isFallback` field anywhere in the contract
+(`@craftynp/types`'s `shippingRateSchema` doesn't carry one), and no
+`SHIPPING_FALLBACK_*` env var — `SHIPPING_OPTION_DEFAULT_AMOUNT`/`_LABEL`
+below is a different thing entirely (see `seed-us-region.ts`). If this
+tradeoff is ever revisited, the pieces to resurrect are in the git history of
+this module, not something to rebuild from scratch.
+
+**AC11's alerting contract is two literal log-tag strings**, asserted by
+`lib.test.ts` so they can't drift silently: `[shipstation:rate-limit]` on
+every 429/backoff, `[shipstation:unavailable]` whenever a rate call fails and
+checkout is blocked (missing dimensions, timeout, empty response, or
+exhausted retries) — grep for either to build an alert.
+
+**AC5 (a product cannot publish without shipping weight/dimensions) is a
+workflow hook, not a route middleware** —
+`src/workflows/hooks/validate-product-shipping-dimensions.ts` registers on
+both `createProductsWorkflow.hooks.productsCreated` and
+`updateProductsWorkflow.hooks.productsUpdated`, throwing (and rolling back the
+write) via `assertPublishableProducts`
+(`src/lib/product-shipping-dimensions.ts`) whenever a `published` product is
+missing weight, length, width, or height. A route middleware can't do this:
+`POST /admin/products/:id` with `{status: "published"}` carries no dimensions
+in its body at all, and products also arrive via `/admin/products/batch`, CSV
+import, and custom workflows — all of which bypass HTTP entirely. The hook
+covers every path from one file. A rejected publish still emits a
+`product.updated` event before the hook's compensation runs; harmless today
+since nothing subscribes to it.
+
+**The seeded catalogue needed real dimensions to keep working once the hook
+landed.** `initial-data-seed.ts` now sets `length`/`width`/`height` inline on
+each of its four products — a rare direct edit to that file, justified because
+the hook would otherwise reject the seed's own `PUBLISHED` products on the
+very first migration. `seed-product-shipping-dimensions.ts` is a second,
+idempotent migration script that backfills the same values onto a database
+that ran the seed before this change; it deliberately sorts after
+`initial-data-seed.ts` alphabetically (migration scripts run in filename
+order), the same reason `seed-site-content.ts` does.
+
+**`seed-us-region.ts`** adds a second, USD `United States` region (countries
+`["us"]`), a `US Workshop` stock location whose address comes entirely from
+`SHIP_FROM_*` env (never hand-typed into a migration script, so the client's
+real address never lands in git), a US service zone on `manual_manual`, and
+one flat `Standard Shipping` option priced from `SHIPPING_OPTION_DEFAULT_AMOUNT`/
+`_LABEL` so CNP-53 has something to attach a cart to. This is a **Medusa
+catalogue price, not a checkout-time fallback** — nothing in the live
+checkout flow reads it; a failed live-rate call blocks checkout instead (see
+AC6 above). It bails out if a region named "United States" already exists, so
+re-running `db:migrate` is safe.
+
+`pnpm run list-carriers` (`src/scripts/list-shipstation-carriers.ts`)
+prints every connected carrier's `carrier_id` from `GET /v2/carriers` — use it
+to find `SHIPSTATION_USPS_CARRIER_ID` rather than curling by hand.
+
+**Do not point automated tests at the ShipStation sandbox** — its 20 req/min
+ceiling causes sporadic, confusing failures under CI. Every test here mocks
+`global.fetch` at the `ShipStationModuleService` boundary instead.
+
 ## React 18 — do not "fix" it
 
 The admin dashboard runs **React 18**, and this app declares `react`,
@@ -297,16 +429,29 @@ hand.
 Postgres is on host port **5433**, Redis on 6379 — both from the root
 `docker-compose.yml`, started by `pnpm run services:up`.
 
+For [Shipping rates](#shipping-rates-cnp-51): `SHIPSTATION_API_KEY`,
+`SHIPSTATION_BASE_URL`, `SHIPSTATION_USPS_CARRIER_ID` (found via
+`pnpm run list-carriers`), `SHIPSTATION_RATE_LIMIT_PER_MINUTE`,
+`SHIPSTATION_TIMEOUT_MS`, `SHIPSTATION_MAX_RETRIES`, `SHIPSTATION_WEIGHT_UNIT`,
+`SHIPSTATION_DIMENSION_UNIT`, `SHIPSTATION_RATE_CACHE_TTL_SECONDS`,
+`SHIPPING_OPTION_DEFAULT_AMOUNT`/`_LABEL` (the seeded Medusa shipping option's
+price — not a checkout-time fallback, see above), `SHIPPING_QUOTE_SECRET`
+(`replace-me-…` placeholder, regenerate the same way as `JWT_SECRET`), and
+`SHIP_FROM_ADDRESS_1`/`_CITY`/`_STATE`/`_POSTAL_CODE`/`_COUNTRY_CODE` (the
+ship-from address — real values, never committed).
+
 ## Database
 
 Run both from the repo root:
 
 - `pnpm run db:migrate` — runs migrations, which includes every migration
-  script under `src/migration-scripts/` — the initial data seed and
-  `seed-site-content.ts` (CNP-23) both run this way. Add a new seed as a new
-  file here, not an edit to `initial-data-seed.ts`: the ledger tracks each
-  script independently, so a new file still runs against a database that has
-  already migrated, while editing an already-run script does nothing. Its
+  script under `src/migration-scripts/` — the initial data seed,
+  `seed-site-content.ts` (CNP-23), `seed-us-region.ts`, and
+  `seed-product-shipping-dimensions.ts` (both CNP-51, see
+  [Shipping rates](#shipping-rates-cnp-51)) all run this way. Add a new seed
+  as a new file here, not an edit to `initial-data-seed.ts`: the ledger tracks
+  each script independently, so a new file still runs against a database that
+  has already migrated, while editing an already-run script does nothing. Its
   output prints the `pk_…` publishable key the storefront needs in its
   `.env.local`.
 - `pnpm run db:seed` — **only** for re-seeding a database you have deliberately
@@ -329,7 +474,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **36** of the repo's 746 tests. The `siteContent`
+This app currently holds **116** of the repo's 898 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including

@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 import { CheckoutView } from "@/components";
 import type { SavedAddress } from "@/lib/saved-address";
@@ -50,6 +56,37 @@ const otherAddress: SavedAddress = {
   isDefaultShipping: false,
 };
 
+const singleRateResponse = {
+  rates: [
+    {
+      rateId: "se-1",
+      carrierName: "USPS",
+      serviceName: "USPS Ground Advantage",
+      serviceCode: "usps_ground_advantage",
+      amount: 7.42,
+      currencyCode: "usd",
+      deliveryDays: 4,
+      estimatedDeliveryDate: null,
+      quoteToken: "token.signature",
+    },
+  ],
+};
+
+function mockFetchWithRatesAnd(addressResponse: {
+  ok: boolean;
+  status: number;
+}) {
+  return jest.fn().mockImplementation((url: string) => {
+    if (url === "/checkout/shipping-rates") {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(singleRateResponse),
+      });
+    }
+    return Promise.resolve(addressResponse);
+  });
+}
+
 function fillValidForm() {
   fireEvent.change(screen.getByLabelText("First name"), {
     target: { value: "Jamie" },
@@ -80,6 +117,7 @@ function fillValidForm() {
 describe("CheckoutView", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     clearCart();
     clearCheckoutDraft();
     setCartDrawerOpen(false);
@@ -102,7 +140,9 @@ describe("CheckoutView", () => {
     expect(
       screen.getByRole("region", { name: /Delivery address/ }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Shipping method/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: /Shipping method/ }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("region", { name: /Payment/ }),
     ).not.toBeInTheDocument();
@@ -123,7 +163,12 @@ describe("CheckoutView", () => {
     ).toBeInTheDocument();
   });
 
-  it("lets a guest complete the form with no account controls", () => {
+  it("lets a guest complete the form with no account controls", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(singleRateResponse),
+    }) as unknown as typeof fetch;
+
     render(
       <CheckoutView
         customer={null}
@@ -136,6 +181,9 @@ describe("CheckoutView", () => {
     expect(screen.queryByText("Create an account")).not.toBeInTheDocument();
 
     fillValidForm();
+    await waitFor(() =>
+      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(
@@ -166,7 +214,7 @@ describe("CheckoutView", () => {
     expect(screen.getByText("Enter your ZIP code.")).toBeInTheDocument();
 
     expect(screen.getByLabelText("First name")).toHaveFocus();
-    expect(screen.getByText("Check 8 fields below.")).toBeInTheDocument();
+    expect(screen.getByText("Check 9 fields below.")).toBeInTheDocument();
   });
 
   it("clears a field's message once it is filled and resubmitted", () => {
@@ -271,7 +319,7 @@ describe("CheckoutView", () => {
     ).not.toBeInTheDocument();
     // Only the 8 still-blank delivery/contact fields should count — the 4
     // billing errors must not survive the re-check as a phantom tally.
-    expect(screen.getByText("Check 8 fields below.")).toBeInTheDocument();
+    expect(screen.getByText("Check 9 fields below.")).toBeInTheDocument();
   });
 
   it("preselects the customer's default saved address on load, with no click required", () => {
@@ -427,7 +475,12 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("Email")).toHaveValue("typed@example.com");
   });
 
-  it("submits as a real button described by the payment note, with no navigation", () => {
+  it("submits as a real button described by the payment note, with no navigation", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(singleRateResponse),
+    }) as unknown as typeof fetch;
+
     render(
       <CheckoutView
         customer={null}
@@ -444,6 +497,9 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
+    await waitFor(() =>
+      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+    );
     fireEvent.click(button);
 
     expect(
@@ -452,7 +508,7 @@ describe("CheckoutView", () => {
   });
 
   it("posts the mapped address once when the save checkbox is checked", async () => {
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 201 });
+    const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
     global.fetch = fetchMock as unknown as typeof fetch;
 
     render(
@@ -464,15 +520,24 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
+    await waitFor(() =>
+      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+    );
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Save this address to my account" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("/checkout/addresses");
-    expect(JSON.parse(init!.body as string)).toMatchObject({
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/checkout/addresses",
+        expect.anything(),
+      ),
+    );
+    const addressCall = fetchMock.mock.calls.find(
+      ([url]) => url === "/checkout/addresses",
+    )!;
+    expect(JSON.parse(addressCall[1]!.body as string)).toMatchObject({
       firstName: "Jamie",
       lastName: "Rivera",
       address1: "123 Maple Street",
@@ -483,9 +548,10 @@ describe("CheckoutView", () => {
   });
 
   it("shows a non-blocking notice and still completes when the save request fails", async () => {
-    global.fetch = jest
-      .fn()
-      .mockResolvedValue({ ok: false, status: 502 }) as unknown as typeof fetch;
+    global.fetch = mockFetchWithRatesAnd({
+      ok: false,
+      status: 502,
+    }) as unknown as typeof fetch;
 
     render(
       <CheckoutView
@@ -496,6 +562,9 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
+    await waitFor(() =>
+      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+    );
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Save this address to my account" }),
     );
@@ -527,5 +596,249 @@ describe("CheckoutView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  describe("shipping rates", () => {
+    const rateResponse = {
+      rates: [
+        {
+          rateId: "se-1",
+          carrierName: "USPS",
+          serviceName: "USPS Ground Advantage",
+          serviceCode: "usps_ground_advantage",
+          amount: 7.42,
+          currencyCode: "usd",
+          deliveryDays: 4,
+          estimatedDeliveryDate: null,
+          quoteToken: "token.signature",
+        },
+      ],
+    };
+
+    function mockRatesFetch() {
+      return jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(rateResponse),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers({ legacyFakeTimers: false });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("fires no request while the address is incomplete", async () => {
+      const fetchMock = mockRatesFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      expect(fetchMock).not.toHaveBeenCalledWith(
+        "/checkout/shipping-rates",
+        expect.anything(),
+      );
+    });
+
+    it("makes one request after the debounce once the address is complete", async () => {
+      const fetchMock = mockRatesFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      const ratesCalls = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/shipping-rates",
+      );
+      expect(ratesCalls).toHaveLength(1);
+    });
+
+    it("does not re-fetch for an unchanged destination and cart", async () => {
+      const fetchMock = mockRatesFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      fireEvent.change(screen.getByLabelText("Last name"), {
+        target: { value: "Rivera-Smith" },
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      const ratesCalls = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/shipping-rates",
+      );
+      expect(ratesCalls).toHaveLength(1);
+    });
+
+    it("blocks submission while shipping rates are still loading, with no rate chosen", async () => {
+      const fetchMock = mockRatesFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(screen.getByText("Check 1 field below.")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Details saved" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("auto-selects the returned rate and lets submission complete once it loads", async () => {
+      const fetchMock = mockRatesFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(
+        screen.getByRole("button", { name: "Details saved" }),
+      ).toBeInTheDocument();
+    });
+
+    it("shows an error and blocks submission when ShipStation is unavailable — no flat-rate fallback", async () => {
+      const fetchMock = jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          return Promise.resolve({ ok: false, status: 502 });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "We couldn't get a shipping rate for your address right now.",
+          ),
+        ).toBeInTheDocument(),
+      );
+
+      expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(
+        screen.queryByRole("button", { name: "Details saved" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText("Check 1 field below.")).toBeInTheDocument();
+    });
+
+    it("retries the rate call when Try again is clicked", async () => {
+      let shouldFail = true;
+      const fetchMock = jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          if (shouldFail) return Promise.resolve({ ok: false, status: 502 });
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(rateResponse),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Try again" }),
+        ).toBeInTheDocument(),
+      );
+
+      shouldFail = false;
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+    });
   });
 });

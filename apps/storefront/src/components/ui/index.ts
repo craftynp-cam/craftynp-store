@@ -10,6 +10,7 @@ export {
 } from "./drawer";
 export { ProductListItem } from "./product-list-item";
 export { QuantityStepper } from "./quantity-stepper";
+export { RadioCardGroup, type RadioCardOption } from "./radio-card-group";
 export { RadioGroup, type RadioOption } from "./radio-group";
 export { Select, type SelectOption } from "./select";
 export { TextInput, type FieldProps } from "./text-input";
