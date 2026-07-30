@@ -9,6 +9,7 @@ import {
   type CheckoutDraft,
   type CheckoutErrors,
   type CountryOption,
+  EMPTY_CHECKOUT_DRAFT,
   prefillCheckoutDraft,
   validateCheckoutDraft,
 } from "@/lib/checkout";
@@ -165,7 +166,15 @@ export function CheckoutView({
                       countryCode: selected.countryCode,
                     });
                   } else {
-                    patchCheckoutDraft({ savedAddressId: "" });
+                    patchCheckoutDraft({
+                      savedAddressId: "",
+                      address1: EMPTY_CHECKOUT_DRAFT.address1,
+                      address2: EMPTY_CHECKOUT_DRAFT.address2,
+                      city: EMPTY_CHECKOUT_DRAFT.city,
+                      state: EMPTY_CHECKOUT_DRAFT.state,
+                      postalCode: EMPTY_CHECKOUT_DRAFT.postalCode,
+                      countryCode: EMPTY_CHECKOUT_DRAFT.countryCode,
+                    });
                   }
                 }}
               />

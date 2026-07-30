@@ -248,6 +248,32 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("ZIP code")).toHaveValue("62704");
   });
 
+  it("clears the address fields when 'Enter a new address' is selected", () => {
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[savedAddress]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("radio", {
+        name: "123 Maple Street, Springfield, IL 62704",
+      }),
+    );
+    expect(screen.getByLabelText("Street address")).toHaveValue(
+      "123 Maple Street",
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "Enter a new address" }));
+
+    expect(screen.getByLabelText("Street address")).toHaveValue("");
+    expect(screen.getByLabelText("City")).toHaveValue("");
+    expect(screen.getByLabelText("State")).toHaveValue("");
+    expect(screen.getByLabelText("ZIP code")).toHaveValue("");
+  });
+
   it("hides the saved-address picker and save checkbox for a guest even when addresses are passed", () => {
     render(
       <CheckoutView
