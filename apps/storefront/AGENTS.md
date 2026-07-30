@@ -551,5 +551,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **662** of the repo's 729 tests. A smaller number
+The storefront currently holds **663** of the repo's 730 tests. A smaller number
 after your change means something was dropped.

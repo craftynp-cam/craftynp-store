@@ -225,6 +225,40 @@ describe("CheckoutView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("drops stale billing error messages once billing is marked same as delivery again", () => {
+    render(
+      <CheckoutView
+        customer={null}
+        savedAddresses={[]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Billing address is the same as delivery",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(
+      screen.getByText("Enter the billing street address."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Billing address is the same as delivery",
+      }),
+    );
+
+    expect(screen.queryByLabelText("Billing Street address")).toBeNull();
+    expect(
+      screen.queryByText("Enter the billing street address."),
+    ).not.toBeInTheDocument();
+    // Only the 8 still-blank delivery/contact fields should count — the 4
+    // billing errors must not survive the re-check as a phantom tally.
+    expect(screen.getByText("Check 8 fields below.")).toBeInTheDocument();
+  });
+
   it("renders the saved-address picker for a customer with addresses and fills the fields on selection", () => {
     render(
       <CheckoutView

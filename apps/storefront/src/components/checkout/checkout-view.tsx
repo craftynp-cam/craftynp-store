@@ -64,6 +64,20 @@ export function CheckoutView({
 
   function handleChange(patch: Partial<CheckoutDraft>) {
     patchCheckoutDraft(patch);
+
+    if (patch.billingSameAsDelivery === true) {
+      setErrors((current) => {
+        const {
+          billingAddress1: _billingAddress1,
+          billingCity: _billingCity,
+          billingState: _billingState,
+          billingPostalCode: _billingPostalCode,
+          billingCountryCode: _billingCountryCode,
+          ...rest
+        } = current;
+        return rest;
+      });
+    }
   }
 
   async function saveAddressIfRequested(current: CheckoutDraft) {
