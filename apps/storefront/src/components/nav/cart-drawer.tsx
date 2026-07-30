@@ -102,6 +102,7 @@ export function CartDrawer() {
               ) : (
                 <Link
                   href={checkoutHref()}
+                  onClick={close}
                   className={`${ctaClassName} bg-accent text-on-accent hover:bg-accent/90`}
                 >
                   Checkout
