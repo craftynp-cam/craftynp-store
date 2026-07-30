@@ -46,6 +46,20 @@ module.exports = defineConfig({
       },
     },
     {
+      resolve: "./src/modules/stripe-tax",
+      dependencies: [Modules.CACHE],
+      options: {
+        secretKey: process.env.STRIPE_SECRET_KEY,
+        defaultTaxCode: process.env.STRIPE_TAX_DEFAULT_TAX_CODE,
+        shippingTaxCode: process.env.STRIPE_TAX_SHIPPING_TAX_CODE,
+        timeoutMs: Number(process.env.STRIPE_TAX_TIMEOUT_MS ?? 5000),
+        maxRetries: Number(process.env.STRIPE_TAX_MAX_RETRIES ?? 2),
+        cacheTtlSeconds: Number(
+          process.env.STRIPE_TAX_CACHE_TTL_SECONDS ?? 900,
+        ),
+      },
+    },
+    {
       resolve: "@medusajs/medusa/file",
       options: {
         providers: [

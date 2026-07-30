@@ -392,6 +392,89 @@ to find `SHIPSTATION_USPS_CARRIER_ID` rather than curling by hand.
 ceiling causes sporadic, confusing failures under CI. Every test here mocks
 `global.fetch` at the `ShipStationModuleService` boundary instead.
 
+## Sales tax (CNP-52)
+
+Sales tax is calculated by Stripe Tax, via a custom store route rather than a
+Medusa tax provider — the same reasoning as [Shipping rates](#shipping-rates-cnp-51),
+and for the same underlying cause: the storefront has no Medusa cart yet, and a
+tax provider is only reachable through cart-based workflows. `POST /store/tax-quote`
+(`src/api/store/tax-quote/`) takes `{ destination, items, shippingQuoteToken }`
+directly. `src/modules/stripe-tax/` holds the Stripe Tax logic — `lib.ts` (pure:
+unit conversion, calculation-params building, response normalization, cache key,
+the log tag), `service.ts` (the module service: cache read, `stripe.tax.calculations.create`,
+cache write on success only), `index.ts` (`Module(STRIPE_TAX_MODULE, …)`,
+registered in `medusa-config.ts`).
+
+**This is the one place the official `stripe` npm package is used, not raw
+`fetch`.** ShipStation's API is plain JSON and cheap to hand-roll; Stripe's is
+form-encoded with bracket notation for nested arrays (`line_items[0][amount]`),
+which is genuinely error-prone by hand, and CNP-53 will need the same client for
+PaymentIntents. The SDK's own `timeout`/`maxNetworkRetries` are configured from
+options — there is deliberately no ShipStation-style token-bucket limiter here;
+Stripe's test-mode rate ceiling is orders of magnitude higher than ShipStation's
+sandbox, and the SDK already backs off on its own.
+
+**Decimal dollars everywhere except inside this module.** `@craftynp/types`'
+`taxQuoteResponseSchema` and every other amount in this codebase (`ShippingRate.amount`,
+`formatMoney`) are decimal major units; Stripe's Tax API is integer minor units.
+`toMinorUnits`/`fromMinorUnits` in `stripe-tax/lib.ts` are the only crossing
+points, and both are covered directly for rounding drift — nothing outside this
+module ever touches cents.
+
+**A state with no obligation is a successful `$0.00` calculation, not an
+error.** Stripe still returns a valid `Calculation` object when there's no tax
+registration for the shopper's state; `normalizeCalculation` treats
+`tax_amount_exclusive: 0` the same as any other amount. This is the opposite of
+ShipStation's `"empty"` reason (a genuinely failed rate call) — do not conflate
+the two when touching either module.
+
+**Tax depends on the selected shipping rate, not only the address**, since
+AC1 requires shipping to be taxed per-state. The route therefore takes a
+`shippingQuoteToken` and verifies it with `verifyShippingQuote` from
+`src/lib/shipping-quote.ts` before calling Stripe — direct reuse of CNP-51's
+work, so the shipping figure feeding the tax calculation is already
+tamper-evident rather than trusted from the client.
+
+**The signed tax quote (`src/lib/tax-quote.ts`) is this story's own reusable
+piece**, the same shape as `shipping-quote.ts`: a calculation id, tax amount,
+currency, and a `taxSignature` (sha256 over destination + shipping amount +
+sorted `variantId:quantity` pairs — more than the shipping quote's cart
+signature covers, since the tax answer depends on the full address and the
+shipping cost, not just postal code and country), under `TAX_QUOTE_SECRET`
+with a 30-minute expiry. `verifyTaxQuote(token, secret, { taxSignature })` is
+what CNP-53 must call at order placement, alongside `verifyShippingQuote`, and
+then call `stripe.tax.transactions.createFromCalculation` against the signed
+`calculationId` so the sale is filable in Stripe's own tax reports — recording
+that transaction is CNP-53's job, not this one's.
+
+**Variant pricing is resolved server-side, in a pattern new to this app.**
+Nothing in `apps/medusa` previously queried `calculated_price` — that
+resolution lived only in the storefront's own SDK calls. `POST /store/tax-quote`
+introduces it here for the first time: `query.graph` on the `variant` entity
+with `context: { region_id, currency_code }`, after resolving a region from
+`destination.countryCode` against every seeded region's `countries.iso_2` (the
+same match-then-fall-back-to-first shape as the storefront's own
+`selectDefaultRegion`, duplicated locally rather than shared, since one is
+Node/Medusa and the other is Next/SDK). The request body still carries only
+`{ variantId, quantity }` — the client never gets to say what anything costs.
+
+**AC11's alerting contract is one literal log-tag string**, mirroring
+ShipStation's pair: `[stripe-tax:unavailable]`, on every failed tax
+calculation, an unresolved region, or a variant with no price — grep for it to
+build an alert alongside the ShipStation tags.
+
+**Stripe Tax nexus/registration per state is a Stripe dashboard setting, not
+code** — same category as the Auth0/Google Workspace tenant settings CNP-56/72
+already flag as having no in-repo representation. A state you haven't
+registered in returns `$0.00` tax (see above), not an error, so there is
+nothing in this repo to configure per state.
+
+**Never point automated tests at the Stripe sandbox** — same reasoning as the
+ShipStation sandbox note above. `stripe-tax/service.test.ts` spies on the
+Stripe client's `tax.calculations.create` method directly (constructing a real
+`Stripe` client with a fake key is safe — it performs no I/O until a method is
+called), rather than mocking the whole `stripe` module.
+
 ## React 18 — do not "fix" it
 
 The admin dashboard runs **React 18**, and this app declares `react`,
@@ -439,6 +522,14 @@ price — not a checkout-time fallback, see above), `SHIPPING_QUOTE_SECRET`
 (`replace-me-…` placeholder, regenerate the same way as `JWT_SECRET`), and
 `SHIP_FROM_ADDRESS_1`/`_CITY`/`_STATE`/`_POSTAL_CODE`/`_COUNTRY_CODE` (the
 ship-from address — real values, never committed).
+
+For [Sales tax](#sales-tax-cnp-52): `STRIPE_SECRET_KEY` (sandbox/test mode
+locally — get one from the Stripe dashboard, and enable Stripe Tax with an
+origin address and at least one state registration there too, since none of
+that is scriptable), `STRIPE_TAX_DEFAULT_TAX_CODE`, `STRIPE_TAX_SHIPPING_TAX_CODE`,
+`STRIPE_TAX_TIMEOUT_MS`, `STRIPE_TAX_MAX_RETRIES`, `STRIPE_TAX_CACHE_TTL_SECONDS`,
+and `TAX_QUOTE_SECRET` (`replace-me-…` placeholder, regenerate the same way as
+`JWT_SECRET` — do not reuse `SHIPPING_QUOTE_SECRET` or `JWT_SECRET` here).
 
 ## Database
 
