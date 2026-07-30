@@ -55,7 +55,10 @@ describe("checkout draft", () => {
 
     window.localStorage.setItem(
       CHECKOUT_STORAGE_KEY,
-      JSON.stringify({ ...EMPTY_CHECKOUT_DRAFT, email: "external@example.com" }),
+      JSON.stringify({
+        ...EMPTY_CHECKOUT_DRAFT,
+        email: "external@example.com",
+      }),
     );
     window.dispatchEvent(new Event("storage"));
 
@@ -117,7 +120,9 @@ describe("checkout draft", () => {
         throw new Error("quota exceeded");
       });
 
-    expect(() => patchCheckoutDraft({ email: "jamie@example.com" })).not.toThrow();
+    expect(() =>
+      patchCheckoutDraft({ email: "jamie@example.com" }),
+    ).not.toThrow();
 
     setItem.mockRestore();
   });

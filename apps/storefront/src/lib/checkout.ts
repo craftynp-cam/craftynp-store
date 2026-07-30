@@ -48,18 +48,6 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   saveAddress: false,
 };
 
-export const CHECKOUT_FIELD_ORDER: readonly CheckoutTextField[] = [
-  "firstName",
-  "lastName",
-  "email",
-  "phone",
-  "address1",
-  "city",
-  "state",
-  "postalCode",
-  "countryCode",
-];
-
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const US_ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
 
@@ -133,7 +121,9 @@ export function countryOptions(
   const countries = region?.countries ?? [];
   const options = countries
     .filter(
-      (country): country is {
+      (
+        country,
+      ): country is {
         iso_2: string;
         display_name?: string | null;
         name?: string | null;
@@ -141,7 +131,8 @@ export function countryOptions(
     )
     .map((country) => ({
       id: country.iso_2.toLowerCase(),
-      label: country.display_name ?? country.name ?? country.iso_2.toUpperCase(),
+      label:
+        country.display_name ?? country.name ?? country.iso_2.toUpperCase(),
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 

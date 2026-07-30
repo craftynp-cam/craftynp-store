@@ -67,7 +67,9 @@ describe("validateCheckoutDraft", () => {
 
   it("gives a different message for a malformed email than a blank one", () => {
     const blank = validateCheckoutDraft(makeDraft({ email: "" }));
-    const malformed = validateCheckoutDraft(makeDraft({ email: "not-an-email" }));
+    const malformed = validateCheckoutDraft(
+      makeDraft({ email: "not-an-email" }),
+    );
 
     expect(blank.email).toBe("Enter your email address.");
     expect(malformed.email).toBe(
@@ -97,8 +99,7 @@ describe("validateCheckoutDraft", () => {
 
   it("accepts a ZIP+4 code", () => {
     expect(
-      validateCheckoutDraft(makeDraft({ postalCode: "62704-1234" }))
-        .postalCode,
+      validateCheckoutDraft(makeDraft({ postalCode: "62704-1234" })).postalCode,
     ).toBeUndefined();
   });
 

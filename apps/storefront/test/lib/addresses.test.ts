@@ -129,9 +129,9 @@ describe("savedAddressLabel", () => {
   });
 
   it("prefixes the address name when present", () => {
-    expect(
-      savedAddressLabel(makeAddress({ address_name: "Home" })),
-    ).toBe("Home — 123 Maple Street, Springfield, IL 62704");
+    expect(savedAddressLabel(makeAddress({ address_name: "Home" }))).toBe(
+      "Home — 123 Maple Street, Springfield, IL 62704",
+    );
   });
 
   it("omits missing parts without leaving stray commas", () => {
