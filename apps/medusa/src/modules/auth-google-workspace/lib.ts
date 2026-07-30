@@ -87,11 +87,6 @@ export function mapUserInfoToIdentity(
   const email = userInfo.email.toLowerCase();
   const emailDomain = email.split("@")[1];
 
-  // `hd` is Google's authoritative claim for the Workspace domain a verified
-  // account belongs to. A personal Gmail account never sets it, and the `hd`
-  // query param on the authorize URL is only a UI hint the user can bypass by
-  // switching accounts at Google, so this check — not that param — is the
-  // real gate.
   if (userInfo.hd !== allowedDomain || emailDomain !== allowedDomain) {
     return {
       success: false,

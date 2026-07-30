@@ -43,10 +43,6 @@ module.exports = defineConfig({
       dependencies: [Modules.CACHE, ContainerRegistrationKeys.LOGGER],
       options: {
         providers: [
-          // Registered, but deliberately absent from authMethodsPerActor.user
-          // below, so /auth/user/emailpass/* stays closed over HTTP. Still
-          // needed because `medusa user` calls authService.register("emailpass", …)
-          // in-process, bypassing that HTTP gate entirely.
           { resolve: "@medusajs/medusa/auth-emailpass", id: "emailpass" },
           {
             resolve: "./src/modules/auth-auth0",
