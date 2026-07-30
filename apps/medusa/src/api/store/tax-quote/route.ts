@@ -1,5 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import { ContainerRegistrationKeys, QueryContext } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type { TaxQuoteRequest } from "@craftynp/types";
 
@@ -70,32 +70,50 @@ export async function POST(
     });
   }
 
-  const { data: regions } = await query.graph({
-    entity: "region",
-    fields: ["id", "currency_code", "countries.iso_2"],
-    filters: {},
-  });
+  let region: RegionWithCountries | null;
+  let variants: unknown[];
 
-  const region = selectRegionForCountry(
-    regions as RegionWithCountries[],
-    destination.countryCode,
-  );
+  try {
+    const { data: regions } = await query.graph({
+      entity: "region",
+      fields: ["id", "currency_code", "countries.iso_2"],
+      filters: {},
+    });
 
-  if (!region) {
+    region = selectRegionForCountry(
+      regions as RegionWithCountries[],
+      destination.countryCode,
+    );
+
+    if (!region) {
+      logger.error(
+        `${STRIPE_TAX_UNAVAILABLE_LOG_TAG} reason=no_region postal=${destination.postalCode}`,
+      );
+      return res
+        .status(502)
+        .json({ error: "tax_unavailable", reason: "misconfigured" });
+    }
+
+    const variantsResult = await query.graph({
+      entity: "variant",
+      fields: ["id", "calculated_price.calculated_amount"],
+      filters: { id: variantIds },
+      context: {
+        calculated_price: QueryContext({
+          region_id: region.id,
+          currency_code: region.currency_code,
+        }),
+      },
+    });
+    variants = variantsResult.data;
+  } catch (error) {
     logger.error(
-      `${STRIPE_TAX_UNAVAILABLE_LOG_TAG} reason=no_region postal=${destination.postalCode}`,
+      `${STRIPE_TAX_UNAVAILABLE_LOG_TAG} reason=misconfigured postal=${destination.postalCode} error=${error instanceof Error ? error.message : String(error)}`,
     );
     return res
       .status(502)
       .json({ error: "tax_unavailable", reason: "misconfigured" });
   }
-
-  const { data: variants } = await query.graph({
-    entity: "variant",
-    fields: ["id", "calculated_price.calculated_amount"],
-    filters: { id: variantIds },
-    context: { region_id: region.id, currency_code: region.currency_code },
-  });
 
   const variantsById = new Map(
     (variants as VariantWithPrice[]).map((variant) => [variant.id, variant]),
