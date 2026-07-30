@@ -25,6 +25,27 @@ module.exports = defineConfig({
   modules: [
     { resolve: "./src/modules/site-content" },
     {
+      resolve: "./src/modules/shipstation",
+      dependencies: [Modules.CACHE],
+      options: {
+        apiKey: process.env.SHIPSTATION_API_KEY,
+        baseUrl: process.env.SHIPSTATION_BASE_URL,
+        uspsCarrierId: process.env.SHIPSTATION_USPS_CARRIER_ID,
+        rateLimitPerMinute: Number(
+          process.env.SHIPSTATION_RATE_LIMIT_PER_MINUTE ?? 20,
+        ),
+        timeoutMs: Number(process.env.SHIPSTATION_TIMEOUT_MS ?? 5000),
+        maxRetries: Number(process.env.SHIPSTATION_MAX_RETRIES ?? 2),
+        weightUnit: process.env.SHIPSTATION_WEIGHT_UNIT ?? "gram",
+        dimensionUnit: process.env.SHIPSTATION_DIMENSION_UNIT ?? "centimeter",
+        cacheTtlSeconds: Number(
+          process.env.SHIPSTATION_RATE_CACHE_TTL_SECONDS ?? 900,
+        ),
+        fromCountryCode: process.env.SHIP_FROM_COUNTRY_CODE,
+        fromPostalCode: process.env.SHIP_FROM_POSTAL_CODE,
+      },
+    },
+    {
       resolve: "@medusajs/medusa/file",
       options: {
         providers: [
