@@ -66,10 +66,6 @@ export function CheckoutView({
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Runs once the shopper has a choice to make and hasn't made one yet
-  // (savedAddressId is "" — neither a saved address nor NEW_ADDRESS_ID).
-  // fetchCustomerAddresses already sorts the default-shipping address
-  // first, so savedAddresses[0] is the one to preselect.
   useEffect(() => {
     if (!isSignedIn || draft.savedAddressId !== "") return;
     const defaultAddress = savedAddresses[0];

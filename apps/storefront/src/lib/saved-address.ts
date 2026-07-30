@@ -1,7 +1,5 @@
 import type { CheckoutDraft } from "./checkout";
 
-// Distinct from "", which means no choice has been made yet and a default
-// address may still be preselected. Not a real Medusa address id.
 export const NEW_ADDRESS_ID = "new";
 
 export type SavedAddress = {
