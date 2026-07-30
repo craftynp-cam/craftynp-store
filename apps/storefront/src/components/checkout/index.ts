@@ -7,3 +7,9 @@ export {
   SavedAddressPicker,
   type SavedAddressPickerProps,
 } from "./saved-address-picker";
+export {
+  ShippingMethodFields,
+  type ShippingMethodFieldsProps,
+} from "./shipping-method-fields";
+export { shippingRateToOption } from "./shipping-rate-option";
+export { useShippingRates } from "./use-shipping-rates";

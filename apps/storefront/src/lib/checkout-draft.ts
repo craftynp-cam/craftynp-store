@@ -20,11 +20,19 @@ const STRING_FIELDS = [
   "billingPostalCode",
   "billingCountryCode",
   "savedAddressId",
+  "shippingRateId",
+  "shippingRateLabel",
+  "shippingRateCurrency",
+  "shippingQuoteToken",
 ] as const satisfies readonly (keyof CheckoutDraft)[];
 
 const BOOLEAN_FIELDS = [
   "billingSameAsDelivery",
   "saveAddress",
+] as const satisfies readonly (keyof CheckoutDraft)[];
+
+const NUMBER_FIELDS = [
+  "shippingRateAmount",
 ] as const satisfies readonly (keyof CheckoutDraft)[];
 
 function parseDraft(raw: string | null): CheckoutDraft {
@@ -47,6 +55,13 @@ function parseDraft(raw: string | null): CheckoutDraft {
     for (const field of BOOLEAN_FIELDS) {
       const value = source[field];
       if (typeof value === "boolean") draft[field] = value;
+    }
+
+    for (const field of NUMBER_FIELDS) {
+      const value = source[field];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        draft[field] = value;
+      }
     }
 
     return draft;

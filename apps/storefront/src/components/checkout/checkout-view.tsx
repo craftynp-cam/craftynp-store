@@ -23,6 +23,7 @@ import {
   readServerCheckoutDraft,
   subscribeToCheckoutDraft,
 } from "@/lib/checkout-draft";
+import { readCart, readServerCart, subscribeToCart } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
 import { checkoutHref } from "@/lib/routes";
 
@@ -33,6 +34,8 @@ import { CheckoutSection } from "./checkout-section";
 import { CheckoutSummary } from "./checkout-summary";
 import { ContactFields } from "./contact-fields";
 import { SavedAddressPicker } from "./saved-address-picker";
+import { ShippingMethodFields } from "./shipping-method-fields";
+import { useShippingRates } from "./use-shipping-rates";
 
 export type CheckoutViewProps = {
   customer: AuthedCustomer | null;
@@ -60,6 +63,9 @@ export function CheckoutView({
   );
   const values = prefillCheckoutDraft(draft, customer);
   const isSignedIn = customer != null;
+
+  const cart = useSyncExternalStore(subscribeToCart, readCart, readServerCart);
+  const shippingRates = useShippingRates(values, cart);
 
   const [errors, setErrors] = useState<CheckoutErrors>({});
   const [status, setStatus] = useState<SubmitStatus>("idle");
@@ -222,6 +228,31 @@ export function CheckoutView({
             {saveNotice ? (
               <p className="text-sm text-foreground-muted">{saveNotice}</p>
             ) : null}
+          </CheckoutSection>
+
+          <CheckoutSection step={3} title="Shipping method">
+            <ShippingMethodFields
+              status={shippingRates.status}
+              rates={shippingRates.rates}
+              selectedRateId={values.shippingRateId}
+              error={shippingRates.error}
+              errorMessage={errors.shippingRateId}
+              onRetry={shippingRates.retry}
+              onSelect={(rateId) => {
+                const rate = shippingRates.rates.find(
+                  (candidate) => candidate.rateId === rateId,
+                );
+                if (!rate) return;
+
+                handleChange({
+                  shippingRateId: rate.rateId,
+                  shippingRateLabel: rate.serviceName,
+                  shippingRateAmount: rate.amount,
+                  shippingRateCurrency: rate.currencyCode,
+                  shippingQuoteToken: rate.quoteToken,
+                });
+              }}
+            />
           </CheckoutSection>
 
           <div

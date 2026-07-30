@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { CheckoutSummary } from "@/components";
 import { addCartLine, clearCart, type CartLine } from "@/lib/cart";
 import { setCartDrawerOpen } from "@/lib/cart-drawer";
+import { clearCheckoutDraft, patchCheckoutDraft } from "@/lib/checkout-draft";
 
 function addLine(overrides: Partial<CartLine> = {}) {
   act(() => {
@@ -26,6 +27,7 @@ describe("CheckoutSummary", () => {
   beforeEach(() => {
     window.localStorage.clear();
     clearCart();
+    clearCheckoutDraft();
     setCartDrawerOpen(false);
   });
 
@@ -57,20 +59,42 @@ describe("CheckoutSummary", () => {
     );
   });
 
-  it("renders no shipping or tax row", () => {
+  it("renders a shipping placeholder and no tax row when no rate is chosen", () => {
     addLine();
     render(<CheckoutSummary onEditCart={jest.fn()} />);
 
     const totals = totalsRegion();
-    expect(within(totals).queryByText(/Shipping/)).not.toBeInTheDocument();
+    expect(within(totals).getByText("Shipping").nextSibling).toHaveTextContent(
+      "Calculated above",
+    );
     expect(within(totals).queryByText(/Tax/)).not.toBeInTheDocument();
   });
 
-  it("sets the total equal to the subtotal", () => {
+  it("sets the total equal to the subtotal when no rate is chosen", () => {
     addLine({ unitPrice: 0.75, quantity: 2 });
     render(<CheckoutSummary onEditCart={jest.fn()} />);
 
     expect(within(totalsRegion()).getAllByText("$1.50")).toHaveLength(2);
+  });
+
+  it("shows the chosen shipping rate and sums it into the total", () => {
+    addLine({ unitPrice: 0.75, quantity: 2 });
+    act(() => {
+      patchCheckoutDraft({
+        shippingRateId: "rate_standard",
+        shippingRateAmount: 7.42,
+        shippingRateCurrency: "usd",
+      });
+    });
+    render(<CheckoutSummary onEditCart={jest.fn()} />);
+
+    const totals = totalsRegion();
+    expect(within(totals).getByText("Shipping").nextSibling).toHaveTextContent(
+      "$7.42",
+    );
+    expect(within(totals).getByText("Total").nextSibling).toHaveTextContent(
+      "$8.92",
+    );
   });
 
   it("writes quantity changes through to the cart and updates the total", () => {

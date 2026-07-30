@@ -113,6 +113,42 @@ describe("checkout draft", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it("persists the shipping rate fields, including the numeric amount", () => {
+    patchCheckoutDraft({
+      shippingRateId: "rate_standard",
+      shippingRateLabel: "USPS Ground Advantage",
+      shippingRateAmount: 7.42,
+      shippingRateCurrency: "usd",
+      shippingQuoteToken: "token.signature",
+    });
+
+    const draft = readCheckoutDraft();
+    expect(draft.shippingRateId).toBe("rate_standard");
+    expect(draft.shippingRateAmount).toBe(7.42);
+  });
+
+  it("falls back to zero when the stored amount is not a number", async () => {
+    window.localStorage.setItem(
+      CHECKOUT_STORAGE_KEY,
+      JSON.stringify({ ...EMPTY_CHECKOUT_DRAFT, shippingRateAmount: "7.42" }),
+    );
+
+    jest.resetModules();
+    const fresh = await import("@/lib/checkout-draft");
+    expect(fresh.readCheckoutDraft().shippingRateAmount).toBe(0);
+  });
+
+  it("rejects a NaN or non-finite stored amount", async () => {
+    window.localStorage.setItem(
+      CHECKOUT_STORAGE_KEY,
+      JSON.stringify({ ...EMPTY_CHECKOUT_DRAFT, shippingRateAmount: NaN }),
+    );
+
+    jest.resetModules();
+    const fresh = await import("@/lib/checkout-draft");
+    expect(fresh.readCheckoutDraft().shippingRateAmount).toBe(0);
+  });
+
   it("does not throw when localStorage.setItem throws", () => {
     const setItem = jest
       .spyOn(window.localStorage.__proto__, "setItem")

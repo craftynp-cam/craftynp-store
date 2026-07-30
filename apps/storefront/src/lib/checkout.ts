@@ -23,6 +23,11 @@ export type CheckoutDraft = {
   billingCountryCode: string;
   savedAddressId: string;
   saveAddress: boolean;
+  shippingRateId: string;
+  shippingRateLabel: string;
+  shippingRateAmount: number;
+  shippingRateCurrency: string;
+  shippingQuoteToken: string;
 };
 
 export type CheckoutTextField =
@@ -39,7 +44,8 @@ export type CheckoutTextField =
   | "billingCity"
   | "billingState"
   | "billingPostalCode"
-  | "billingCountryCode";
+  | "billingCountryCode"
+  | "shippingRateId";
 
 export type CheckoutErrors = Partial<Record<CheckoutTextField, string>>;
 
@@ -63,6 +69,11 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   billingCountryCode: "us",
   savedAddressId: "",
   saveAddress: false,
+  shippingRateId: "",
+  shippingRateLabel: "",
+  shippingRateAmount: 0,
+  shippingRateCurrency: "",
+  shippingQuoteToken: "",
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -133,6 +144,10 @@ export function validateCheckoutDraft(draft: CheckoutDraft): CheckoutErrors {
     }
   }
 
+  if (isBlank(draft.shippingRateId)) {
+    errors.shippingRateId = "Choose a delivery option.";
+  }
+
   return errors;
 }
 
@@ -186,11 +201,23 @@ export function countryOptions(
 
 export type CheckoutTotals = {
   subtotal: number;
+  shipping: number | null;
   total: number;
   currencyCode: string;
 };
 
-export function checkoutTotals(cart: Cart): CheckoutTotals {
+export function checkoutTotals(
+  cart: Cart,
+  draft?: CheckoutDraft,
+): CheckoutTotals {
   const { amount, currencyCode } = cartSubtotal(cart);
-  return { subtotal: amount, total: amount, currencyCode };
+  const shipping =
+    draft && draft.shippingRateId !== "" ? draft.shippingRateAmount : null;
+
+  return {
+    subtotal: amount,
+    shipping,
+    total: amount + (shipping ?? 0),
+    currencyCode,
+  };
 }

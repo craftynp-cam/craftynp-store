@@ -219,6 +219,12 @@ what's inside, just what a reader wouldn't get from the code:
   this broke 47 test suites at once before the split. `addresses.ts`
   re-exports both names for convenience, so server-side code and tests that
   already mock `medusa.ts` can keep importing everything from one place.
+  `shipping-rates.ts` (CNP-51) is the pure logic behind step 3 — destination
+  readiness, the cache/dedupe key, cheapest-rate selection, delivery-window
+  formatting — and, like `saved-address.ts`, carries no `medusa.ts` import so
+  `checkout-view.tsx` can value-import it directly.
+  `shipping-rates-cache.ts` is its `sessionStorage` cache, same shape as
+  `cart.ts`/`checkout-draft.ts`.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -310,10 +316,13 @@ what activating it switches to.
 ## HeroUI
 
 The shared primitives in `src/components/ui` — button, text input, textarea,
-select, checkbox, radio group, badge, drawer — are thin wrappers over **HeroUI
-v3**, which is built on React Aria Components. Use them rather than reaching
-for HeroUI directly; they translate brand vocabulary into HeroUI's and are
-where the accessibility guarantees are tested.
+select, checkbox, radio group, radio card group, badge, drawer — are thin
+wrappers over **HeroUI v3**, which is built on React Aria Components. Use
+them rather than reaching for HeroUI directly; they translate brand
+vocabulary into HeroUI's and are where the accessibility guarantees are
+tested. `RadioCardGroup` (CNP-51) is a second radio wrapper, not a
+`RadioOption.label` widened to `ReactNode` — see the Checkout section above
+for why the plain `RadioGroup`'s string-only label stayed put.
 
 Three non-obvious HeroUI facts the drawer wrapper (`ui/drawer.tsx`) exists
 because of:
@@ -441,26 +450,55 @@ up but hasn't clicked the verification link yet (blocked by the tenant's
 cancelled" — the two look identical at the OAuth-error-code level but call for
 opposite next steps.
 
-## Checkout (CNP-50)
+## Checkout (CNP-50, CNP-51)
 
-`/checkout` builds the contact and delivery-address step only — sections 1
-and 2 of the eventual page, plus the sticky cart summary. This is a
-deliberate scope boundary, not an oversight, and the standing decisions below
-should hold until the stories that supersede them:
+`/checkout` builds the contact/delivery-address and shipping-method steps —
+sections 1–3 of the eventual page, plus the sticky cart summary. Section 4
+(Payment) is still out of scope; the decisions below should hold until the
+stories that supersede them:
 
-- **There is no Medusa cart, and no `sdk.store.cart.*` call anywhere in the
-  storefront.** The checkout form is a client-only draft persisted to
-  `localStorage` (`checkout-draft.ts`); it is not wired to a Medusa cart,
-  shipping option, or payment session. Creating a real cart at checkout time
-  is future work, alongside ShipStation and Stripe.
-- The cart summary shows **Subtotal and Total only** — no Shipping or Tax
-  row. Total equals Subtotal. Adding a shipping row means giving
-  `checkoutTotals` a real shipping amount to sum, not hardcoding one; a
-  guessed number would be a wrong price shown to a shopper.
-- Sections 3 (Shipping method) and 4 (Payment) are not rendered at all — no
-  placeholder cards, no inert card-number inputs. `CheckoutSection` exists so
-  adding them later is additive (see the `src/components/checkout` bullet
-  above).
+- **There is still no Medusa cart, and no `sdk.store.cart.*` call anywhere in
+  the storefront.** The checkout form is a client-only draft persisted to
+  `localStorage` (`checkout-draft.ts`); it is not wired to a Medusa cart or
+  payment session. Shipping rates work without one — see below — but
+  creating a real cart at checkout time is still future work, alongside
+  Stripe.
+- **The cart summary shows Subtotal, Shipping, and Total** — no Tax row yet.
+  Shipping reads `"Calculated above"` until the shopper has a rate selected,
+  never a guessed number. `checkoutTotals(cart, draft)` sums the draft's
+  `shippingRateAmount` once `shippingRateId` is set; `CheckoutSummary` gets
+  there via its own `useSyncExternalStore` on the checkout draft, not a prop,
+  so wiring a new total source needs no prop drilling from `CheckoutView`.
+- **Shipping method (CNP-51) is real, live USPS rates from ShipStation**, not
+  a placeholder. `src/components/checkout/use-shipping-rates.ts` is the
+  fetch hook: it debounces `SHIPPING_RATE_DEBOUNCE_MS` (500ms) after the
+  address becomes ready (`isDestinationReadyForRates` in
+  `src/lib/shipping-rates.ts`, keyed off `validateCheckoutDraft`'s own
+  per-field errors — it does not re-implement the ZIP check), checks
+  `src/lib/shipping-rates-cache.ts` (a `sessionStorage` cache, TTL 15
+  minutes, keyed on destination + sorted `variantId:quantity` pairs) before
+  ever calling `POST /checkout/shipping-rates`, and auto-preselects the
+  cheapest rate unless the shopper's current selection is still in the list.
+  **A single returned rate renders as a plain static row with no radio** —
+  `ShippingMethodFields` branches on `rates.length`; more than one renders
+  `RadioCardGroup` (`src/components/ui/radio-card-group.tsx`), a new
+  primitive rather than widening `RadioOption.label` to `ReactNode`, since
+  `radio-group.test.tsx` and `SavedAddressPicker` both depend on that prop
+  staying a plain string. `shipping-rate-option.tsx`'s `displayLabel` drops a
+  redundant carrier prefix when the service name already contains it (every
+  USPS `service_type` already reads "USPS …").
+- `src/app/checkout/shipping-rates/route.ts` is a POST-only route handler,
+  the same reason `checkout/addresses/route.ts` is: `next.config.ts` rewrites
+  `/api/:path*` to Medusa, so a handler using `sdk.client.fetch` has to live
+  outside `/api`. It proxies to Medusa's `POST /store/shipping-rates` (see
+  `apps/medusa/AGENTS.md`'s own Shipping rates section for that side).
+- **`src/lib/shipping-rates.ts` and `shipping-rates-cache.ts` carry no
+  `medusa.ts` import**, the same `saved-address.ts` split documented below —
+  `checkout-view.tsx` and `use-shipping-rates.ts` value-import them directly,
+  and a `medusa.ts` import would throw at module eval with no env vars set.
+- Sections beyond 4 (Payment) are still not rendered at all — no inert
+  card-number inputs. `CheckoutSection` exists so adding it later is additive
+  (see the `src/components/checkout` bullet above).
 - **Unchecking "Billing address is the same as delivery" unfurls a real
   billing-address block**, not an inert checkbox — `AddressFields` holds a
   shared internal `AddressBlock` used for both, and `CheckoutDraft` carries
@@ -490,7 +528,12 @@ should hold until the stories that supersede them:
   validation can hang off (a shopper who never focuses an empty field would
   otherwise never see its message), and the only thing that can reach
   `/checkout/addresses`. A permanently disabled CTA was considered and
-  rejected for exactly this reason.
+  rejected for exactly this reason. `validateCheckoutDraft` also requires
+  `shippingRateId`, with the message "Choose a delivery option." — while
+  rates are still loading there is no field to attach that message to, so
+  the only visible signal is the top summary's field count; once rates have
+  loaded, auto-preselection means this message is effectively unreachable in
+  the ordinary flow.
 - **Guest checkout is the default and is never blocked.** Nothing in the form
   asks for a password or account creation; a signed-out shopper sees only a
   plain "Sign in" text link, an offer rather than a gate. Account creation
@@ -575,5 +618,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **666** of the repo's 746 tests. A smaller number
+The storefront currently holds **725** of the repo's 898 tests. A smaller number
 after your change means something was dropped.
