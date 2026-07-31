@@ -60,12 +60,24 @@ type ShippingTaxLineDTO = {
   shipping_line_id: string;
 };
 
+const PLACEHOLDER_ITEM_REFERENCE = "__shipping_only_placeholder__";
+
 /**
  * Calculates tax lines via Stripe Tax at cart-refresh time. Every getTaxLines
  * call is a live Stripe calculation — there is deliberately no cache here
  * (unlike the sibling StripeTaxModuleService, which the tax-quote route still
  * uses for its own signed-token flow); a cart refresh is infrequent enough,
  * and a stale cached rate is worse than an extra round trip.
+ *
+ * Medusa's tax module calls a provider's getTaxLines twice per refresh, not
+ * once — once with only item lines (get-item-tax-lines.ts's
+ * normalizeLineItemsForTax branch) and once with only shipping lines
+ * (its normalizeLineItemsForShipping branch), e.g. whenever a shipping
+ * method is added to a cart without any item having changed. Stripe's
+ * Calculation API requires a non-empty `line_items` array even when only
+ * `shipping_cost` is wanted, so a shipping-only call gets a zero-amount
+ * placeholder item added to the *request* only — it never appears in the
+ * returned tax lines, since those are built from the real itemLines array.
  */
 class StripeTaxTaxProvider {
   static identifier = "stripe-tax";
@@ -98,13 +110,25 @@ class StripeTaxTaxProvider {
     shippingLines: ShippingTaxCalculationLine[],
     context: TaxCalculationContext,
   ): Promise<(ItemTaxLineDTO | ShippingTaxLineDTO)[]> {
+    const requestItemLines =
+      itemLines.length > 0
+        ? itemLines.map((line) => ({
+            id: line.line_item.id,
+            unitPrice: line.line_item.unit_price ?? 0,
+            quantity: line.line_item.quantity ?? 1,
+            currencyCode: line.line_item.currency_code,
+          }))
+        : [
+            {
+              id: PLACEHOLDER_ITEM_REFERENCE,
+              unitPrice: 0,
+              quantity: 1,
+              currencyCode: shippingLines[0]?.shipping_line.currency_code,
+            },
+          ];
+
     const input = buildProviderCalculationInput(
-      itemLines.map((line) => ({
-        id: line.line_item.id,
-        unitPrice: line.line_item.unit_price ?? 0,
-        quantity: line.line_item.quantity ?? 1,
-        currencyCode: line.line_item.currency_code,
-      })),
+      requestItemLines,
       shippingLines.map((line) => ({
         unitPrice: line.shipping_line.unit_price ?? 0,
         currencyCode: line.shipping_line.currency_code,

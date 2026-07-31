@@ -633,12 +633,28 @@ insert throws `ValidationError: Value for LineItemTaxLine.code is required,
 'null' found`. `tax-provider.ts` hardcodes `"sales_tax"` for both item and
 shipping tax lines.
 
-All three of these — the `AwilixResolutionError`, the missing
-`cacheTtlSeconds`, and the null `code` — are runtime-only failures. A passing
-`tsc`/`jest` run exercises none of Medusa's actual DI container, its own
-options validation, or its entity-level column constraints, so
-`pnpm run db:migrate` and a real `pnpm run dev` checkout are the only things
-that catch them.
+**`getTaxLines` is called twice per cart refresh, not once — separately for
+items and for shipping methods.** `get-item-tax-lines.ts` (Medusa core)
+calls `TaxModuleService.getTaxLines` once with only item lines and, in a
+separate call, once with only shipping lines (whenever, say, a shipping
+method is added without any item changing) — never both at once. Stripe's
+Tax Calculation API requires a non-empty `line_items` array even when only
+`shipping_cost` is wanted, so a shipping-only call with `line_items: []`
+fails with `Missing required param: line_items.` `tax-provider.ts` detects
+an empty `itemLines` array and substitutes a single zero-amount placeholder
+item for the Stripe _request_ only — it never appears in the returned tax
+lines, since those are built by mapping over the real `itemLines`/
+`shippingLines` arrays, not whatever was sent to Stripe. `tax-provider.test.ts`
+covers both the items-only and shipping-only shapes directly, spying on
+`tax.calculations.create` the same way `service.test.ts` does.
+
+All four of these — the `AwilixResolutionError`, the missing
+`cacheTtlSeconds`, the null `code`, and the shipping-only `line_items`
+requirement — are runtime-only failures. A passing `tsc`/`jest` run
+exercises none of Medusa's actual DI container, its own options validation,
+its entity-level column constraints, or the two-call shape its own core
+workflows use, so `pnpm run db:migrate` and a real `pnpm run dev` checkout
+are what actually catch them.
 
 ## React 18 — do not "fix" it
 
@@ -739,7 +755,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **175** of the repo's 1026 tests. The `siteContent`
+This app currently holds **178** of the repo's 1029 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including
