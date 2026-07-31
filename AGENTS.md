@@ -131,3 +131,45 @@ A storefront test left under `src/` is silently never run. Test files are named
 
 A test must be able to fail. Write it so you have seen it fail for the right
 reason before you make it pass.
+
+### What earns a test
+
+**Test the code, not the library underneath it.** A test earns its place when
+the code under test does something of its own — composes, transforms, maps,
+branches — or guards a documented invariant, money, a security boundary, or an
+error path. It does not when the code just forwards a prop into a dependency
+that does the work.
+
+Do not add these, and remove them when you find them:
+
+- **Library behaviour.** A wrapper that spreads `...rest` into HeroUI or React
+  Aria and then asserts the outcome is testing React Aria. Assert only what the
+  wrapper itself adds: its composition, its mapping, its conditional rendering.
+- **Class names and styles.** `toHaveClass("bg-ink")` pins no behaviour and
+  breaks on any restyle.
+- **Static prop-to-DOM rendering.** "renders the heading", "renders its
+  children", "renders the body copy".
+- **Tautologies.** Asserting a constant equals its own literal, or walking the
+  same registry the implementation walks. An assertion derived from the code
+  under test cannot disagree with it.
+- **The absence of a feature.** "renders no links here" passes trivially now and
+  fails the day someone adds one on purpose.
+- **Duplicates.** The same behaviour already asserted at an equal or better
+  level elsewhere.
+
+Three things resemble that list and are not it:
+
+- A happy-path case acting as the negative control for a set of rejection cases.
+  Drop it and a validator that always throws still passes every sibling.
+- Accessibility guarantees, which the storefront tests on purpose — the
+  `src/components/ui` wrappers' aria wiring, and the class assertion in
+  `skip-link.test.tsx`, because jsdom applies no CSS and a link that reveals
+  itself on focus cannot be checked any other way.
+- The design-token, focus-ring and contrast guards, which pin token values and
+  utility names deliberately and are named as load-bearing in
+  [apps/storefront/AGENTS.md](apps/storefront/AGENTS.md).
+
+**A green suite is not evidence the app builds.** Both apps point
+`@craftynp/types` at its `src/` under Jest, so nothing in the suite exercises
+the `dist/` the build actually resolves — that gap hid a crash-on-render bug
+through a fully green suite. Run `pnpm run build` as well.
