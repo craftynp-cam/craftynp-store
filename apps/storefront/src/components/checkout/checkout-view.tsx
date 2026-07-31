@@ -109,7 +109,13 @@ export function CheckoutView({
   }
 
   useEffect(() => {
-    if (!isSignedIn || draft.savedAddressId !== "") return;
+    if (!isSignedIn) return;
+
+    const currentSelectionIsKnown =
+      draft.savedAddressId === NEW_ADDRESS_ID ||
+      savedAddresses.some((address) => address.id === draft.savedAddressId);
+    if (currentSelectionIsKnown) return;
+
     const defaultAddress = savedAddresses[0];
     if (!defaultAddress) return;
 

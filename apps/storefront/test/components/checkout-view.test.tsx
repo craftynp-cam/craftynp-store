@@ -10,7 +10,11 @@ import {
 import { CheckoutView } from "@/components";
 import type { SavedAddress } from "@/lib/saved-address";
 import type { AuthedCustomer } from "@/lib/auth";
-import { CHECKOUT_STORAGE_KEY, clearCheckoutDraft } from "@/lib/checkout-draft";
+import {
+  CHECKOUT_STORAGE_KEY,
+  clearCheckoutDraft,
+  patchCheckoutDraft,
+} from "@/lib/checkout-draft";
 import { addCartLine, clearCart, readCart } from "@/lib/cart";
 import { setCartDrawerOpen } from "@/lib/cart-drawer";
 
@@ -407,6 +411,31 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("City")).toHaveValue("Springfield");
     expect(screen.getByLabelText("State")).toHaveValue("IL");
     expect(screen.getByLabelText("ZIP code")).toHaveValue("62704");
+  });
+
+  it("recovers to the default address when the persisted selection points at an address that no longer exists", () => {
+    // A savedAddressId can outlive the address it names — the checkout draft
+    // persists in localStorage across sessions, and nothing clears it when an
+    // account address is deleted, or when a different default is chosen after
+    // the draft last synced.
+    patchCheckoutDraft({ savedAddressId: "caddr_deleted" });
+
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[savedAddress, otherAddress]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    expect(
+      screen.getByRole("radio", {
+        name: "123 Maple Street, Springfield, IL 62704",
+      }),
+    ).toBeChecked();
+    expect(screen.getByLabelText("Street address")).toHaveValue(
+      "123 Maple Street",
+    );
   });
 
   it("fills the fields for the address the shopper manually selects", () => {
