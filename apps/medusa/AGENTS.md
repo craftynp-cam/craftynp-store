@@ -590,7 +590,26 @@ since it depends on the region, tax region, and service zone that script
 creates — the same filename-ordering discipline `seed-product-shipping-dimensions.ts`
 already established. The flat `Standard Shipping` option from
 `seed-us-region.ts` is untouched and stays as the catalogue-price row it
-always was.
+always was. Before it can create the `calculated`-price shipping option, the
+script also `link.create`s the ShipStation provider onto the `US Workshop`
+stock location — the same link `seed-us-region.ts` already makes for
+`manual_manual` — because `createShippingOptionsWorkflow` validates a
+provider against the stock locations actually linked to the service zone's
+fulfillment set, not against `medusa-config.ts`'s provider list.
+
+**Module registration alone does not make a provider resolvable inside
+another module's own service.** `ShipStationFulfillmentProviderService`'s
+constructor injects `[SHIPSTATION_MODULE]` (`"shipstation"`) to reuse
+`ShipStationModuleService.getUspsRates` for its re-estimate fallback — but
+each module gets its own Awilix scope, and a module only sees registrations
+outside that scope if its own `medusa-config.ts` entry lists them under
+`dependencies`, the same mechanism the `shipstation`/`stripeTax` custom
+modules already use for `Modules.CACHE`. The `@medusajs/medusa/fulfillment`
+entry therefore needs `dependencies: [SHIPSTATION_MODULE]` — omitting it
+throws `AwilixResolutionError: Could not resolve 'shipstation'` the moment
+`calculatePrice` (or, at boot, `canCalculate`) runs, not at startup, so it
+surfaces the first time a cart actually needs a calculated price rather than
+during `medusa develop`.
 
 ## React 18 — do not "fix" it
 

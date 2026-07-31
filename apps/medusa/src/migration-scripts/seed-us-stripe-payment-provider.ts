@@ -1,5 +1,5 @@
 import type { MedusaContainer } from "@medusajs/framework";
-import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import {
   createShippingOptionsWorkflow,
   updateRegionsWorkflow,
@@ -35,6 +35,7 @@ export default async function seed_stripe_payment_provider({
 }) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const link = container.resolve(ContainerRegistrationKeys.LINK);
 
   const { data: existingOptions } = await query.graph({
     entity: "shipping_option",
@@ -76,6 +77,26 @@ export default async function seed_stripe_payment_provider({
     shippingProfiles[0],
     "default shipping profile",
   );
+
+  const { data: stockLocations } = await query.graph({
+    entity: "stock_location",
+    fields: ["id"],
+    filters: { name: "US Workshop" },
+  });
+  const stockLocation = required(
+    stockLocations[0],
+    "US Workshop stock location",
+  );
+
+  logger.info(
+    "Enabling the ShipStation fulfillment provider for the US Workshop location...",
+  );
+  await link.create({
+    [Modules.STOCK_LOCATION]: { stock_location_id: stockLocation.id },
+    [Modules.FULFILLMENT]: {
+      fulfillment_provider_id: SHIPSTATION_LIVE_RATE_PROVIDER_ID,
+    },
+  });
 
   logger.info(
     "Attaching Stripe payment provider to the United States region...",

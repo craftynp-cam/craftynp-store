@@ -5,6 +5,8 @@ import {
   Modules,
 } from "@medusajs/framework/utils";
 
+import { SHIPSTATION_MODULE } from "./src/modules/shipstation";
+
 loadEnv(process.env.NODE_ENV || "development", process.cwd());
 
 module.exports = defineConfig({
@@ -78,6 +80,7 @@ module.exports = defineConfig({
     },
     {
       resolve: "@medusajs/medusa/fulfillment",
+      dependencies: [SHIPSTATION_MODULE],
       options: {
         providers: [
           { resolve: "@medusajs/medusa/fulfillment-manual", id: "manual" },
