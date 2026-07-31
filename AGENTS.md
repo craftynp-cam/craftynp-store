@@ -18,7 +18,12 @@ manages products, discounts, and orders from the Medusa admin dashboard.
 - `apps/storefront` — Next.js 16 / React 19 App Router, port **8000**.
 - `apps/medusa` — Medusa 2.18, port **9000**, admin at `/app`, React **18**.
 - `packages/types` — `@craftynp/types`, the zod schemas and types shared by both
-  apps, consumed from its built `dist/`.
+  apps, consumed from its built `dist/`. It builds through
+  `tsconfig.build.json`, which excludes `*.test.ts` so tests stay out of the
+  published `dist/`; `typecheck` still runs against `tsconfig.json` and so still
+  covers them. Do not collapse the two back into one config. The build clears
+  `dist/` first, because turbo caches `dist/**` and would otherwise restore
+  files a later build no longer emits.
 
 TypeScript 5.9 strict, Tailwind CSS, Postgres 15 and Redis 7 via Docker, Jest,
 pnpm workspaces + Turborepo.
