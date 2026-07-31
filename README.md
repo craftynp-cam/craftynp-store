@@ -256,17 +256,20 @@ link in the email, so a wrong value produces receipts nobody can open.
 
 **DNS.** `thecraftynp.org` is verified in Resend with these records:
 
-| Type | Name                | Value                                                | Notes            |
-| ---- | ------------------- | ---------------------------------------------------- | ---------------- |
-| TXT  | `resend._domainkey` | the DKIM public key from Resend                      | DKIM             |
-| MX   | `send`              | `feedback-smtp.us-east-1.amazonses.com`              | priority 10      |
-| TXT  | `send`              | `v=spf1 include:amazonses.com ~all`                  | SPF              |
-| TXT  | `_dmarc`            | `v=DMARC1; p=none; rua=mailto:dmarc@thecraftynp.org` | **add manually** |
+| Type | Name                | Value                                                      | Notes         |
+| ---- | ------------------- | ---------------------------------------------------------- | ------------- |
+| TXT  | `resend._domainkey` | the DKIM public key from Resend                            | DKIM          |
+| MX   | `send`              | `feedback-smtp.us-east-1.amazonses.com`                    | priority 10   |
+| TXT  | `send`              | `v=spf1 include:amazonses.com ~all`                        | SPF           |
+| TXT  | `_dmarc`            | `v=DMARC1; p=none; rua=mailto:dmarc@thecraftynp.org; fo=1` | added by hand |
 
 **Resend provisions SPF and DKIM but never DMARC** — its dashboard shows the
-domain fully verified without one, so it is easy to assume it is handled. Add
-the `_dmarc` record at the registrar, leave it at `p=none` long enough to read
-the aggregate reports, then tighten to `p=quarantine` and eventually `p=reject`.
+domain fully verified without one, so it is easy to assume it is handled. The
+`_dmarc` record above was added at the registrar for that reason; if you ever
+rebuild this domain's DNS from what Resend shows you, it will be missing again.
+
+It sits at `p=none` (monitor only) for now. Read the aggregate reports for a
+few weeks, then tighten to `p=quarantine` and eventually `p=reject`.
 
 Two things to know before tightening:
 
