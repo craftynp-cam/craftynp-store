@@ -1,13 +1,20 @@
 "use client";
 
-import { useImperativeHandle, type Ref } from "react";
+import { useImperativeHandle, useSyncExternalStore, type Ref } from "react";
 import {
   Elements,
   PaymentElement,
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
+import {
+  loadStripe,
+  type Appearance,
+  type Stripe as StripeJs,
+} from "@stripe/stripe-js";
+
+import { tokenHex, type Mode } from "@/lib/design-tokens";
+import { readIsDarkMode, subscribeToIsDarkMode } from "@/lib/theme";
 
 let stripePromise: Promise<StripeJs | null> | null = null;
 
@@ -17,6 +24,36 @@ function getStripe(): Promise<StripeJs | null> {
     stripePromise = loadStripe(publishableKey);
   }
   return stripePromise;
+}
+
+/**
+ * The Payment Element renders in an iframe, so it cannot read this site's
+ * `color-scheme`/`light-dark()` tokens itself — Stripe's `appearance` option
+ * is the only way to match it to the page. Built from the same resolved hex
+ * values `design-tokens.ts` uses everywhere else, rather than a second,
+ * hand-picked palette that could drift from the real one.
+ */
+function stripeAppearance(mode: Mode): Appearance {
+  return {
+    theme: mode === "dark" ? "night" : "stripe",
+    variables: {
+      colorPrimary: tokenHex("primary", mode),
+      colorBackground: tokenHex("surface", mode),
+      colorText: tokenHex("foreground", mode),
+      colorTextSecondary: tokenHex("foreground-muted", mode),
+      colorTextPlaceholder: tokenHex("foreground-subtle", mode),
+      colorDanger: tokenHex("danger-foreground", mode),
+      borderRadius: "10px",
+    },
+    rules: {
+      ".Input": { borderColor: tokenHex("border-strong", mode) },
+      ".Label": { color: tokenHex("foreground-muted", mode) },
+    },
+  };
+}
+
+function readServerIsDarkMode(): boolean {
+  return false;
 }
 
 export type ConfirmPaymentResult =
@@ -81,8 +118,19 @@ export type PaymentFieldsProps = {
 };
 
 export function PaymentFields({ clientSecret, submitRef }: PaymentFieldsProps) {
+  const isDark = useSyncExternalStore(
+    subscribeToIsDarkMode,
+    readIsDarkMode,
+    readServerIsDarkMode,
+  );
+  const mode: Mode = isDark ? "dark" : "light";
+
   return (
-    <Elements stripe={getStripe()} options={{ clientSecret }}>
+    <Elements
+      key={mode}
+      stripe={getStripe()}
+      options={{ clientSecret, appearance: stripeAppearance(mode) }}
+    >
       <PaymentElement />
       <PaymentSubmitBridge ref={submitRef} />
     </Elements>

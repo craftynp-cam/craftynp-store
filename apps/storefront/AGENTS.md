@@ -580,6 +580,21 @@ completes by placing a real Medusa order.
   here — the same trap the HeroUI section above documents) in a way a plain
   function component isn't exposed to. React 19 accepts `ref` as an ordinary
   prop on function components, which sidesteps it entirely.
+- **The Payment Element renders in an iframe, so it cannot read this site's
+  own CSS at all** — without an explicit `appearance`, it's a plain white
+  Stripe-branded card that clashes with the dark-mode page. `stripeAppearance(mode)`
+  in `payment-fields.tsx` builds Stripe's `appearance.variables` from the
+  exact same resolved hex values `design-tokens.ts` uses everywhere else
+  (`tokenHex("surface", mode)`, `tokenHex("foreground", mode)`, etc.) rather
+  than a second, hand-picked palette that could drift from the real one.
+  `theme.ts`'s `readIsDarkMode`/`subscribeToIsDarkMode` resolve the
+  _actual_ painted mode — unlike `readStoredTheme`, "system" is resolved to
+  a real light/dark answer via `matchMedia` rather than left as its own
+  value, since Stripe's `appearance` needs one concrete answer. `PaymentFields`
+  keys `<Elements>` on the resolved mode, so toggling the theme mid-checkout
+  remounts the Payment Element with the new appearance rather than calling
+  Stripe's `elements.update()` — an accepted simplification for a short-lived,
+  one-time flow.
 - **The submit button reads `Pay $X`**, computed from `checkoutTotals`, and
   is a real `<button type="submit">` — the "Continue"/never-says-Pay stance
   CNP-50–52 held is exactly what CNP-53 supersedes. `handleSubmit` validates
@@ -715,5 +730,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **766** of the repo's 1024 tests. A smaller number
+The storefront currently holds **774** of the repo's 1037 tests. A smaller number
 after your change means something was dropped.

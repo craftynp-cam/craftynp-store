@@ -48,3 +48,47 @@ export function applyTheme(preference: ThemePreference): void {
 export const themeInitScript = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
 )});if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}}catch(e){}})()`;
+
+function systemPrefersDark(): boolean {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
+    return false;
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+/**
+ * The resolved mode actually painted on the page — unlike readStoredTheme,
+ * "system" is resolved to a real light/dark answer via matchMedia rather
+ * than left as its own value. Third-party embeds that can't read `color-scheme`
+ * or `light-dark()` themselves (Stripe's Payment Element, rendered in an
+ * iframe) need this to pick a matching appearance.
+ */
+export function readIsDarkMode(): boolean {
+  if (typeof document === "undefined") return false;
+  const pinned = document.documentElement.dataset.theme;
+  if (pinned === "dark") return true;
+  if (pinned === "light") return false;
+  return systemPrefersDark();
+}
+
+export function subscribeToIsDarkMode(listener: () => void): () => void {
+  const unsubscribeTheme = subscribeToTheme(listener);
+
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
+    return unsubscribeTheme;
+  }
+
+  const mediaQueryList = window.matchMedia("(prefers-color-scheme: dark)");
+  mediaQueryList.addEventListener("change", listener);
+
+  return () => {
+    unsubscribeTheme();
+    mediaQueryList.removeEventListener("change", listener);
+  };
+}
