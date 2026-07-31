@@ -22,20 +22,22 @@ like the order emails. Hence the Action.
 email provider exists — the template editor shows a warning banner saying so,
 and saving the body first simply has no effect.
 
-1. **Actions → Library → `custom-email-provider`**: create the Action below and
-   add the secret `RESEND_API_KEY` to it. That secret lives in the Auth0
-   tenant and is separate from this repo's env var. Deploy it.
-2. **Branding → Email Provider**: configure the Custom Email Provider and bind
-   it to the Action. Until this exists, Auth0 uses its built-in provider, which
-   is trial-grade and generally only delivers to tenant members — so
-   customer-facing reset mail does not work at all before this step, branding
-   aside.
-3. **Branding → Email Templates → Change Password**: set the message body to
+1. **Branding → Email Provider → toggle "Use my own email provider" → Custom
+   Provider.** The `custom-email-provider` trigger has no entry in the generic
+   Actions → Library → Create Action dropdown — it gets its own built-in code
+   editor right on this page. Set **From** to
+   `The Crafty NP <hello@thecraftynp.org>`, paste in the Action below, add the
+   secret `RESEND_API_KEY` (key icon, left rail — a tenant secret, separate
+   from this repo's env var), then **Save**, which deploys it. Until this step,
+   Auth0 uses its own built-in provider, which is trial-grade and generally
+   only delivers to tenant members — customer-facing reset mail does not work
+   at all before this, branding aside.
+2. **Branding → Email Templates → Change Password**: set the message body to
    **exactly** `{{ url }}` and nothing else. The Action recovers a clean reset
    URL by stripping tags from the rendered HTML, which only works because the
    body has nothing else in it. Anything else there ends up inside `RESET_URL`.
 
-**Do 2 and 3 back to back.** In between, the provider is live while the body is
+**Do 1 and 2 back to back.** In between, the provider is live while the body is
 still Auth0's default, so a reset would reach the Resend template with
 `RESET_URL` set to the stripped text of Auth0's entire default email.
 
