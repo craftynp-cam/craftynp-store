@@ -43,7 +43,10 @@ type TaxCalculationContext = {
 
 type ItemTaxLineDTO = {
   rate: number;
-  code: string | null;
+  // Medusa's line_item_tax_line table has a non-nullable `code` column —
+  // unlike the "system" provider, this provider has no local tax_rate row
+  // to source a real code from, so it always supplies the same constant.
+  code: string;
   name: string;
   provider_id: string;
   line_item_id: string;
@@ -51,7 +54,7 @@ type ItemTaxLineDTO = {
 
 type ShippingTaxLineDTO = {
   rate: number;
-  code: string | null;
+  code: string;
   name: string;
   provider_id: string;
   shipping_line_id: string;
@@ -138,7 +141,7 @@ class StripeTaxTaxProvider {
       );
       return {
         rate: found?.rate ?? 0,
-        code: null,
+        code: "sales_tax",
         name: "Sales tax",
         provider_id: this.getIdentifier(),
         line_item_id: line.line_item.id,
@@ -148,7 +151,7 @@ class StripeTaxTaxProvider {
     const shippingTaxLines: ShippingTaxLineDTO[] = shippingLines.map(
       (line) => ({
         rate: normalized.shippingRate,
-        code: null,
+        code: "sales_tax",
         name: "Sales tax",
         provider_id: this.getIdentifier(),
         shipping_line_id: line.shipping_line.id,

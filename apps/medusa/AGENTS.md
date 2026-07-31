@@ -621,11 +621,24 @@ Tax module requires the following options: cacheTtlSeconds` the first time a
 cart actually needs its tax lines calculated. `StripeTaxProviderOptions`
 (`lib.ts`) is `Omit<StripeTaxOptions, "cacheTtlSeconds">`, with its own
 `validateStripeTaxProviderOptions`, so the two option shapes and their
-validators can drift independently. This and the `AwilixResolutionError`
-above are both runtime-only failures — a passing `tsc`/`jest` run does not
-exercise Medusa's actual DI container or its own options validation, so
-`pnpm run db:migrate` and `pnpm run dev` against a real database are the
-only things that catch them.
+validators can drift independently.
+
+**`getTaxLines` must never return `code: null`.** Medusa's
+`line_item_tax_line`/`shipping_line_tax_line` tables have a non-nullable
+`code` column — the DTO type (`@medusajs/framework/types`) allows
+`code: string | null` because the built-in "system" provider sources a real
+code from a local `tax_rate` row that can genuinely lack one, but a provider
+with no such row, like this one, has to supply a real value itself or the
+insert throws `ValidationError: Value for LineItemTaxLine.code is required,
+'null' found`. `tax-provider.ts` hardcodes `"sales_tax"` for both item and
+shipping tax lines.
+
+All three of these — the `AwilixResolutionError`, the missing
+`cacheTtlSeconds`, and the null `code` — are runtime-only failures. A passing
+`tsc`/`jest` run exercises none of Medusa's actual DI container, its own
+options validation, or its entity-level column constraints, so
+`pnpm run db:migrate` and a real `pnpm run dev` checkout are the only things
+that catch them.
 
 ## React 18 — do not "fix" it
 
