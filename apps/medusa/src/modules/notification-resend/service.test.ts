@@ -133,6 +133,29 @@ describe("ResendNotificationProviderService.send", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("starts up without an api key, and fails on send instead", async () => {
+    // Medusa builds every provider at boot, so throwing in the constructor
+    // would stop the backend starting over a missing email key.
+    const logger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    };
+
+    const service = new ResendNotificationProviderService(
+      { logger: logger as unknown as Logger },
+      { ...OPTIONS, apiKey: "" },
+    );
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("reason=not_configured"),
+    );
+    await expect(service.send(NOTIFICATION)).rejects.toThrow(
+      "RESEND_API_KEY is required",
+    );
+  });
+
   it("retries a 5xx up to maxRetries before giving up", async () => {
     const fetchMock = jest
       .fn()

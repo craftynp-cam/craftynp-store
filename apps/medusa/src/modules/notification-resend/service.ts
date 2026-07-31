@@ -28,13 +28,33 @@ type NotificationWithIdempotency = ProviderSendNotificationDTO & {
 class ResendNotificationProviderService extends AbstractNotificationProviderService {
   static override identifier = "resend";
 
-  private readonly options_: ResendOptions;
+  private readonly rawOptions_: unknown;
   private readonly logger_: Logger;
+  private resolvedOptions_: ResendOptions | null = null;
 
   constructor({ logger }: { logger: Logger }, options: unknown) {
     super();
-    this.options_ = validateResendOptions(options);
+    this.rawOptions_ = options;
     this.logger_ = logger;
+
+    // Deliberately not validated here. Medusa builds every provider at boot, so
+    // throwing on a missing key would stop the whole backend starting over
+    // email — which is explicitly not on the critical path anywhere else.
+    // Fail on the first send instead, where it lands in the notification row.
+    try {
+      validateResendOptions(options);
+    } catch (error) {
+      this.logger_.warn(
+        `${RESEND_SEND_FAILED_LOG_TAG} reason=not_configured detail=${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private get options_(): ResendOptions {
+    this.resolvedOptions_ ??= validateResendOptions(this.rawOptions_);
+    return this.resolvedOptions_;
   }
 
   override async send(
