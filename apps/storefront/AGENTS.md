@@ -228,7 +228,13 @@ what's inside, just what a reader wouldn't get from the code:
   behind step 4 — `isReadyForPayment` (gating on the live tax status, the
   same staleness discipline `tax-quote.ts` documents) and
   `paymentPrepareKey` — and, like `shipping-rates.ts`, carries no `medusa.ts`
-  import.
+  import. `paymentPrepareKey` leans on the tax quote token to stand in for
+  everything that token's own signature covers (postal code, country, state,
+  city, shipping rate, cart lines), but the street lines, recipient name and
+  phone are **not** in that signature and so are listed in the key
+  explicitly — leave them out and a street-only edit never re-prepares, so
+  the Medusa cart keeps the previous address on the order and its shipping
+  label.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -596,12 +602,17 @@ completes by placing a real Medusa order.
   Stripe's `Elements` group only ever reads `options.clientSecret` on its
   _first_ mount — a changed value on a later render is silently ignored,
   so a shopper who edits the address after the Payment Element has already
-  rendered (a fresh cart/payment session supersedes the old one, i.e. AC10's
-  idempotent-on-`cartId` path returning a _different_ payment session for
-  the changed cart) leaves the mounted element bound to a PaymentIntent that
-  no longer matches reality, surfacing as an unhandled
+  rendered leaves the mounted element bound to a PaymentIntent that no longer
+  matches reality, surfacing as an unhandled
   `"Unhandled payment Element loaderror"`. Keying on `clientSecret` forces a
-  clean remount instead of trying to reconcile in place. `PaymentElement`'s
+  clean remount instead of trying to reconcile in place. **This only works
+  because the backend actually returns a different secret on that edit** —
+  Medusa cancels the old PaymentIntent whenever the cart total moves, so
+  `prepare-cart` mints a fresh session rather than echoing the cancelled one
+  back; see that route's section in
+  [apps/medusa/AGENTS.md](../medusa/AGENTS.md). Before it did, the remount
+  simply re-mounted against the same cancelled intent and Stripe reported
+  `This PaymentIntent is in a terminal state` instead. `PaymentElement`'s
   own `onLoadError` is wired through to `CheckoutView`'s error area rather
   than left unhandled, and that error is paired with the `clientSecret` it
   was raised against (in state, not a ref — reading a ref during render
@@ -742,5 +753,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **776** of the repo's 1044 tests. A smaller number
+The storefront currently holds **779** of the repo's 1054 tests. A smaller number
 after your change means something was dropped.

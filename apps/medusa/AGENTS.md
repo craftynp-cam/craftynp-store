@@ -541,10 +541,40 @@ one line item per cart line carrying the storefront's display `details`/
 per `lineItemCustomizationSchema`, is future work; the storefront's `CartLine`
 doesn't produce that payload yet), attaches the live-rate shipping method,
 and creates a payment collection plus a Stripe payment session. **Idempotent
-on `cartId`**: a repeat call with the same id reuses the existing cart,
-skips re-adding a shipping method it already has, and reuses an existing
-Stripe payment session rather than minting a second — the server half of
-AC10.
+on `cartId`**: a repeat call with the same id reuses the existing cart and
+its payment session rather than minting a second — the server half of AC10.
+
+**Every read that feeds the payment decision must happen after every write
+that can move `cart.total`, and the route's ordering exists for exactly that
+reason.** `updateCartWorkflow` and `addShippingMethodToCartWorkflow` both run
+`refreshCartItemsWorkflow`, which runs `refreshPaymentCollectionForCartWorkflow`,
+which — on any change to the total — `parallelize`s
+`deletePaymentSessionsWorkflow` with a resync of the payment collection's
+amount. Deleting a session calls the Stripe provider's `deleteSession`, which
+**cancels the PaymentIntent**. So a cart snapshot taken before those writes
+describes a payment session that has since been deleted and an intent that is
+now in a terminal state; handing its `client_secret` back to the storefront
+produced `This PaymentIntent is in a terminal state and cannot be used to
+initialize Elements` the moment a shopper edited their address after the
+Payment Element had rendered. The route therefore keeps the pre-update read
+down to the `invalid_cart`/`cart_already_completed` guards only, and re-reads
+the cart — totals, payment collection, and sessions together — once all
+mutations are done. Because the amount resync and the session deletion move
+together in that one `when` branch, a collection whose `amount` still equals
+`cart.total` is proof its session survived; anything else mints a fresh
+session (`createPaymentSessionsWorkflow` deletes any survivor first, so this
+cannot leave two).
+
+**The shipping method is re-attached on every prepare call, not only when the
+cart has none.** `addShippingMethodToCartWorkflow` runs
+`removeShippingMethodFromCartStep` for the incoming shipping profile before
+creating the new method, so this replaces rather than duplicates. Skipping it
+left the method carrying the _previous_ address's `quoteToken`, which Medusa's
+own `refreshCartShippingMethodsWorkflow` then handed back to `calculatePrice`
+— a token that can never satisfy the new cart signature, so every ordinary
+address edit logged `[shipping-quote:mismatch] reason=cart_mismatch` and took
+the re-estimate/tolerance path, which throws and blocks checkout outright when
+the address moved far enough for the fresh rate to fall outside tolerance.
 
 **`POST /store/checkout/complete`** runs `completeCartWorkflow` and is
 idempotent the same way: it looks up an existing order by `cart_id` first and
@@ -673,14 +703,21 @@ subset of fields the calling workflow happened to pass in. `service.test.ts`
 covers the exact regression: a variant with no dimensions of its own, backed
 only by its product's.
 
-All six of these — the two `AwilixResolutionError`s (`shipstation` and
+All seven of these — the two `AwilixResolutionError`s (`shipstation` and
 `query`), the missing `cacheTtlSeconds`, the null `code`, the shipping-only
-`line_items` requirement, and the incomplete cart-refresh context — are
+`line_items` requirement, the incomplete cart-refresh context, and the
+cancelled PaymentIntent handed back from a pre-update cart snapshot — are
 runtime-only failures. A passing `tsc`/`jest` run exercises none of Medusa's
 actual DI container, its own options validation, its entity-level column
-constraints, or the exact field selection its own core workflows use, so
+constraints, the exact field selection its own core workflows use, or the
+side effects those workflows have on rows this app then reads back, so
 `pnpm run db:migrate` and a real `pnpm run dev` checkout are what actually
-catch them.
+catch them. Each one that has since been pinned down is covered by a unit
+test that encodes the _behaviour Medusa was found to have_ —
+`prepare-cart/route.test.ts` mocks the core workflows and switches the cart
+the `query` mock returns once a mutating workflow has run, which is the only
+way to express "the payment session was deleted underneath us" without a
+live database.
 
 ## React 18 — do not "fix" it
 
@@ -781,7 +818,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **183** of the repo's 1042 tests. The `siteContent`
+This app currently holds **190** of the repo's 1054 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including

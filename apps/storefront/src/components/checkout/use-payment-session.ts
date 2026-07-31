@@ -59,7 +59,6 @@ export function usePaymentSession(
 ): PaymentSessionState {
   const [fetchState, setFetchState] = useState<FetchState | null>(null);
   const [retryToken, setRetryToken] = useState(0);
-  const committedKeyRef = useRef<string | null>(null);
   const activeKeyRef = useRef<string | null>(null);
 
   const ready = isReadyForPayment(draft, taxReady);
@@ -119,7 +118,6 @@ export function usePaymentSession(
           }>;
         })
         .then((result) => {
-          committedKeyRef.current = key;
           setFetchState({
             key,
             status: "ready",

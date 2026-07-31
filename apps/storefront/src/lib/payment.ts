@@ -30,18 +30,31 @@ export function paymentPrepareKey(draft: CheckoutDraft, cart: Cart): string {
     ? "same"
     : [
         draft.billingAddress1,
+        draft.billingAddress2,
         draft.billingCity,
         draft.billingState,
         draft.billingPostalCode,
         draft.billingCountryCode,
       ].join(":");
 
-  // The tax quote token already covers destination + shipping rate + cart
-  // lines (verified server-side), so it stands in for all of that here.
-  // Only email and billing details are not covered by it.
+  // The tax quote token stands in for the parts of the destination its own
+  // signature covers — postal code, country, state, city, shipping rate, cart
+  // lines — all verified server-side. It does *not* cover the recipient or the
+  // street lines, so those are listed here explicitly: editing only address1
+  // otherwise leaves the key unchanged, no re-prepare fires, and the Medusa
+  // cart keeps the previous street on the order and its shipping label.
+  const recipient = [
+    draft.firstName,
+    draft.lastName,
+    draft.phone,
+    draft.address1,
+    draft.address2,
+  ].join(":");
+
   return [
     draft.taxQuoteToken,
     draft.email.trim().toLowerCase(),
+    recipient,
     billing,
     items,
   ].join("|");

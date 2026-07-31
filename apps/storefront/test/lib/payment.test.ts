@@ -82,7 +82,7 @@ describe("paymentPrepareKey", () => {
     });
 
     expect(paymentPrepareKey(draft, cart)).toBe(
-      "tax.token|jamie@example.com|same|a:1,b:2",
+      "tax.token|jamie@example.com|Jamie:Rivera:555-123-4567:123 Maple Street:|same|a:1,b:2",
     );
   });
 
@@ -90,6 +90,30 @@ describe("paymentPrepareKey", () => {
     const cart = makeCart();
     expect(paymentPrepareKey(makeDraft(), cart)).not.toBe(
       paymentPrepareKey(makeDraft({ taxQuoteToken: "tax.token.2" }), cart),
+    );
+  });
+
+  it("changes when only the street address is edited", () => {
+    // The tax quote token covers postal code, country, state and city, but not
+    // the street lines — leave them out of the key and a street-only edit never
+    // re-prepares, so the Medusa cart keeps the previous address on the order.
+    const cart = makeCart();
+    expect(paymentPrepareKey(makeDraft(), cart)).not.toBe(
+      paymentPrepareKey(makeDraft({ address1: "456 Oak Avenue" }), cart),
+    );
+  });
+
+  it("changes when the apartment line is added", () => {
+    const cart = makeCart();
+    expect(paymentPrepareKey(makeDraft(), cart)).not.toBe(
+      paymentPrepareKey(makeDraft({ address2: "Apt 4B" }), cart),
+    );
+  });
+
+  it("changes when the recipient name is edited", () => {
+    const cart = makeCart();
+    expect(paymentPrepareKey(makeDraft(), cart)).not.toBe(
+      paymentPrepareKey(makeDraft({ lastName: "Rivera-Smith" }), cart),
     );
   });
 
