@@ -11,13 +11,13 @@ describe("CommunicationPreferencesCard", () => {
     global.fetch = originalFetch;
   });
 
-  it("locks the transactional row on, since order and proof email is required", () => {
+  it("locks the transactional row on, since order email is required", () => {
     render(
       <CommunicationPreferencesCard initialPreferences={INITIAL_PREFERENCES} />,
     );
 
     const transactional = screen.getByRole("switch", {
-      name: /Proof approvals & order updates/,
+      name: /Order updates/,
     });
     expect(transactional).toBeChecked();
     expect(transactional).toBeDisabled();

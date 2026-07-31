@@ -48,8 +48,8 @@ export function CommunicationPreferencesCard({
           <Switch
             isSelected
             isDisabled
-            label="Proof approvals & order updates"
-            description="Receipts, proofs to approve, and shipping notices."
+            label="Order updates"
+            description="Receipts and shipping notices."
           />
         </div>
         <div className="py-4">
@@ -73,8 +73,8 @@ export function CommunicationPreferencesCard({
       </div>
 
       <p className="mt-4 text-sm text-foreground-muted">
-        Order and proof emails are required — they&apos;re how you approve and
-        track what you bought.
+        Order emails are required — they&apos;re how you track what you
+        bought.
       </p>
 
       {error ? (
