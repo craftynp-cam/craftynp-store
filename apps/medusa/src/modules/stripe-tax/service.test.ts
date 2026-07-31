@@ -153,4 +153,46 @@ describe("StripeTaxModuleService", () => {
     await expect(service.calculateTax(calculationInput)).rejects.toThrow();
     expect(cache.set).not.toHaveBeenCalled();
   });
+
+  describe("recordTransaction", () => {
+    function makeServiceWithTransactionSpy() {
+      const { service } = makeService();
+      const client = (service as unknown as { client_: Stripe }).client_;
+      const createFromCalculation = jest.spyOn(
+        client.tax.transactions,
+        "createFromCalculation",
+      );
+      return { service, createFromCalculation };
+    }
+
+    it("records a transaction against the given calculation and reference", async () => {
+      const { service, createFromCalculation } =
+        makeServiceWithTransactionSpy();
+      createFromCalculation.mockResolvedValueOnce({
+        id: "tax_txn_1",
+      } as never);
+
+      await service.recordTransaction("taxcalc_1", "order_123");
+
+      expect(createFromCalculation).toHaveBeenCalledWith({
+        calculation: "taxcalc_1",
+        reference: "order_123",
+      });
+    });
+
+    it("wraps a Stripe error the same way calculateTax does", async () => {
+      const { service, createFromCalculation } =
+        makeServiceWithTransactionSpy();
+      createFromCalculation.mockRejectedValueOnce(
+        new Stripe.errors.StripeAPIError({
+          message: "server error",
+          type: "api_error",
+        }),
+      );
+
+      await expect(
+        service.recordTransaction("taxcalc_1", "order_123"),
+      ).rejects.toMatchObject({ reason: "http_error" });
+    });
+  });
 });

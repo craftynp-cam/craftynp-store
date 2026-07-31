@@ -68,6 +68,28 @@ class StripeTaxModuleService {
     await this.cache_.set(key, normalized, options.cacheTtlSeconds);
     return normalized;
   }
+
+  /**
+   * Records a Stripe Tax calculation as a filable transaction, so the sale
+   * shows up in Stripe's own tax reports. `reference` must be unique across
+   * every transaction and reversal — the order id is a natural fit and also
+   * makes this call idempotent in effect: a retried order-placement subscriber
+   * invocation reusing the same order id fails on Stripe's own uniqueness
+   * check rather than recording the sale twice.
+   */
+  async recordTransaction(
+    calculationId: string,
+    reference: string,
+  ): Promise<void> {
+    try {
+      await this.client_.tax.transactions.createFromCalculation({
+        calculation: calculationId,
+        reference,
+      });
+    } catch (error) {
+      throw toStripeTaxError(error);
+    }
+  }
 }
 
 export default StripeTaxModuleService;
