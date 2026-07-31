@@ -577,9 +577,30 @@ the re-estimate/tolerance path, which throws and blocks checkout outright when
 the address moved far enough for the fresh rate to fall outside tolerance.
 
 **`POST /store/checkout/complete`** runs `completeCartWorkflow` and is
-idempotent the same way: it looks up an existing order by `cart_id` first and
+idempotent the same way: it looks up an existing order for the cart first and
 returns that instead of erroring, so a resubmitted request cannot double-place
 an order.
+
+**That lookup has to go through the `order_cart` link table, because `Order`
+has no `cart_id` column.** The cart/order association is a module link
+(`@medusajs/link-modules`' `OrderCart` definition, table `order_cart`), so
+`query.graph({ entity: "order", filters: { cart_id } })` doesn't return
+nothing — MikroORM rejects the unknown property outright with
+`Trying to query by not existing property Order.cart_id`, which surfaced as a
+500 on the very first successful payment. The route queries
+`entity: "order_cart"` with `fields: ["order_id", "order.id", "order.display_id"]`
+and filters on `cart_id` instead.
+
+**AC9's webhook races this route, and losing that race is a success.** Stripe's
+`payment_intent.succeeded` drives `processPaymentWorkflow` →
+`completeCartAfterPaymentStep`, which can place the order in the window between
+this route's idempotency lookup and its own `completeCartWorkflow` call —
+leaving that call to throw on an already-completed cart. The `catch` therefore
+re-runs the link lookup before reporting anything, and only returns
+`502 order_placement_unavailable` (with `[checkout:complete-failed]`) when no
+order exists either way. Without that re-check the shopper sees "Your payment
+was captured, but we couldn't confirm your order just yet" on an order that
+was, in fact, placed a few milliseconds earlier.
 
 **AC9 needed no code here.** Medusa core already ships
 `/hooks/payment/:provider` with raw-body signature verification, and
@@ -703,21 +724,27 @@ subset of fields the calling workflow happened to pass in. `service.test.ts`
 covers the exact regression: a variant with no dimensions of its own, backed
 only by its product's.
 
-All seven of these — the two `AwilixResolutionError`s (`shipstation` and
+All eight of these — the two `AwilixResolutionError`s (`shipstation` and
 `query`), the missing `cacheTtlSeconds`, the null `code`, the shipping-only
-`line_items` requirement, the incomplete cart-refresh context, and the
-cancelled PaymentIntent handed back from a pre-update cart snapshot — are
-runtime-only failures. A passing `tsc`/`jest` run exercises none of Medusa's
-actual DI container, its own options validation, its entity-level column
-constraints, the exact field selection its own core workflows use, or the
-side effects those workflows have on rows this app then reads back, so
-`pnpm run db:migrate` and a real `pnpm run dev` checkout are what actually
-catch them. Each one that has since been pinned down is covered by a unit
-test that encodes the _behaviour Medusa was found to have_ —
-`prepare-cart/route.test.ts` mocks the core workflows and switches the cart
-the `query` mock returns once a mutating workflow has run, which is the only
-way to express "the payment session was deleted underneath us" without a
-live database.
+`line_items` requirement, the incomplete cart-refresh context, the cancelled
+PaymentIntent handed back from a pre-update cart snapshot, and the
+non-existent `Order.cart_id` — are runtime-only failures. A passing
+`tsc`/`jest` run exercises none of Medusa's actual DI container, its own
+options validation, its entity-level column constraints, which associations
+are real columns versus link tables, the exact field selection its own core
+workflows use, or the side effects those workflows have on rows this app then
+reads back, so `pnpm run db:migrate` and a real `pnpm run dev` checkout are
+what actually catch them.
+
+Each one that has since been pinned down is covered by a unit test that
+encodes the _behaviour Medusa was found to have_, which is the only way a
+mock-based test can catch this class at all. `prepare-cart/route.test.ts`
+switches the cart its `query` mock returns once a mutating workflow has run,
+expressing "the payment session was deleted underneath us";
+`complete/route.test.ts` makes its `query` mock **throw** on an `order` filter
+containing `cart_id`, expressing "this column does not exist" — a mock that
+politely returned `[]` instead would have passed against the broken code.
+Both were verified to fail against the pre-fix route before being kept.
 
 ## React 18 — do not "fix" it
 
@@ -818,7 +845,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **190** of the repo's 1054 tests. The `siteContent`
+This app currently holds **194** of the repo's 1058 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including
