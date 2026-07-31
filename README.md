@@ -266,7 +266,19 @@ link in the email, so a wrong value produces receipts nobody can open.
 **Resend provisions SPF and DKIM but never DMARC** — its dashboard shows the
 domain fully verified without one, so it is easy to assume it is handled. Add
 the `_dmarc` record at the registrar, leave it at `p=none` long enough to read
-the aggregate reports, then tighten to `p=quarantine`.
+the aggregate reports, then tighten to `p=quarantine` and eventually `p=reject`.
+
+Two things to know before tightening:
+
+- **Do not add `aspf=s` (strict SPF alignment).** Resend's Return-Path is on
+  the `send.` subdomain, so strict alignment fails **every** order email.
+  Relaxed is the default and passes on the organizational domain — leave the
+  alignment tags off entirely.
+- **DMARC applies to the whole domain, not just Resend.** Order mail goes out
+  through Resend (`send` SPF + `resend._domainkey`) and everything else through
+  Google Workspace (root `include:_spf.google.com` + the `google` DKIM
+  selector). Both are aligned today; any future sender has to be too before the
+  policy moves past `p=none`.
 
 The free tier allows **100 emails a day** on one custom domain — a daily cap,
 not a monthly one, so a burst can exhaust it while the month sits far under
