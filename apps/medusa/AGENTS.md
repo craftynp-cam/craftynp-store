@@ -97,13 +97,12 @@ for both actors.
 
 **No in-repo representation.** These live only in external dashboards, so don't
 search the repo for them: Auth0's password policy, its "Require Email
-Verification" Post-Login Action, and Attack Protection; the
-`custom-email-provider` Action that routes password-reset mail through the
-Resend `password-reset` template, along with the Change Password template body
-it depends on being **exactly** `{{ url }}` and nothing else (a reviewable copy
-of the Action is in [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md),
-and a copy under `src/` would never run); the Google Cloud OAuth
-Web client whose redirect URI must exactly match `GOOGLE_ADMIN_CALLBACK_URL`;
+Verification" Post-Login Action, and Attack Protection; the Auth0
+`custom-email-provider` Action that sends password-reset mail through Resend —
+never add it under `src/`, it would not run there (see
+[docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md));
+the Google Cloud OAuth Web client whose redirect URI must exactly match
+`GOOGLE_ADMIN_CALLBACK_URL`;
 the Workspace org's 2-Step Verification policy; and Stripe Tax's nexus and
 per-state registrations. Workspace 2SV is the real MFA enforcement — Medusa's
 TOTP is config-only and opt-in per identity, so do not implement enrolment.
