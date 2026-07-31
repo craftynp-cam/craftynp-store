@@ -17,6 +17,17 @@ export function checkoutHref(): string {
   return "/checkout";
 }
 
+export function checkoutConfirmationHref(
+  orderId: string,
+  displayId: number,
+): string {
+  const params = new URLSearchParams({
+    order: orderId,
+    number: String(displayId),
+  });
+  return `/checkout/confirmation?${params.toString()}`;
+}
+
 export function signInHref(options?: {
   returnTo?: string;
   error?: string;
@@ -46,8 +57,6 @@ export function authLogoutHref(): string {
 }
 
 export function sanitizeReturnTo(value: string | null | undefined): string {
-  // WHATWG URL parsing treats "\" as "/" in http(s) URLs, so "/\evil.com"
-  // resolves protocol-relative, exactly like "//evil.com".
   if (value && value.startsWith("/") && !/^\/[/\\]/.test(value)) {
     return value;
   }

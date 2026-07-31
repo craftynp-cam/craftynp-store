@@ -5,6 +5,8 @@ import {
   Modules,
 } from "@medusajs/framework/utils";
 
+import { SHIPSTATION_MODULE } from "./src/modules/shipstation";
+
 loadEnv(process.env.NODE_ENV || "development", process.cwd());
 
 module.exports = defineConfig({
@@ -57,6 +59,54 @@ module.exports = defineConfig({
         cacheTtlSeconds: Number(
           process.env.STRIPE_TAX_CACHE_TTL_SECONDS ?? 900,
         ),
+      },
+    },
+    {
+      resolve: "@medusajs/medusa/payment",
+      options: {
+        providers: [
+          {
+            resolve: "@medusajs/payment-stripe",
+            id: "stripe",
+            options: {
+              apiKey: process.env.STRIPE_SECRET_KEY,
+              webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+              capture: true,
+              automaticPaymentMethods: true,
+            },
+          },
+        ],
+      },
+    },
+    {
+      resolve: "@medusajs/medusa/fulfillment",
+      dependencies: [SHIPSTATION_MODULE, ContainerRegistrationKeys.QUERY],
+      options: {
+        providers: [
+          { resolve: "@medusajs/medusa/fulfillment-manual", id: "manual" },
+          {
+            resolve: "./src/modules/shipstation-fulfillment",
+            id: "shipstation",
+          },
+        ],
+      },
+    },
+    {
+      resolve: "@medusajs/medusa/tax",
+      options: {
+        providers: [
+          {
+            resolve: "./src/modules/stripe-tax/tax-provider-module",
+            id: "stripe",
+            options: {
+              secretKey: process.env.STRIPE_SECRET_KEY,
+              defaultTaxCode: process.env.STRIPE_TAX_DEFAULT_TAX_CODE,
+              shippingTaxCode: process.env.STRIPE_TAX_SHIPPING_TAX_CODE,
+              timeoutMs: Number(process.env.STRIPE_TAX_TIMEOUT_MS ?? 5000),
+              maxRetries: Number(process.env.STRIPE_TAX_MAX_RETRIES ?? 2),
+            },
+          },
+        ],
       },
     },
     {

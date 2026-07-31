@@ -24,16 +24,14 @@ describe("tax quote cache", () => {
   it("round-trips a written entry", () => {
     const quote = makeQuote();
     writeCachedTaxQuote("us|62704|il|springfield|rate_1|a:1", quote);
-    expect(
-      readCachedTaxQuote("us|62704|il|springfield|rate_1|a:1"),
-    ).toEqual(quote);
+    expect(readCachedTaxQuote("us|62704|il|springfield|rate_1|a:1")).toEqual(
+      quote,
+    );
   });
 
   it("misses on a different key", () => {
     writeCachedTaxQuote("us|62704|il|springfield|rate_1|a:1", makeQuote());
-    expect(
-      readCachedTaxQuote("us|95128|ca|san jose|rate_2|a:1"),
-    ).toBeNull();
+    expect(readCachedTaxQuote("us|95128|ca|san jose|rate_2|a:1")).toBeNull();
   });
 
   it("expires an entry past the TTL", () => {
@@ -42,9 +40,7 @@ describe("tax quote cache", () => {
     writeCachedTaxQuote("us|62704|il|springfield|rate_1|a:1", makeQuote());
 
     jest.spyOn(Date, "now").mockReturnValue(now + 16 * 60 * 1000);
-    expect(
-      readCachedTaxQuote("us|62704|il|springfield|rate_1|a:1"),
-    ).toBeNull();
+    expect(readCachedTaxQuote("us|62704|il|springfield|rate_1|a:1")).toBeNull();
 
     jest.restoreAllMocks();
   });
@@ -68,9 +64,7 @@ describe("tax quote cache", () => {
     expect(() =>
       readCachedTaxQuote("us|62704|il|springfield|rate_1|a:1"),
     ).not.toThrow();
-    expect(
-      readCachedTaxQuote("us|62704|il|springfield|rate_1|a:1"),
-    ).toBeNull();
+    expect(readCachedTaxQuote("us|62704|il|springfield|rate_1|a:1")).toBeNull();
 
     getItem.mockRestore();
   });

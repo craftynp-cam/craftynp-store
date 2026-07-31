@@ -27,10 +27,13 @@ export type CheckoutDraft = {
   shippingRateLabel: string;
   shippingRateAmount: number;
   shippingRateCurrency: string;
+  shippingServiceCode: string;
   shippingQuoteToken: string;
   taxAmount: number;
   taxCurrency: string;
   taxQuoteToken: string;
+  cartId: string;
+  paymentClientSecret: string;
 };
 
 export type CheckoutTextField =
@@ -77,10 +80,13 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   shippingRateLabel: "",
   shippingRateAmount: 0,
   shippingRateCurrency: "",
+  shippingServiceCode: "",
   shippingQuoteToken: "",
   taxAmount: 0,
   taxCurrency: "",
   taxQuoteToken: "",
+  cartId: "",
+  paymentClientSecret: "",
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

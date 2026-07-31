@@ -11,6 +11,7 @@ import {
   cheapestRateId,
   isDestinationReadyForRates,
   SHIPPING_RATE_DEBOUNCE_MS,
+  shippingRateDraftPatch,
   shippingRateKey,
 } from "@/lib/shipping-rates";
 import {
@@ -47,13 +48,7 @@ function preselectRate(rates: readonly ShippingRate[], currentRateId: string) {
   const rate = rates.find((candidate) => candidate.rateId === rateId);
   if (!rate) return;
 
-  patchCheckoutDraft({
-    shippingRateId: rate.rateId,
-    shippingRateLabel: rate.serviceName,
-    shippingRateAmount: rate.amount,
-    shippingRateCurrency: rate.currencyCode,
-    shippingQuoteToken: rate.quoteToken,
-  });
+  patchCheckoutDraft(shippingRateDraftPatch(rate));
 }
 
 export function useShippingRates(

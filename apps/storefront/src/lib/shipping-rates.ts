@@ -34,6 +34,17 @@ export function cheapestRateId(rates: readonly ShippingRate[]): string | null {
   ).rateId;
 }
 
+export function shippingRateDraftPatch(rate: ShippingRate) {
+  return {
+    shippingRateId: rate.rateId,
+    shippingRateLabel: rate.serviceName,
+    shippingRateAmount: rate.amount,
+    shippingRateCurrency: rate.currencyCode,
+    shippingServiceCode: rate.serviceCode,
+    shippingQuoteToken: rate.quoteToken,
+  };
+}
+
 export function selectedShippingAmount(
   rates: readonly ShippingRate[],
   rateId: string,

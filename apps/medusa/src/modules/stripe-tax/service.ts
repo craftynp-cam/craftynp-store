@@ -3,10 +3,10 @@ import { Modules } from "@medusajs/framework/utils";
 import Stripe from "stripe";
 
 import {
-  StripeTaxError,
   buildCalculationParams,
   normalizeCalculation,
   taxCacheKey,
+  toStripeTaxError,
   validateStripeTaxOptions,
   type CalculationParamsInput,
   type NormalizedCalculation,
@@ -17,29 +17,6 @@ type InjectedDependencies = {
   logger: Logger;
   [Modules.CACHE]: ICacheService;
 };
-
-function toStripeTaxError(error: unknown): StripeTaxError {
-  if (error instanceof Stripe.errors.StripeConnectionError) {
-    return new StripeTaxError("timeout", error.message);
-  }
-
-  if (
-    error instanceof Stripe.errors.StripeInvalidRequestError &&
-    typeof error.param === "string" &&
-    error.param.includes("address")
-  ) {
-    return new StripeTaxError("invalid_address", error.message);
-  }
-
-  if (error instanceof Stripe.errors.StripeError) {
-    return new StripeTaxError("http_error", error.message);
-  }
-
-  return new StripeTaxError(
-    "http_error",
-    error instanceof Error ? error.message : String(error),
-  );
-}
 
 class StripeTaxModuleService {
   protected logger_: Logger;
@@ -90,6 +67,20 @@ class StripeTaxModuleService {
     const normalized = normalizeCalculation(calculation);
     await this.cache_.set(key, normalized, options.cacheTtlSeconds);
     return normalized;
+  }
+
+  async recordTransaction(
+    calculationId: string,
+    reference: string,
+  ): Promise<void> {
+    try {
+      await this.client_.tax.transactions.createFromCalculation({
+        calculation: calculationId,
+        reference,
+      });
+    } catch (error) {
+      throw toStripeTaxError(error);
+    }
   }
 }
 
