@@ -33,6 +33,7 @@ import {
   subscribeToCart,
 } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
+import { shippingRateDraftPatch } from "@/lib/shipping-rates";
 import { checkoutConfirmationHref, checkoutHref } from "@/lib/routes";
 import { formatMoney } from "@/lib/money";
 
@@ -340,14 +341,7 @@ export function CheckoutView({
                 );
                 if (!rate) return;
 
-                handleChange({
-                  shippingRateId: rate.rateId,
-                  shippingRateLabel: rate.serviceName,
-                  shippingRateAmount: rate.amount,
-                  shippingRateCurrency: rate.currencyCode,
-                  shippingServiceCode: rate.serviceCode,
-                  shippingQuoteToken: rate.quoteToken,
-                });
+                handleChange(shippingRateDraftPatch(rate));
               }}
             />
           </CheckoutSection>

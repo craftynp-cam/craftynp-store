@@ -542,6 +542,16 @@ completes by placing a real Medusa order.
   minutes, keyed on destination + sorted `variantId:quantity` pairs) before
   ever calling `POST /checkout/shipping-rates`, and auto-preselects the
   cheapest rate unless the shopper's current selection is still in the list.
+  **Both selection paths — that auto-preselect and the shopper's own click in
+  `CheckoutView` — must go through `shippingRateDraftPatch`
+  (`src/lib/shipping-rates.ts`), never a hand-written object literal.** They
+  were two literals, and the auto-preselect one silently omitted
+  `shippingServiceCode`: a shopper who simply accepted the preselected rate
+  reached payment with a blank service code (`prepare-cart` rejects it), and
+  one who picked a rate then edited their address kept the _previous_ rate's
+  code beside the new rate's quote token — a mismatch nothing validates until
+  ShipStation is asked to re-estimate a service that was never chosen. Adding
+  a rate-derived draft field means adding it to that one function.
   **A single returned rate renders as a plain static row with no radio** —
   `ShippingMethodFields` branches on `rates.length`; more than one renders
   `RadioCardGroup` (`src/components/ui/radio-card-group.tsx`), a new
@@ -753,5 +763,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **779** of the repo's 1059 tests. A smaller number
+The storefront currently holds **781** of the repo's 1061 tests. A smaller number
 after your change means something was dropped.

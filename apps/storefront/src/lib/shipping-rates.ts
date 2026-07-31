@@ -34,6 +34,27 @@ export function cheapestRateId(rates: readonly ShippingRate[]): string | null {
   ).rateId;
 }
 
+/**
+ * The single definition of what selecting a rate writes to the draft. Both the
+ * shopper's own click and `useShippingRates`' auto-preselect go through this:
+ * they were separate object literals, and the auto-preselect one silently
+ * omitted `shippingServiceCode`. A shopper who accepted the preselected rate
+ * without clicking one therefore reached payment with a blank service code,
+ * and one who picked a rate and then edited their address kept the *previous*
+ * rate's code beside the new rate's quote token — a mismatch nothing validates
+ * until ShipStation is asked to re-estimate a service that was never chosen.
+ */
+export function shippingRateDraftPatch(rate: ShippingRate) {
+  return {
+    shippingRateId: rate.rateId,
+    shippingRateLabel: rate.serviceName,
+    shippingRateAmount: rate.amount,
+    shippingRateCurrency: rate.currencyCode,
+    shippingServiceCode: rate.serviceCode,
+    shippingQuoteToken: rate.quoteToken,
+  };
+}
+
 export function selectedShippingAmount(
   rates: readonly ShippingRate[],
   rateId: string,

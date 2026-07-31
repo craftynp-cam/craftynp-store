@@ -7,6 +7,7 @@ import {
   formatDeliveryWindow,
   isDestinationReadyForRates,
   selectedShippingAmount,
+  shippingRateDraftPatch,
   shippingRateKey,
 } from "@/lib/shipping-rates";
 
@@ -217,5 +218,28 @@ describe("formatDeliveryWindow", () => {
         makeRate({ deliveryDays: null, estimatedDeliveryDate: null }),
       ),
     ).toBe("Delivery estimate unavailable");
+  });
+});
+
+describe("shippingRateDraftPatch", () => {
+  it("carries every field the draft needs to describe the chosen rate", () => {
+    expect(shippingRateDraftPatch(makeRate())).toEqual({
+      shippingRateId: "rate_1",
+      shippingRateLabel: "USPS Ground Advantage",
+      shippingRateAmount: 7.42,
+      shippingRateCurrency: "usd",
+      shippingServiceCode: "usps_ground_advantage",
+      shippingQuoteToken: "token",
+    });
+  });
+
+  it("includes the service code, which prepare-cart rejects when blank", () => {
+    // useShippingRates' auto-preselect built this object separately and left
+    // shippingServiceCode out, so a shopper who never clicked a rate reached
+    // payment with a blank one.
+    expect(
+      shippingRateDraftPatch(makeRate({ serviceCode: "usps_priority_mail" }))
+        .shippingServiceCode,
+    ).toBe("usps_priority_mail");
   });
 });
