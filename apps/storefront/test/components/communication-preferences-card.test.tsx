@@ -13,9 +13,7 @@ describe("CommunicationPreferencesCard", () => {
 
   it("locks the transactional row on, since order and proof email is required", () => {
     render(
-      <CommunicationPreferencesCard
-        initialPreferences={INITIAL_PREFERENCES}
-      />,
+      <CommunicationPreferencesCard initialPreferences={INITIAL_PREFERENCES} />,
     );
 
     const transactional = screen.getByRole("switch", {
@@ -29,9 +27,7 @@ describe("CommunicationPreferencesCard", () => {
     const fetchMock = jest.fn().mockResolvedValue({ ok: true } as Response);
     global.fetch = fetchMock as unknown as typeof fetch;
     render(
-      <CommunicationPreferencesCard
-        initialPreferences={INITIAL_PREFERENCES}
-      />,
+      <CommunicationPreferencesCard initialPreferences={INITIAL_PREFERENCES} />,
     );
 
     fireEvent.click(screen.getByRole("switch", { name: /^New drops/ }));
@@ -51,9 +47,7 @@ describe("CommunicationPreferencesCard", () => {
     const fetchMock = jest.fn().mockResolvedValue({ ok: false } as Response);
     global.fetch = fetchMock as unknown as typeof fetch;
     render(
-      <CommunicationPreferencesCard
-        initialPreferences={INITIAL_PREFERENCES}
-      />,
+      <CommunicationPreferencesCard initialPreferences={INITIAL_PREFERENCES} />,
     );
 
     const salesToggle = screen.getByRole("switch", {

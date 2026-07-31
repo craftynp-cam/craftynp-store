@@ -19,9 +19,7 @@ describe("SignInSecurityCard", () => {
   });
 
   it("shows an email customer a reset button that requests a reset link", async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValue({ ok: true } as Response);
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true } as Response);
     global.fetch = fetchMock as unknown as typeof fetch;
     render(<SignInSecurityCard authProvider="email" />);
 

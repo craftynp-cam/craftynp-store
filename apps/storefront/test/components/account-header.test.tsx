@@ -16,9 +16,7 @@ function makeCustomer(overrides: Partial<AuthedCustomer> = {}): AuthedCustomer {
 
 describe("AccountHeader", () => {
   it("greets the customer by first name and shows their email", () => {
-    render(
-      <AccountHeader customer={makeCustomer({ first_name: "Cam" })} />,
-    );
+    render(<AccountHeader customer={makeCustomer({ first_name: "Cam" })} />);
 
     expect(screen.getByText("Hi, Cam")).toBeInTheDocument();
     expect(screen.getByText(/cam@example.com/)).toBeInTheDocument();
