@@ -242,6 +242,41 @@ registration — neither is scriptable. See `apps/medusa/.env.example` for the
 remaining `STRIPE_TAX_*` variables and `apps/medusa/AGENTS.md`'s Sales tax
 section for how the calculation itself works.
 
+#### Transactional email (Resend)
+
+Order confirmation and shipped receipts go out through Resend. **The email
+bodies are not in this repo** — they are Resend-hosted templates, bound by
+alias (`order-confirmation`, `order-shipped`, `password-reset`) so the binding
+survives a template being recreated. Medusa supplies the variables; the owner
+edits the design in the Resend dashboard.
+
+Set `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `STOREFRONT_URL` from
+`apps/medusa/.env.example`. `STOREFRONT_URL` is what builds the tokenized order
+link in the email, so a wrong value produces receipts nobody can open.
+
+**DNS.** `thecraftynp.org` is verified in Resend with these records:
+
+| Type | Name                | Value                                                | Notes            |
+| ---- | ------------------- | ---------------------------------------------------- | ---------------- |
+| TXT  | `resend._domainkey` | the DKIM public key from Resend                      | DKIM             |
+| MX   | `send`              | `feedback-smtp.us-east-1.amazonses.com`              | priority 10      |
+| TXT  | `send`              | `v=spf1 include:amazonses.com ~all`                  | SPF              |
+| TXT  | `_dmarc`            | `v=DMARC1; p=none; rua=mailto:dmarc@thecraftynp.org` | **add manually** |
+
+**Resend provisions SPF and DKIM but never DMARC** — its dashboard shows the
+domain fully verified without one, so it is easy to assume it is handled. Add
+the `_dmarc` record at the registrar, leave it at `p=none` long enough to read
+the aggregate reports, then tighten to `p=quarantine`.
+
+The free tier allows **100 emails a day** on one custom domain — a daily cap,
+not a monthly one, so a burst can exhaust it while the month sits far under
+3,000. Every send logs its remaining allowance, and `[email:quota-low]` /
+`[email:quota-daily]` are logged at warn as it runs down. See the "Email and
+notifications" section of `apps/medusa/AGENTS.md`.
+
+Password reset is **not** sent by this app — Auth0 owns it. See
+[apps/medusa/docs/auth0-custom-email-provider.md](apps/medusa/docs/auth0-custom-email-provider.md).
+
 ### Running locally
 
 ```bash

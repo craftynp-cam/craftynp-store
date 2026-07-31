@@ -183,6 +183,27 @@ between steps 3 and 4. The backend half is in
   it hides every error from a shopper who never focuses a field.
 - Guest checkout is the default and is never blocked.
 
+### Order confirmation
+
+`/checkout/confirmation` is a real order view, not just a thank-you, and is
+reused as the permanent order link in the confirmation email — which is why no
+`/order` or `/orders` segment exists. One would permanently claim that Medusa
+category handle for nothing.
+
+- **The page is a pure GET keyed on `?order=`** and performs no mutation, which
+  is what makes a refresh safe. The cart and draft are cleared in
+  `checkout-view.tsx` _before_ the redirect, never on arrival here — moving
+  that would make the ordering silently load-bearing.
+- **Its query contract is `order`, `number` and `token`**, built by
+  `checkoutConfirmationHref()`. Medusa's `order-email.ts` builds the same URL
+  independently for the email, so a change here needs the same change there.
+- **The guest account prompt sits below the order content with no dismissal
+  state**, so it structurally cannot block someone reading their own order. Do
+  not turn it into a modal or an interstitial.
+- `fetchOrderConfirmation` passes the guest `?token=` _or_ the session bearer,
+  never both, and degrades to `null` like every other fetch helper — the page
+  still renders a thank-you when the backend is down.
+
 ## Auth
 
 Sign-in, registration, "Continue with Google", and password reset all run
