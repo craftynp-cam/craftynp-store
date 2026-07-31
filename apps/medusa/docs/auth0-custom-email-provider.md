@@ -30,17 +30,22 @@ like the order emails. Hence the Action.
 ## The Action
 
 ```js
+const FROM = "The Crafty NP <hello@thecraftynp.org>";
+
 exports.onExecuteCustomEmailProvider = async (event, api) => {
   const { to, subject, html, message_type } = event.notification;
 
-  // Only password reset is redirected to the Resend template. Anything else
-  // Auth0 sends (verification, blocked account) falls through to its own body
-  // rather than silently not being sent at all.
-  const isReset = message_type === "reset_email";
+  // Only password reset is redirected to the Resend template. Every other
+  // message_type Auth0 can send — verify_email, blocked_account,
+  // organization_invitation, and the dashboard's own
+  // try_provider_configuration_email test — falls through to Auth0's rendered
+  // body, so enabling this provider never silently stops those being sent.
+  const isReset =
+    message_type === "reset_email" || message_type === "reset_email_by_code";
 
   const payload = isReset
     ? {
-        from: "The Crafty NP <hello@thecraftynp.org>",
+        from: FROM,
         to: [to],
         template: { id: "password-reset" },
         variables: {
@@ -51,35 +56,60 @@ exports.onExecuteCustomEmailProvider = async (event, api) => {
           SHOP_ADDRESS: "The Crafty NP",
         },
       }
-    : {
-        from: "The Crafty NP <hello@thecraftynp.org>",
-        to: [to],
-        subject,
-        html,
-      };
+    : { from: FROM, to: [to], subject, html };
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${event.secrets.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    // Auth0 retries the trigger when the Action fails, which is the retry
-    // path for this mail — there is no notification row on our side.
-    throw new Error(`Resend rejected the send: ${await response.text()}`);
+  let response;
+  try {
+    response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${event.secrets.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Network-level failure. Auth0 retries up to 5 times over the next few
+    // minutes — this is the whole retry story for password-reset mail, since
+    // it never touches our notification table.
+    return api.notification.retry();
   }
+
+  if (response.ok) return;
+
+  // 4xx fails identically on every attempt (bad key, unknown template,
+  // unverified sender), so retrying just burns the quota. 5xx and 429 are
+  // worth another go.
+  if (response.status >= 500 || response.status === 429) {
+    return api.notification.retry();
+  }
+
+  return api.notification.drop();
 };
 ```
 
+`api.notification.retry()` marks the send failed-but-recoverable; `drop()`
+marks it failed with no further attempts. Neither is the same as throwing —
+use them rather than an `Error`.
+
 ## Verifying it
 
-Trigger a reset from Universal Login, then check Resend's logs for a send to
-that address using the `password-reset` template. If the mail arrives but
-looks like Auth0's default, the Action is not bound to the trigger. If
-`RESET_URL` contains markup, the Change Password body is not `{{ url }}` alone.
+Two stages, in this order:
+
+1. **"Send test email"** in Branding → Email Provider. It arrives as
+   `message_type: try_provider_configuration_email`, so it takes the
+   _fall-through_ branch — it proves the Action is bound, the secret resolves
+   and the sender is accepted, but it does **not** exercise the Resend
+   template.
+2. **A real reset** from Universal Login. That is the only thing that
+   exercises the `password-reset` template and the `{{ url }}` extraction.
+
+Then check Resend's logs for the send.
+
+| Symptom                                   | Cause                                                                                   |
+| ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| Mail arrives looking like Auth0's default | Action not bound to the trigger, or `message_type` did not match                        |
+| `RESET_URL` contains markup or extra text | Change Password body is not `{{ url }}` alone                                           |
+| Nothing arrives, Auth0 shows retries      | Resend rejected it — check the key's permissions and that the sender domain is verified |
 
 These sends draw on the **same 100-a-day Resend allowance** as order mail.
