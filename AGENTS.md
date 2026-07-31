@@ -120,6 +120,3 @@ A storefront test left under `src/` is silently never run. Test files are named
 
 A test must be able to fail. Write it so you have seen it fail for the right
 reason before you make it pass.
-
-Suite: **1073 tests** (types 85, medusa 203, storefront 785). A smaller number
-after your change means something was dropped.

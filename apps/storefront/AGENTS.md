@@ -199,5 +199,3 @@ directory needs adding there and to `eslint.config.mjs`'s `files` glob.
   CSS modules, and `customExportConditions` deliberately left unset.
   `jest.setup.ts`'s Streams/`TextEncoder` polyfills for `@medusajs/js-sdk` are
   the same — leave them in place.
-
-This app holds **785** of the repo's 1073 tests.

@@ -245,5 +245,3 @@ rendered here.
 
 `jest.config.js` maps `@craftynp/types` to the package's `src/` rather than its
 `dist/` on purpose, so tests need no prior build — do not "correct" it.
-
-This app holds **203** of the repo's 1073 tests.
