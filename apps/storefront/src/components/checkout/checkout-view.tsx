@@ -265,11 +265,18 @@ export function CheckoutView({
       const order = (await response.json()) as {
         orderId: string;
         displayId: number;
+        orderToken?: string;
       };
 
       clearCart();
       clearCheckoutDraft();
-      router.push(checkoutConfirmationHref(order.orderId, order.displayId));
+      router.push(
+        checkoutConfirmationHref(
+          order.orderId,
+          order.displayId,
+          order.orderToken,
+        ),
+      );
     } catch {
       showPayError(
         "Your payment was captured, but we couldn't confirm your order just yet. We'll email your confirmation shortly.",

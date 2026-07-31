@@ -2,6 +2,7 @@ export {
   ArrowRight,
   CaretLeft,
   CaretRight,
+  Check,
   FacebookLogo,
   InstagramLogo,
   List,

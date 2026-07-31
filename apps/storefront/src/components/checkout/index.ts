@@ -4,6 +4,31 @@ export { CheckoutSummary, type CheckoutSummaryProps } from "./checkout-summary";
 export { CheckoutView, type CheckoutViewProps } from "./checkout-view";
 export { ContactFields, type ContactFieldsProps } from "./contact-fields";
 export {
+  GuestAccountPrompt,
+  type GuestAccountPromptProps,
+} from "./guest-account-prompt";
+export {
+  OrderAddressCard,
+  type OrderAddressCardProps,
+} from "./order-address-card";
+export {
+  OrderConfirmationHero,
+  type OrderConfirmationHeroProps,
+} from "./order-confirmation-hero";
+export {
+  OrderConfirmationView,
+  type OrderConfirmationViewProps,
+} from "./order-confirmation-view";
+export {
+  OrderDeliveryCard,
+  type OrderDeliveryCardProps,
+} from "./order-delivery-card";
+export { OrderLineRow, type OrderLineRowProps } from "./order-line-row";
+export {
+  OrderSummaryCard,
+  type OrderSummaryCardProps,
+} from "./order-summary-card";
+export {
   SavedAddressPicker,
   type SavedAddressPickerProps,
 } from "./saved-address-picker";
