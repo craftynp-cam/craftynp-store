@@ -126,7 +126,12 @@ describe("POST /store/checkout/complete", () => {
     await POST(req, res);
 
     expect(status).toHaveBeenCalledWith(502);
-    expect(json).toHaveBeenCalledWith({ error: "order_placement_unavailable" });
+    // `message` carries the underlying cause, since it is the only field
+    // @medusajs/js-sdk preserves for the storefront proxy to forward.
+    expect(json).toHaveBeenCalledWith({
+      error: "order_placement_unavailable",
+      message: "order_placement_unavailable:payment not authorized",
+    });
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining("[checkout:complete-failed]"),
     );

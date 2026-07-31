@@ -582,6 +582,18 @@ completes by placing a real Medusa order.
   which forwards to Medusa's `POST /store/checkout/prepare-cart` (see
   `apps/medusa/AGENTS.md`'s own Payments section for that side). On success it
   writes `cartId` and `paymentClientSecret` onto the draft.
+- **Both checkout proxies report the upstream failure through
+  `describeUpstreamError` (`src/lib/upstream-error.ts`), never a bare error
+  code.** `sdk.client.fetch` rejects with a `FetchError` carrying only the
+  upstream status and the body's `message` — every other field a Medusa route
+  responds with is discarded by the SDK before the proxy sees it, which is why
+  those routes name themselves in `message` too. Collapsing all of that into
+  one `{ error: "checkout_unavailable" }` is what made a rejected quote, a
+  misconfigured region and an unreachable Medusa indistinguishable in the
+  browser, and it cost two rounds of live debugging apiece before the reason
+  was forwarded. The shared helper exists so the two proxies can't drift the
+  way the two rate-selection literals did; it carries no `medusa.ts` import,
+  so tests can use it directly.
 - **`PaymentFields` (`src/components/checkout/payment-fields.tsx`) only
   mounts once `paymentSession.status === "ready"`.** It wraps Stripe's
   `Elements`/`PaymentElement` around the client secret and bridges
@@ -763,5 +775,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **781** of the repo's 1061 tests. A smaller number
+The storefront currently holds **785** of the repo's 1065 tests. A smaller number
 after your change means something was dropped.

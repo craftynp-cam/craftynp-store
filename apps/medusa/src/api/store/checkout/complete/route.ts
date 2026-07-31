@@ -68,9 +68,14 @@ export async function POST(
       });
     }
 
-    logger.error(
-      `[checkout:complete-failed] cart=${cartId} error=${error instanceof Error ? error.message : String(error)}`,
-    );
-    return res.status(502).json({ error: "order_placement_unavailable" });
+    const detail = error instanceof Error ? error.message : String(error);
+    logger.error(`[checkout:complete-failed] cart=${cartId} error=${detail}`);
+    // `message` is the only field @medusajs/js-sdk preserves from an error
+    // body, so the storefront proxy can forward a real reason rather than a
+    // blanket 502 — see prepare-cart's own note.
+    return res.status(502).json({
+      error: "order_placement_unavailable",
+      message: `order_placement_unavailable:${detail}`,
+    });
   }
 }

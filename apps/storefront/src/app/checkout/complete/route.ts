@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { CheckoutCompleteResponse } from "@craftynp/types";
 
 import { sdk } from "@/lib/medusa";
+import { describeUpstreamError } from "@/lib/upstream-error";
 
 type CheckoutCompletePayload = { cartId: string };
 
@@ -33,9 +34,13 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Could not complete checkout", error);
+    const detail = describeUpstreamError(error);
+    console.error(
+      `Could not complete checkout (upstream ${detail.upstreamStatus})`,
+      error,
+    );
     return NextResponse.json(
-      { error: "order_placement_unavailable" },
+      { error: "order_placement_unavailable", ...detail },
       { status: 502 },
     );
   }
