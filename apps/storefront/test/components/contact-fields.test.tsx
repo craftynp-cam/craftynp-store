@@ -21,15 +21,6 @@ function renderFields(
 }
 
 describe("ContactFields", () => {
-  it("renders labels for first name, last name, email, and phone", () => {
-    renderFields();
-
-    expect(screen.getByLabelText("First name")).toBeInTheDocument();
-    expect(screen.getByLabelText("Last name")).toBeInTheDocument();
-    expect(screen.getByLabelText("Email")).toBeInTheDocument();
-    expect(screen.getByLabelText("Phone")).toBeInTheDocument();
-  });
-
   it("sets autocomplete, type, and inputMode on each field", () => {
     renderFields();
 

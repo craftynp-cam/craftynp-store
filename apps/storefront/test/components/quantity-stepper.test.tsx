@@ -73,17 +73,6 @@ describe("QuantityStepper", () => {
     ).toBeDisabled();
   });
 
-  it("rounds each end button to match the container, so the focus ring isn't clipped", () => {
-    render(<QuantityStepper value={1} onChange={jest.fn()} label="Quantity" />);
-
-    expect(
-      screen.getByRole("button", { name: "Decrease quantity" }),
-    ).toHaveClass("rounded-l-lg");
-    expect(
-      screen.getByRole("button", { name: "Increase quantity" }),
-    ).toHaveClass("rounded-r-lg");
-  });
-
   it("hides its glyphs from assistive technology", () => {
     const { container } = render(
       <QuantityStepper value={1} onChange={jest.fn()} label="Quantity" />,

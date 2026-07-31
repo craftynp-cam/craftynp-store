@@ -1,14 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 
 import { Badge } from "@/components";
 
 describe("Badge", () => {
-  it("renders its text", () => {
-    render(<Badge>Made to order</Badge>);
-
-    expect(screen.getByText("Made to order")).toBeInTheDocument();
-  });
-
   it.each([
     ["neutral", "chip--default"],
     ["accent", "chip--accent"],

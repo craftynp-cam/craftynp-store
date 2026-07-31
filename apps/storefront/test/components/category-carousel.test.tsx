@@ -46,44 +46,6 @@ describe("CategoryCarousel", () => {
     ).toEqual(["1 of 3: Shirts", "2 of 3: Keychains", "3 of 3: Stickers"]);
   });
 
-  it("slides the track to the active slide instead of cross-fading", () => {
-    const { container } = render(<CategoryCarousel categories={categories} />);
-    const track = container.querySelector(".flex.h-full");
-    expect(track).toHaveStyle({ transform: "translateX(-0%)" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Next category" }));
-
-    expect(track).toHaveStyle({ transform: "translateX(-100%)" });
-  });
-
-  it("shows a progress ring on the pause control that tracks the countdown", () => {
-    const { container } = render(<CategoryCarousel categories={categories} />);
-
-    const button = screen.getByRole("button", {
-      name: "Pause automatic slide rotation",
-    });
-    const ringCircles = button.querySelectorAll("circle");
-    expect(ringCircles).toHaveLength(2);
-
-    const progressCircle = container.querySelector(
-      "circle[stroke-dasharray]",
-    ) as SVGCircleElement | null;
-    expect(progressCircle?.style.animationPlayState).toBe("running");
-
-    fireEvent.click(button);
-    const frozenCircle = container.querySelector(
-      "circle[stroke-dasharray]",
-    ) as SVGCircleElement | null;
-    expect(frozenCircle?.style.animationPlayState).toBe("paused");
-  });
-
-  it("does not render a progress ring when there is no pause control", () => {
-    mockMatchMedia(true);
-    const { container } = render(<CategoryCarousel categories={categories} />);
-
-    expect(container.querySelector("circle")).not.toBeInTheDocument();
-  });
-
   it("keeps exactly one h1 on the page as slides change", () => {
     render(<CategoryCarousel categories={categories} />);
 

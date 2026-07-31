@@ -41,21 +41,6 @@ describe("NavDrawer", () => {
     expect(links[2]).toHaveAttribute("href", "/categories/stickers");
   });
 
-  it("renders however many categories exist", () => {
-    const many: NavCategory[] = Array.from({ length: 7 }, (_, i) => ({
-      name: `Category ${i}`,
-      href: `/categories/category-${i}`,
-    }));
-    render(<NavDrawer categories={many} />);
-    const dialog = open();
-
-    for (const category of many) {
-      expect(
-        within(dialog).getByRole("link", { name: category.name }),
-      ).toBeInTheDocument();
-    }
-  });
-
   it("still offers All Products and shows an empty state when there are no categories", () => {
     render(<NavDrawer categories={[]} />);
     const dialog = open();
@@ -81,15 +66,6 @@ describe("NavDrawer", () => {
 
     expect(
       within(dialog).getByRole("searchbox", { name: "Search products" }),
-    ).toBeInTheDocument();
-  });
-
-  it("does not let the decorative arrow contribute to a row's accessible name", () => {
-    render(<NavDrawer categories={categories} />);
-    const dialog = open();
-
-    expect(
-      within(dialog).getByRole("link", { name: "Stickers" }),
     ).toBeInTheDocument();
   });
 

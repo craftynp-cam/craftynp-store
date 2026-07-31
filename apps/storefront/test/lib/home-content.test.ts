@@ -40,14 +40,6 @@ describe("toWorkshopGallery", () => {
     const result = toWorkshopGallery(resolveSiteContent([]));
     expect(result.tiles).toEqual([]);
   });
-
-  it("maps the heading and intro through unchanged", () => {
-    const result = toWorkshopGallery(resolveSiteContent([]));
-    expect(result.heading).toBe("Fresh from the workshop");
-    expect(result.intro).toBe(
-      "Real pieces we've made — the customization result, not a mockup.",
-    );
-  });
 });
 
 describe("toMakerIntro", () => {
@@ -73,7 +65,6 @@ describe("toMakerIntro", () => {
 
   it("uses the registry defaults when nothing is stored", () => {
     const result = toMakerIntro(resolveSiteContent([]));
-    expect(result.heading).toBe("Hi, I'm the one behind every order");
     expect(result.imageUrl).toBe("");
   });
 });

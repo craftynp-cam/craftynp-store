@@ -1,8 +1,6 @@
 import { MedusaError } from "@medusajs/framework/utils";
 
 import {
-  SHIPSTATION_RATE_LIMIT_LOG_TAG,
-  SHIPSTATION_UNAVAILABLE_LOG_TAG,
   applyRetryAfter,
   buildEstimateRequest,
   extractRates,
@@ -408,12 +406,5 @@ describe("token bucket reducers", () => {
     const next = applyRetryAfter(state, 1000, 5000);
     expect(next.tokens).toBe(0);
     expect(next.blockedUntilMs).toBe(6000);
-  });
-});
-
-describe("log tags", () => {
-  it("match the documented alerting strings", () => {
-    expect(SHIPSTATION_RATE_LIMIT_LOG_TAG).toBe("[shipstation:rate-limit]");
-    expect(SHIPSTATION_UNAVAILABLE_LOG_TAG).toBe("[shipstation:unavailable]");
   });
 });

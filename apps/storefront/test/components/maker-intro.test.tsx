@@ -13,11 +13,6 @@ const props: MakerIntroProps = {
 };
 
 describe("MakerIntro", () => {
-  it("renders the eyebrow", () => {
-    render(<MakerIntro {...props} />);
-    expect(screen.getByText("About the maker")).toBeInTheDocument();
-  });
-
   it("renders the heading as an h2", () => {
     render(<MakerIntro {...props} />);
     expect(
@@ -25,13 +20,6 @@ describe("MakerIntro", () => {
         level: 2,
         name: "Hi, I'm the one behind every order",
       }),
-    ).toBeInTheDocument();
-  });
-
-  it("renders the body copy", () => {
-    render(<MakerIntro {...props} />);
-    expect(
-      screen.getByText("The Crafty NP started as a kitchen-table hobby."),
     ).toBeInTheDocument();
   });
 

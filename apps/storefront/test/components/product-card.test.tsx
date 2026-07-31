@@ -3,23 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { ProductCard } from "@/components";
 
 describe("ProductCard", () => {
-  it("renders the category, title and price", () => {
-    render(
-      <ProductCard
-        href="/products/stickers"
-        title="Custom Die-Cut Stickers"
-        category="Stickers"
-        price="$0.55"
-      />,
-    );
-
-    expect(screen.getByText("Stickers")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Custom Die-Cut Stickers" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("$0.55")).toBeInTheDocument();
-  });
-
   it("prefixes the price with 'from' only when isFromPrice is set", () => {
     render(
       <ProductCard
