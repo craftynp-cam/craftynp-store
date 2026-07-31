@@ -13,6 +13,10 @@ export function accountHref(): string {
   return "/account";
 }
 
+export function accountAddressesHref(): string {
+  return "/account/addresses";
+}
+
 export function checkoutHref(): string {
   return "/checkout";
 }

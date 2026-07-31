@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { AUTH_COOKIE_NAME } from "@/lib/auth";
-import { EMPTY_CHECKOUT_DRAFT, validateCheckoutDraft } from "@/lib/checkout";
+import { validateAddressFields } from "@/lib/checkout";
 import { sdk } from "@/lib/medusa";
 
 type AddressPayload = {
@@ -47,27 +47,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const errors = validateCheckoutDraft({
-    ...EMPTY_CHECKOUT_DRAFT,
+  const errors = validateAddressFields({
     firstName: body.firstName,
     lastName: body.lastName,
-    email: "placeholder@example.com",
-    phone: body.phone ?? "0000000000",
     address1: body.address1,
-    address2: body.address2 ?? "",
     city: body.city,
     state: body.state,
     postalCode: body.postalCode,
     countryCode: body.countryCode,
   });
-  const addressErrors = { ...errors };
-  delete addressErrors.email;
-  delete addressErrors.phone;
-  delete addressErrors.shippingRateId;
 
-  if (Object.keys(addressErrors).length > 0) {
+  if (Object.keys(errors).length > 0) {
     return NextResponse.json(
-      { error: "invalid_address", fields: addressErrors },
+      { error: "invalid_address", fields: errors },
       { status: 400 },
     );
   }

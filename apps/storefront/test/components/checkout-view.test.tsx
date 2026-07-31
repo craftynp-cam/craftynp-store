@@ -66,11 +66,13 @@ const customer: AuthedCustomer = {
   email: "sarah@example.com",
   first_name: "Sarah",
   last_name: "Nguyen",
+  authProvider: "email",
 };
 
 const savedAddress: SavedAddress = {
   id: "caddr_1",
   label: "123 Maple Street, Springfield, IL 62704",
+  addressName: "",
   firstName: "Jamie",
   lastName: "Rivera",
   address1: "123 Maple Street",
@@ -86,6 +88,7 @@ const savedAddress: SavedAddress = {
 const otherAddress: SavedAddress = {
   id: "caddr_2",
   label: "456 Oak Avenue, Portland, OR 97201",
+  addressName: "",
   firstName: "Jamie",
   lastName: "Rivera",
   address1: "456 Oak Avenue",
