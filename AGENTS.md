@@ -47,9 +47,15 @@ clone that has never been built.
 | DB seed          | `pnpm run db:seed`                                |
 | Services up/down | `pnpm run services:up` / `pnpm run services:down` |
 
-Run lint, typecheck, and tests before opening a pull request. On a clone that
-has never been built, run `pnpm run build` before `pnpm run typecheck` —
-`next-env.d.ts` is build-generated.
+Run lint, typecheck, tests, and the build before opening a pull request. On a
+clone that has never been built, run `pnpm run build` before `pnpm run
+typecheck` — `next-env.d.ts` is build-generated.
+
+`pnpm run build` requires `apps/storefront/.env.local`; the `.env.example`
+placeholders are enough, so CI can `cp apps/storefront/.env.example
+apps/storefront/.env.local` first. It needs no backend, database, or Redis —
+the storefront's fetch helpers degrade and Medusa's build falls back to a fake
+Redis.
 
 `db:migrate` and `db:seed` are not interchangeable — read
 [apps/medusa/AGENTS.md](apps/medusa/AGENTS.md) before running either.

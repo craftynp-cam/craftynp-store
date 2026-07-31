@@ -10,18 +10,16 @@
     "incremental": true,
     "moduleResolution": "Bundler",
     "plugins": [{ "name": "next" }],
-    // `@craftynp/types` points at the package's build output, not its source:
-    // the source uses NodeNext `./customization.js` specifiers that Turbopack's
-    // Bundler-mode resolver cannot follow. Turbo builds the package first
-    // (`dependsOn: ["^build"]`), so `dist/` is always present. The mapping
-    // targets `index.d.ts` directly, not the adjacent `index.js` — with
-    // `allowJs` on, pointing at the `.js` file makes TypeScript infer the
-    // module's exports from that file's own (value-only) re-exports, silently
-    // dropping every type-only `export type { ... }` that has no JS-emit
-    // trace, such as `SiteContent`.
+    // Deliberately no `paths` entry for `@craftynp/types`. Turbopack honours
+    // tsconfig `paths` for runtime resolution too, so mapping the package at a
+    // `.d.ts` erased every value import of it from the bundle — the import
+    // vanished and `resolveSiteContent(...)` compiled to `(void 0)(...)`,
+    // crashing the render. Left alone, the workspace symlink resolves through
+    // the package's own `exports` map, which already hands TypeScript
+    // `dist/index.d.ts` and the bundler `dist/index.js`. Turbo builds the
+    // package first (`dependsOn: ["^build"]`), so `dist/` is always present.
     "paths": {
-      "@/*": ["./src/*"],
-      "@craftynp/types": ["../../packages/types/dist/index.d.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [

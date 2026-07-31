@@ -70,6 +70,17 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   `checkout-draft.ts` — must cache their snapshot at module scope and return a
   constant, never a fresh literal, as the server snapshot, or they loop or warn
   on hydration.
+- **Never add a tsconfig `paths` entry for `@craftynp/types`.** Turbopack
+  applies `paths` to runtime resolution, not just typechecking, so aliasing the
+  package at its `dist/index.d.ts` silently erased every value import of it from
+  the production bundle: `site-content.ts`'s `resolveSiteContent([])` fell out
+  as `(void 0)([])` and crashed the render. Nothing caught it — `tsc` was happy,
+  and Jest maps the package to its `src/` — because that call sits in a catch
+  block that only runs when Medusa is unreachable, which is exactly the state a
+  CI build is in. Left unmapped, the workspace symlink resolves through the
+  package's `exports` map, which serves types and runtime separately. This is
+  the only value import of `@craftynp/types` in the app; every other one is
+  `import type`, which is why it was the only casualty.
 
 ## Design tokens
 
