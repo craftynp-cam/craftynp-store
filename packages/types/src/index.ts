@@ -32,6 +32,12 @@ export {
   checkoutPrepareResponseSchema,
   checkoutTotalsSchema,
 } from "./checkout.js";
+export {
+  orderAddressSchema,
+  orderConfirmationLineSchema,
+  orderConfirmationResponseSchema,
+  orderConfirmationSchema,
+} from "./order.js";
 
 export type {
   ArtworkReference,
@@ -66,3 +72,9 @@ export type {
   CheckoutPrepareResponse,
   CheckoutTotals,
 } from "./checkout.js";
+export type {
+  OrderAddress,
+  OrderConfirmation,
+  OrderConfirmationLine,
+  OrderConfirmationResponse,
+} from "./order.js";
