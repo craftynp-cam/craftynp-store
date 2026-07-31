@@ -1,4 +1,7 @@
-import { AbstractFulfillmentProviderService } from "@medusajs/framework/utils";
+import {
+  AbstractFulfillmentProviderService,
+  ContainerRegistrationKeys,
+} from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type {
   CalculateShippingOptionPriceContext,
@@ -18,18 +21,21 @@ import {
   withinShippingTolerance,
 } from "./lib";
 
+type QueryService = {
+  graph: (input: {
+    entity: string;
+    fields: string[];
+    filters: Record<string, unknown>;
+  }) => Promise<{ data: unknown[] }>;
+};
+
 type InjectedDependencies = {
   logger: Logger;
+  [ContainerRegistrationKeys.QUERY]: QueryService;
   [SHIPSTATION_MODULE]: ShipStationModuleService;
 };
 
-type CartVariant = {
-  id: string;
-  weight: number | null;
-  length: number | null;
-  width: number | null;
-  height: number | null;
-};
+type CartVariant = { id: string };
 
 type CartItem = {
   quantity: unknown;
@@ -46,18 +52,35 @@ type CalculatePriceContext = {
   } | null;
 };
 
+type VariantWithDimensions = {
+  id: string;
+  weight: number | null;
+  length: number | null;
+  width: number | null;
+  height: number | null;
+  product?: {
+    weight: number | null;
+    length: number | null;
+    width: number | null;
+    height: number | null;
+  } | null;
+};
+
 class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderService {
   static override identifier = "shipstation";
 
   protected logger_: Logger;
+  protected query_: QueryService;
   protected shipstation_: ShipStationModuleService;
 
   constructor({
     logger,
+    [ContainerRegistrationKeys.QUERY]: query,
     [SHIPSTATION_MODULE]: shipstation,
   }: InjectedDependencies) {
     super();
     this.logger_ = logger;
+    this.query_ = query;
     this.shipstation_ = shipstation;
   }
 
@@ -130,14 +153,47 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
       `${SHIPPING_QUOTE_MISMATCH_LOG_TAG} reason=${verified.reason} service=${shippingData.serviceCode} re-estimating`,
     );
 
-    const packableItems = (context.items ?? []).map((item) => ({
-      variantId: item.variant?.id ?? "",
-      quantity: Number(item.quantity),
-      weight: item.variant?.weight,
-      length: item.variant?.length,
-      width: item.variant?.width,
-      height: item.variant?.height,
-    }));
+    // Medusa's own cart-refresh context (cartFieldsForCalculateShippingOptionsPrices)
+    // only ever fetches items.variant.{weight,length,width,height} and
+    // items.product.weight — it never fetches the product's length/width/height
+    // at all, so a variant relying on product-level dimensions would always
+    // appear to be missing them here. Re-query authoritatively instead, the
+    // same way /store/shipping-rates does, rather than trust whatever subset
+    // of fields this particular caller happened to pass in `context`.
+    const variantIds = items.map((item) => item.variantId).filter(Boolean);
+    const { data: variants } = await this.query_.graph({
+      entity: "variant",
+      fields: [
+        "id",
+        "weight",
+        "length",
+        "width",
+        "height",
+        "product.weight",
+        "product.length",
+        "product.width",
+        "product.height",
+      ],
+      filters: { id: variantIds },
+    });
+    const variantsById = new Map(
+      (variants as VariantWithDimensions[]).map((variant) => [
+        variant.id,
+        variant,
+      ]),
+    );
+
+    const packableItems = (context.items ?? []).map((item) => {
+      const variant = variantsById.get(item.variant?.id ?? "");
+      return {
+        variantId: item.variant?.id ?? "",
+        quantity: Number(item.quantity),
+        weight: variant?.weight ?? variant?.product?.weight,
+        length: variant?.length ?? variant?.product?.length,
+        width: variant?.width ?? variant?.product?.width,
+        height: variant?.height ?? variant?.product?.height,
+      };
+    });
 
     const packed = packItemsIntoOneBox(packableItems);
     if (!packed.ok) {

@@ -648,13 +648,30 @@ lines, since those are built by mapping over the real `itemLines`/
 covers both the items-only and shipping-only shapes directly, spying on
 `tax.calculations.create` the same way `service.test.ts` does.
 
-All four of these — the `AwilixResolutionError`, the missing
-`cacheTtlSeconds`, the null `code`, and the shipping-only `line_items`
-requirement — are runtime-only failures. A passing `tsc`/`jest` run
-exercises none of Medusa's actual DI container, its own options validation,
-its entity-level column constraints, or the two-call shape its own core
-workflows use, so `pnpm run db:migrate` and a real `pnpm run dev` checkout
-are what actually catch them.
+**`calculatePrice`'s re-estimate fallback must not trust `context.items[].variant`
+for dimensions.** Medusa's own cart-refresh context
+(`cartFieldsForCalculateShippingOptionsPrices`, core) fetches
+`items.variant.{weight,length,width,height}` and `items.product.weight` — but
+never the product's `length`/`width`/`height` at all, regardless of what the
+provider needs. A variant that relies on product-level dimensions (the
+common case; per-variant overrides are the exception) always looks
+incomplete through this particular context, even though `initial-data-seed.ts`
+and the CNP-51 publish-guard hook both set dimensions correctly. `calculatePrice`
+re-queries `variant`/`product` dimensions directly instead — the same
+`variant?.weight ?? variant?.product?.weight` fallback the
+`/store/shipping-rates` route already uses — rather than trusting whatever
+subset of fields the calling workflow happened to pass in. `service.test.ts`
+covers the exact regression: a variant with no dimensions of its own, backed
+only by its product's.
+
+All five of these — the `AwilixResolutionError`, the missing
+`cacheTtlSeconds`, the null `code`, the shipping-only `line_items`
+requirement, and the incomplete cart-refresh context — are runtime-only
+failures. A passing `tsc`/`jest` run exercises none of Medusa's actual DI
+container, its own options validation, its entity-level column constraints,
+or the exact field selection its own core workflows use, so
+`pnpm run db:migrate` and a real `pnpm run dev` checkout are what actually
+catch them.
 
 ## React 18 — do not "fix" it
 
@@ -755,7 +772,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **178** of the repo's 1029 tests. The `siteContent`
+This app currently holds **183** of the repo's 1042 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including
