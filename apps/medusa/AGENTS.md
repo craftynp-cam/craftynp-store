@@ -597,19 +597,28 @@ stock location — the same link `seed-us-region.ts` already makes for
 provider against the stock locations actually linked to the service zone's
 fulfillment set, not against `medusa-config.ts`'s provider list.
 
-**Module registration alone does not make a provider resolvable inside
-another module's own service.** `ShipStationFulfillmentProviderService`'s
-constructor injects `[SHIPSTATION_MODULE]` (`"shipstation"`) to reuse
-`ShipStationModuleService.getUspsRates` for its re-estimate fallback — but
-each module gets its own Awilix scope, and a module only sees registrations
-outside that scope if its own `medusa-config.ts` entry lists them under
-`dependencies`, the same mechanism the `shipstation`/`stripeTax` custom
-modules already use for `Modules.CACHE`. The `@medusajs/medusa/fulfillment`
-entry therefore needs `dependencies: [SHIPSTATION_MODULE]` — omitting it
-throws `AwilixResolutionError: Could not resolve 'shipstation'` the moment
-`calculatePrice` (or, at boot, `canCalculate`) runs, not at startup, so it
-surfaces the first time a cart actually needs a calculated price rather than
-during `medusa develop`.
+**Module registration alone does not make anything resolvable inside
+another module's own service — not other modules, and not core framework
+registrations either.** `ShipStationFulfillmentProviderService`'s
+constructor injects `[SHIPSTATION_MODULE]` (`"shipstation"`, to reuse
+`ShipStationModuleService.getUspsRates` for its re-estimate fallback) and
+`ContainerRegistrationKeys.QUERY` (`"query"`, to re-query authoritative
+variant/product dimensions — see below). Each module gets its own Awilix
+scope, and a module only sees registrations outside that scope if its own
+`medusa-config.ts` entry lists them under `dependencies` — the same
+mechanism the `shipstation`/`stripeTax` custom modules already use for
+`Modules.CACHE`, and it applies just as much to `query`, which is otherwise
+easy to assume is globally available the way `logger` is. The
+`@medusajs/medusa/fulfillment` entry therefore needs
+`dependencies: [SHIPSTATION_MODULE, ContainerRegistrationKeys.QUERY]` —
+omitting either throws `AwilixResolutionError: Could not resolve '...'` the
+moment `calculatePrice` (or, at boot, `canCalculate`) runs, not at startup,
+so each surfaces the first time a cart actually needs a calculated price
+rather than during `medusa develop`. This bit twice in a row while building
+this story — once for `shipstation`, once for `query` — precisely because
+nothing about it is checkable by `tsc` or a unit test that constructs the
+service directly with fake dependencies; only Medusa's own container, wired
+up for real, exposes a missing scope declaration.
 
 **`StripeTaxTaxProvider` cannot share `StripeTaxOptions` with the sibling
 `StripeTaxModuleService`, even though both wrap the same Stripe Tax
@@ -664,12 +673,12 @@ subset of fields the calling workflow happened to pass in. `service.test.ts`
 covers the exact regression: a variant with no dimensions of its own, backed
 only by its product's.
 
-All five of these — the `AwilixResolutionError`, the missing
-`cacheTtlSeconds`, the null `code`, the shipping-only `line_items`
-requirement, and the incomplete cart-refresh context — are runtime-only
-failures. A passing `tsc`/`jest` run exercises none of Medusa's actual DI
-container, its own options validation, its entity-level column constraints,
-or the exact field selection its own core workflows use, so
+All six of these — the two `AwilixResolutionError`s (`shipstation` and
+`query`), the missing `cacheTtlSeconds`, the null `code`, the shipping-only
+`line_items` requirement, and the incomplete cart-refresh context — are
+runtime-only failures. A passing `tsc`/`jest` run exercises none of Medusa's
+actual DI container, its own options validation, its entity-level column
+constraints, or the exact field selection its own core workflows use, so
 `pnpm run db:migrate` and a real `pnpm run dev` checkout are what actually
 catch them.
 

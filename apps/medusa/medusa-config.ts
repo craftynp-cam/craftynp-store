@@ -80,7 +80,7 @@ module.exports = defineConfig({
     },
     {
       resolve: "@medusajs/medusa/fulfillment",
-      dependencies: [SHIPSTATION_MODULE],
+      dependencies: [SHIPSTATION_MODULE, ContainerRegistrationKeys.QUERY],
       options: {
         providers: [
           { resolve: "@medusajs/medusa/fulfillment-manual", id: "manual" },
