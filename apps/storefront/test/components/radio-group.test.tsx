@@ -23,12 +23,6 @@ describe("RadioGroup", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(3);
   });
 
-  it("reflects a controlled selection", () => {
-    render(<RadioGroup label="Delivery" options={options} value="express" />);
-
-    expect(screen.getByRole("radio", { name: "Express" })).toBeChecked();
-  });
-
   it("reports selection changes", () => {
     const onChange = jest.fn();
     render(

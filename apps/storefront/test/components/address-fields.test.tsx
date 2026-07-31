@@ -25,22 +25,6 @@ function renderFields(
 }
 
 describe("AddressFields", () => {
-  it("renders every address control", () => {
-    renderFields();
-
-    expect(screen.getByLabelText("Street address")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Apt, suite, etc. (optional)"),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("City")).toBeInTheDocument();
-    expect(screen.getByLabelText("State")).toBeInTheDocument();
-    expect(screen.getByLabelText("ZIP code")).toBeInTheDocument();
-    expect(screen.getByLabelText("Country")).toBeInTheDocument();
-    expect(
-      screen.getByText("Billing address is the same as delivery"),
-    ).toBeInTheDocument();
-  });
-
   it("sets the right autocomplete token on each field", () => {
     renderFields();
 

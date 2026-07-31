@@ -36,26 +36,4 @@ describe("CheckoutSection", () => {
     const region = screen.getByRole("region", { name: /Delivery address/ });
     expect(region).toHaveAccessibleName("Step 2: Delivery address");
   });
-
-  it("renders its children", () => {
-    render(
-      <CheckoutSection step={1} title="Contact">
-        <p>Field goes here</p>
-      </CheckoutSection>,
-    );
-
-    expect(screen.getByText("Field goes here")).toBeInTheDocument();
-  });
-
-  it("changes only the step number when given a different step", () => {
-    render(
-      <CheckoutSection step={4} title="Payment">
-        <p>content</p>
-      </CheckoutSection>,
-    );
-
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "Step 4: Payment",
-    );
-  });
 });

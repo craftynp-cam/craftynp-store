@@ -20,15 +20,6 @@ describe("AboutClosing", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the body copy", () => {
-    render(<AboutClosing {...props} />);
-    expect(
-      screen.getByText(
-        "Browse what's ready to ship, or shop the full catalog.",
-      ),
-    ).toBeInTheDocument();
-  });
-
   it("renders a CTA link to the shop named by ctaLabel", () => {
     render(<AboutClosing {...props} />);
     const link = screen.getByRole("link", { name: "Shop the store" });

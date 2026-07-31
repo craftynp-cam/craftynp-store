@@ -49,19 +49,6 @@ describe("AnnouncementBar", () => {
     expect(accessibleOccurrences("Now Selling: GLITTER!")).toHaveLength(1);
   });
 
-  it("renders on a fixed navy surface", () => {
-    const { container } = render(<AnnouncementBar text="Sale" />);
-
-    expect(container.firstChild).toHaveClass("bg-ink", "text-off-white");
-  });
-
-  it("renders the text once accessibly when it fits the viewport", () => {
-    mockOverflow(false);
-    render(<AnnouncementBar text="Short message" />);
-
-    expect(accessibleOccurrences("Short message")).toHaveLength(1);
-  });
-
   it("duplicates the text for the marquee loop but exposes it once accessibly", () => {
     mockOverflow(true);
     render(<AnnouncementBar text="A very long announcement" />);

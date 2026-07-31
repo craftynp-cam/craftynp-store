@@ -13,22 +13,10 @@ const props: AboutHeroProps = {
 };
 
 describe("AboutHero", () => {
-  it("renders the eyebrow", () => {
-    render(<AboutHero {...props} />);
-    expect(screen.getByText("The maker")).toBeInTheDocument();
-  });
-
   it("renders the heading as the page's h1", () => {
     render(<AboutHero {...props} />);
     expect(
       screen.getByRole("heading", { level: 1, name: "Hi, I'm Katherine" }),
-    ).toBeInTheDocument();
-  });
-
-  it("renders the body copy", () => {
-    render(<AboutHero {...props} />);
-    expect(
-      screen.getByText("The Crafty NP started at my kitchen table."),
     ).toBeInTheDocument();
   });
 

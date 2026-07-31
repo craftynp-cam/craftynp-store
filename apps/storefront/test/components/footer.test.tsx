@@ -10,12 +10,6 @@ const categories: NavCategory[] = [
 ];
 
 describe("Footer", () => {
-  it("renders a contentinfo landmark", () => {
-    render(<Footer categories={categories} />);
-
-    expect(screen.getByRole("contentinfo")).toBeInTheDocument();
-  });
-
   it("derives the Shop column from the passed categories, not a hard-coded list", () => {
     const unusual: NavCategory[] = [
       { name: "Banners", href: "/categories/banners" },

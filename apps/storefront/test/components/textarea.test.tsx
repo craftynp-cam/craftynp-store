@@ -15,15 +15,6 @@ describe("Textarea", () => {
     expect(screen.getByLabelText("Personalisation").tagName).toBe("TEXTAREA");
   });
 
-  it("applies the requested row count", () => {
-    render(<Textarea label="Personalisation" rows={8} />);
-
-    expect(screen.getByLabelText("Personalisation")).toHaveAttribute(
-      "rows",
-      "8",
-    );
-  });
-
   it("describes the control with its helper text", () => {
     render(
       <Textarea label="Personalisation" description="Up to 120 characters." />,

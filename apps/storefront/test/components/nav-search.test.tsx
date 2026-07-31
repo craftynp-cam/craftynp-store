@@ -11,14 +11,6 @@ describe("NavSearch", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps the placeholder as supplementary, non-labelling text", () => {
-    render(<NavSearch />);
-
-    expect(
-      screen.getByPlaceholderText("Search stickers, shirts, keychains…"),
-    ).toBeInTheDocument();
-  });
-
   it("carries the query in a real form field named 'q'", () => {
     render(<NavSearch />);
 

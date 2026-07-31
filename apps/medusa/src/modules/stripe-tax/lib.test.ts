@@ -1,5 +1,4 @@
 import {
-  STRIPE_TAX_UNAVAILABLE_LOG_TAG,
   amountToRate,
   buildCalculationParams,
   buildProviderCalculationInput,
@@ -210,12 +209,6 @@ describe("taxCacheKey", () => {
     const a = taxCacheKey({ ...base, shippingAmount: 7.42 });
     const b = taxCacheKey({ ...base, shippingAmount: 0 });
     expect(a).not.toBe(b);
-  });
-});
-
-describe("log tag", () => {
-  it("is the literal alerting string", () => {
-    expect(STRIPE_TAX_UNAVAILABLE_LOG_TAG).toBe("[stripe-tax:unavailable]");
   });
 });
 

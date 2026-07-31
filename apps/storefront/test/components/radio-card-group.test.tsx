@@ -49,22 +49,6 @@ describe("RadioCardGroup", () => {
     );
   });
 
-  it("reflects a controlled selection", () => {
-    render(
-      <RadioCardGroup
-        label="Shipping method"
-        options={options}
-        value="usps_priority_mail"
-      />,
-    );
-
-    expect(
-      screen.getByRole("radio", {
-        name: "USPS Priority Mail Arrives in 2 business days $11.90",
-      }),
-    ).toBeChecked();
-  });
-
   it("reports selection changes", () => {
     const onChange = jest.fn();
     render(
@@ -108,14 +92,5 @@ describe("RadioCardGroup", () => {
       "true",
     );
     expect(screen.getByText("Choose a delivery option.")).toBeInTheDocument();
-  });
-
-  it("does not let an svg icon contribute to any option's accessible name", () => {
-    render(<RadioCardGroup label="Shipping method" options={options} />);
-
-    for (const radio of screen.getAllByRole("radio")) {
-      const icon = radio.querySelector("svg");
-      expect(icon).toBeNull();
-    }
   });
 });

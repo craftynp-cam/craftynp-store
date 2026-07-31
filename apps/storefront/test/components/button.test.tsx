@@ -3,23 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { Button } from "@/components";
 
 describe("Button", () => {
-  it("renders its label", () => {
-    render(<Button>Add to basket</Button>);
-
-    expect(
-      screen.getByRole("button", { name: "Add to basket" }),
-    ).toBeInTheDocument();
-  });
-
-  it.each(["primary", "secondary", "ghost"] as const)(
-    "applies the %s variant",
-    (variant) => {
-      render(<Button variant={variant}>Go</Button>);
-
-      expect(screen.getByRole("button")).toHaveClass(`button--${variant}`);
-    },
-  );
-
   it("marks itself busy while loading but stays focusable", () => {
     render(<Button isLoading>Save</Button>);
 

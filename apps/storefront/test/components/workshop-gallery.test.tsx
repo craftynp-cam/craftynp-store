@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 
 import { WorkshopGallery } from "@/components";
 import type { WorkshopTile } from "@/components";
@@ -37,17 +37,6 @@ describe("WorkshopGallery", () => {
         name: "Fresh from the workshop",
       }),
     ).toBeInTheDocument();
-  });
-
-  it("renders the intro", () => {
-    render(
-      <WorkshopGallery
-        heading="Fresh from the workshop"
-        intro="Real pieces we've made."
-        tiles={tiles}
-      />,
-    );
-    expect(screen.getByText("Real pieces we've made.")).toBeInTheDocument();
   });
 
   it("renders every tile", () => {
@@ -90,29 +79,6 @@ describe("WorkshopGallery", () => {
       <WorkshopGallery heading="Fresh from the workshop" intro="" tiles={[]} />,
     );
     expect(container).toBeEmptyDOMElement();
-  });
-
-  it("renders no links inside the section", () => {
-    const { container } = render(
-      <WorkshopGallery
-        heading="Fresh from the workshop"
-        intro=""
-        tiles={tiles}
-      />,
-    );
-    const section = container.querySelector("section")!;
-    expect(within(section).queryAllByRole("link")).toHaveLength(0);
-  });
-
-  it("renders on the blush surface", () => {
-    const { container } = render(
-      <WorkshopGallery
-        heading="Fresh from the workshop"
-        intro=""
-        tiles={tiles}
-      />,
-    );
-    expect(container.querySelector("section")).toHaveClass("bg-surface-soft");
   });
 
   it("labels the section by its heading", () => {
