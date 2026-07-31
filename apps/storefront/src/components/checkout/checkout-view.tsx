@@ -255,6 +255,7 @@ export function CheckoutView({
                   shippingRateLabel: rate.serviceName,
                   shippingRateAmount: rate.amount,
                   shippingRateCurrency: rate.currencyCode,
+                  shippingServiceCode: rate.serviceCode,
                   shippingQuoteToken: rate.quoteToken,
                 });
               }}

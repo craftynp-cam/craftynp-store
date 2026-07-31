@@ -23,9 +23,12 @@ const STRING_FIELDS = [
   "shippingRateId",
   "shippingRateLabel",
   "shippingRateCurrency",
+  "shippingServiceCode",
   "shippingQuoteToken",
   "taxCurrency",
   "taxQuoteToken",
+  "cartId",
+  "paymentClientSecret",
 ] as const satisfies readonly (keyof CheckoutDraft)[];
 
 const BOOLEAN_FIELDS = [
