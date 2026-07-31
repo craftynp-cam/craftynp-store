@@ -22,6 +22,16 @@ export {
   shippingRatesResponseSchema,
 } from "./shipping-rates.js";
 export { taxQuoteRequestSchema, taxQuoteResponseSchema } from "./tax.js";
+export {
+  checkoutAddressSchema,
+  checkoutCompleteRequestSchema,
+  checkoutCompleteResponseSchema,
+  checkoutLineItemDetailSchema,
+  checkoutLineItemSchema,
+  checkoutPrepareRequestSchema,
+  checkoutPrepareResponseSchema,
+  checkoutTotalsSchema,
+} from "./checkout.js";
 
 export type {
   ArtworkReference,
@@ -46,3 +56,13 @@ export type {
   ShippingRatesResponse,
 } from "./shipping-rates.js";
 export type { TaxQuoteRequest, TaxQuoteResponse } from "./tax.js";
+export type {
+  CheckoutAddress,
+  CheckoutCompleteRequest,
+  CheckoutCompleteResponse,
+  CheckoutLineItem,
+  CheckoutLineItemDetail,
+  CheckoutPrepareRequest,
+  CheckoutPrepareResponse,
+  CheckoutTotals,
+} from "./checkout.js";
