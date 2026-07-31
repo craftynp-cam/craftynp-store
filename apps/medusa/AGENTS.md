@@ -611,6 +611,22 @@ throws `AwilixResolutionError: Could not resolve 'shipstation'` the moment
 surfaces the first time a cart actually needs a calculated price rather than
 during `medusa develop`.
 
+**`StripeTaxTaxProvider` cannot share `StripeTaxOptions` with the sibling
+`StripeTaxModuleService`, even though both wrap the same Stripe Tax
+calculation.** The module service is genuinely cached
+(`cacheTtlSeconds`), but the tax-line provider is deliberately not (see its
+own module-doc comment) and is never given that option in `medusa-config.ts`
+— so validating it against the full `StripeTaxOptions` shape throws `Stripe
+Tax module requires the following options: cacheTtlSeconds` the first time a
+cart actually needs its tax lines calculated. `StripeTaxProviderOptions`
+(`lib.ts`) is `Omit<StripeTaxOptions, "cacheTtlSeconds">`, with its own
+`validateStripeTaxProviderOptions`, so the two option shapes and their
+validators can drift independently. This and the `AwilixResolutionError`
+above are both runtime-only failures — a passing `tsc`/`jest` run does not
+exercise Medusa's actual DI container or its own options validation, so
+`pnpm run db:migrate` and `pnpm run dev` against a real database are the
+only things that catch them.
+
 ## React 18 — do not "fix" it
 
 The admin dashboard runs **React 18**, and this app declares `react`,
@@ -710,7 +726,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **173** of the repo's 1024 tests. The `siteContent`
+This app currently holds **175** of the repo's 1026 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including

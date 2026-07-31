@@ -10,7 +10,9 @@ import {
   toMinorUnits,
   toStripeTaxError,
   validateStripeTaxOptions,
+  validateStripeTaxProviderOptions,
   type StripeTaxOptions,
+  type StripeTaxProviderOptions,
 } from "./lib.js";
 
 const options: StripeTaxOptions = {
@@ -39,7 +41,34 @@ describe("validateStripeTaxOptions", () => {
   it("throws listing every missing option", () => {
     expect(() =>
       validateStripeTaxOptions({ secretKey: "sk_test_123" }),
+    ).toThrow(/defaultTaxCode.*shippingTaxCode.*cacheTtlSeconds/s);
+  });
+});
+
+describe("validateStripeTaxProviderOptions", () => {
+  const providerOptions: StripeTaxProviderOptions = {
+    secretKey: "sk_test_123",
+    defaultTaxCode: "txcd_99999999",
+    shippingTaxCode: "txcd_92010001",
+    timeoutMs: 5000,
+    maxRetries: 2,
+  };
+
+  it("does not throw when every option is present, without cacheTtlSeconds", () => {
+    expect(() =>
+      validateStripeTaxProviderOptions(
+        providerOptions as unknown as Record<string, unknown>,
+      ),
+    ).not.toThrow();
+  });
+
+  it("throws listing every missing option, excluding cacheTtlSeconds", () => {
+    expect(() =>
+      validateStripeTaxProviderOptions({ secretKey: "sk_test_123" }),
     ).toThrow(/defaultTaxCode.*shippingTaxCode/s);
+    expect(() =>
+      validateStripeTaxProviderOptions({ secretKey: "sk_test_123" }),
+    ).not.toThrow(/cacheTtlSeconds/);
   });
 });
 

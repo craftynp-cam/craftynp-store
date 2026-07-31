@@ -34,6 +34,37 @@ export function validateStripeTaxOptions(
   }
 }
 
+/**
+ * The tax-line provider (tax-provider.ts) shares the calculation-building
+ * helpers below with StripeTaxModuleService but deliberately has no cache —
+ * see its own module-doc comment for why — so it takes a narrower options
+ * shape than StripeTaxOptions and must not be validated against
+ * cacheTtlSeconds, an option it never receives.
+ */
+export type StripeTaxProviderOptions = Omit<
+  StripeTaxOptions,
+  "cacheTtlSeconds"
+>;
+
+const REQUIRED_PROVIDER_OPTIONS = REQUIRED_OPTIONS.filter(
+  (key) => key !== "cacheTtlSeconds",
+);
+
+export function validateStripeTaxProviderOptions(
+  options: Record<string, unknown>,
+): void {
+  const missing = REQUIRED_PROVIDER_OPTIONS.filter(
+    (key) => options[key] == null || options[key] === "",
+  );
+
+  if (missing.length > 0) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      `Stripe Tax provider requires the following options: ${missing.join(", ")}`,
+    );
+  }
+}
+
 export function toMinorUnits(amount: number): number {
   return Math.round(amount * 100);
 }
@@ -64,7 +95,7 @@ export type CalculationParamsInput = {
 
 export function buildCalculationParams(
   input: CalculationParamsInput,
-  options: StripeTaxOptions,
+  options: StripeTaxProviderOptions,
 ): Stripe.Tax.CalculationCreateParams {
   return {
     currency: input.currencyCode.toLowerCase(),

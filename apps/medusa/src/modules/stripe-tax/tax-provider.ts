@@ -7,8 +7,8 @@ import {
   normalizeProviderCalculation,
   STRIPE_TAX_UNAVAILABLE_LOG_TAG,
   toStripeTaxError,
-  validateStripeTaxOptions,
-  type StripeTaxOptions,
+  validateStripeTaxProviderOptions,
+  type StripeTaxProviderOptions,
 } from "./lib";
 
 type InjectedDependencies = {
@@ -68,11 +68,16 @@ class StripeTaxTaxProvider {
   static identifier = "stripe-tax";
 
   protected logger_: Logger;
-  protected options_: StripeTaxOptions;
+  protected options_: StripeTaxProviderOptions;
   protected client_: Stripe;
 
-  constructor({ logger }: InjectedDependencies, options: StripeTaxOptions) {
-    validateStripeTaxOptions(options as unknown as Record<string, unknown>);
+  constructor(
+    { logger }: InjectedDependencies,
+    options: StripeTaxProviderOptions,
+  ) {
+    validateStripeTaxProviderOptions(
+      options as unknown as Record<string, unknown>,
+    );
     this.logger_ = logger;
     this.options_ = options;
     this.client_ = new Stripe(options.secretKey, {
