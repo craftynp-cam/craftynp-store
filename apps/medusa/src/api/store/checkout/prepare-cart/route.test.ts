@@ -342,17 +342,39 @@ describe("POST /store/checkout/prepare-cart", () => {
     });
   });
 
-  it("rejects a cart that has already been completed", async () => {
-    const { req, res, status, json } = buildHarness({
+  it("starts a fresh cart when the draft's cart was already completed", async () => {
+    // The storefront only clears its stored cartId once /checkout/complete
+    // returns, so an order placed by the AC9 webhook after that call failed
+    // leaves a completed cart id in the draft. Rejecting it would wedge the
+    // shopper out of checkout behind a Try again button that re-sends the
+    // same dead id.
+    const { req, res, json } = buildHarness({
       body: buildBody({ cartId: CART_ID }),
       before: cartRow({ completed_at: "2026-07-30T00:00:00.000Z" }),
     });
 
     await POST(req, res);
 
-    expect(status).toHaveBeenCalledWith(400);
-    expect(json).toHaveBeenCalledWith({ error: "cart_already_completed" });
-    expect(mockAddShippingMethodRun).not.toHaveBeenCalled();
+    expect(mockUpdateCartRun).not.toHaveBeenCalled();
+    expect(mockCreateCartRun).toHaveBeenCalledTimes(1);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ cartId: CART_ID }),
+    );
+  });
+
+  it("starts a fresh cart when the draft's cart no longer exists", async () => {
+    const { req, res, json } = buildHarness({
+      body: buildBody({ cartId: CART_ID }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(mockUpdateCartRun).not.toHaveBeenCalled();
+    expect(mockCreateCartRun).toHaveBeenCalledTimes(1);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ cartId: CART_ID }),
+    );
   });
 
   it("creates a cart, collection and session on a first prepare", async () => {

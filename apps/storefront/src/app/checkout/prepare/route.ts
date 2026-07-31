@@ -95,9 +95,21 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Could not prepare checkout", error);
+    // `sdk.client.fetch` throws a FetchError that keeps only the upstream
+    // status and its body's `message` — the `error`/`reason` fields Medusa's
+    // own response carries are dropped before this point. Forwarding both is
+    // what makes a failure here diagnosable at all; a bare
+    // `{ error: "checkout_unavailable" }` says nothing about whether the quote
+    // was rejected, the region is misconfigured, or Medusa was simply down.
+    const status =
+      error && typeof error === "object" && "status" in error
+        ? Number((error as { status: unknown }).status)
+        : null;
+    const reason = error instanceof Error ? error.message : String(error);
+
+    console.error(`Could not prepare checkout (upstream ${status})`, error);
     return NextResponse.json(
-      { error: "checkout_unavailable" },
+      { error: "checkout_unavailable", upstreamStatus: status, reason },
       { status: 502 },
     );
   }

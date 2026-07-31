@@ -557,13 +557,37 @@ now in a terminal state; handing its `client_secret` back to the storefront
 produced `This PaymentIntent is in a terminal state and cannot be used to
 initialize Elements` the moment a shopper edited their address after the
 Payment Element had rendered. The route therefore keeps the pre-update read
-down to the `invalid_cart`/`cart_already_completed` guards only, and re-reads
-the cart — totals, payment collection, and sessions together — once all
+down to the reusability check below, and re-reads the cart — totals, payment
+collection, and sessions together — once all
 mutations are done. Because the amount resync and the session deletion move
 together in that one `when` branch, a collection whose `amount` still equals
 `cart.total` is proof its session survived; anything else mints a fresh
 session (`createPaymentSessionsWorkflow` deletes any survivor first, so this
 cannot leave two).
+
+**A `cartId` the route can't reuse starts a fresh cart rather than erroring.**
+An unknown id, or one belonging to a cart that already became an order, logs
+`[checkout:cart-superseded]` and falls through to `createCartWorkflow`. It used
+to return `400 invalid_cart` / `400 cart_already_completed`, which turned out
+to wedge a shopper out of checkout permanently: the storefront keeps `cartId`
+in `localStorage` and clears it only once `/checkout/complete` returns, so any
+failure _after_ the order was genuinely placed — the AC9 webhook winning the
+race, or the response never landing — leaves a completed cart id in the draft,
+and every subsequent prepare rejects it behind a Try again button that re-sends
+the same dead id. **AC10's no-double-order guarantee was never enforced here**;
+it is `/checkout/complete`'s own order lookup, which still refuses to place a
+second order for one cart, and nothing about preparing a cart charges anything.
+
+**The route's error bodies carry a `message` as well as `error`/`reason`,
+because `@medusajs/js-sdk` throws away everything else.** Its `FetchError`
+keeps only the upstream status and the body's `message` field
+(`normalizeResponse` in the SDK's `client.js`), so the storefront proxy that
+re-exposes these routes sees `"Bad Request"` and nothing more unless the body
+names itself. Both are then forwarded by
+`apps/storefront/src/app/checkout/prepare/route.ts` as `upstreamStatus` and
+`reason` — without them, every distinct failure here reaches the browser as an
+identical `{ error: "checkout_unavailable" }`, which is exactly how a wedged
+checkout stayed unexplained through two rounds of testing.
 
 **The shipping method is re-attached on every prepare call, not only when the
 cart has none.** `addShippingMethodToCartWorkflow` runs
@@ -845,7 +869,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **194** of the repo's 1058 tests. The `siteContent`
+This app currently holds **195** of the repo's 1059 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including

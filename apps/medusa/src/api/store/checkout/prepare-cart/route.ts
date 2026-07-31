@@ -111,6 +111,7 @@ export async function POST(
     return res.status(400).json({
       error: "invalid_shipping_quote",
       reason: shippingResult.reason,
+      message: `invalid_shipping_quote:${shippingResult.reason}`,
     });
   }
 
@@ -132,6 +133,7 @@ export async function POST(
     return res.status(400).json({
       error: "invalid_tax_quote",
       reason: taxResult.reason,
+      message: `invalid_tax_quote:${taxResult.reason}`,
     });
   }
 
@@ -156,12 +158,24 @@ export async function POST(
     logger.error(
       `[checkout:unavailable] reason=misconfigured postal=${shippingAddress.postalCode}`,
     );
-    return res
-      .status(502)
-      .json({ error: "checkout_unavailable", reason: "misconfigured" });
+    return res.status(502).json({
+      error: "checkout_unavailable",
+      reason: "misconfigured",
+      message: "checkout_unavailable:misconfigured",
+    });
   }
 
-  let cartIdToPrepare: string;
+  // A `cartId` this route can't reuse — unknown, or already turned into an
+  // order — falls through to creating a fresh one rather than erroring. The
+  // storefront holds this id in localStorage and only clears it once
+  // `/checkout/complete` returns, so any failure after the order was actually
+  // placed (the AC9 webhook wins the race, or the response never lands) leaves
+  // a completed cart id in the draft. Rejecting it wedges that shopper out of
+  // checkout for good, behind a Try again button that re-sends the same dead
+  // id. AC10's no-double-order guarantee does not live here — it is
+  // `/checkout/complete`'s own order lookup, which still refuses to place a
+  // second order for one cart.
+  let reusableCartId: string | null = null;
 
   if (cartId) {
     const { data: existingCarts } = await query.graph({
@@ -172,16 +186,21 @@ export async function POST(
     const existingCart = existingCarts[0] as
       { id: string; completed_at?: string | Date | null } | undefined;
 
-    if (!existingCart) {
-      return res.status(400).json({ error: "invalid_cart" });
+    if (existingCart && !existingCart.completed_at) {
+      reusableCartId = existingCart.id;
+    } else {
+      logger.warn(
+        `[checkout:cart-superseded] reason=${existingCart ? "completed" : "not_found"} cart=${cartId}`,
+      );
     }
-    if (existingCart.completed_at) {
-      return res.status(400).json({ error: "cart_already_completed" });
-    }
+  }
 
+  let cartIdToPrepare: string;
+
+  if (reusableCartId) {
     await updateCartWorkflow(req.scope).run({
       input: {
-        id: existingCart.id,
+        id: reusableCartId,
         region_id: region.id,
         email,
         shipping_address: toCartAddress(shippingAddress),
@@ -189,7 +208,7 @@ export async function POST(
       },
     });
 
-    cartIdToPrepare = existingCart.id;
+    cartIdToPrepare = reusableCartId;
   } else {
     const { result: createdCart } = await createCartWorkflow(req.scope).run({
       input: {
@@ -267,9 +286,11 @@ export async function POST(
     logger.error(
       `[checkout:unavailable] reason=cart_missing cart=${cartIdToPrepare}`,
     );
-    return res
-      .status(502)
-      .json({ error: "checkout_unavailable", reason: "cart_missing" });
+    return res.status(502).json({
+      error: "checkout_unavailable",
+      reason: "cart_missing",
+      message: "checkout_unavailable:cart_missing",
+    });
   }
 
   let paymentCollectionId = cart.payment_collection?.id;
@@ -314,9 +335,11 @@ export async function POST(
     logger.error(
       `[checkout:unavailable] reason=no_client_secret cart=${cart.id}`,
     );
-    return res
-      .status(502)
-      .json({ error: "checkout_unavailable", reason: "payment_unavailable" });
+    return res.status(502).json({
+      error: "checkout_unavailable",
+      reason: "payment_unavailable",
+      message: "checkout_unavailable:payment_unavailable",
+    });
   }
 
   return res.json({
