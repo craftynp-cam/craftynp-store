@@ -39,21 +39,29 @@ function storefrontUrl(): string {
 // deliberately independent, so the order/number/token contract is written down
 // in both apps' AGENTS.md.
 export function orderConfirmationUrl(order: OrderConfirmation): string {
-  const token = signOrderAccessToken(
-    {
-      oid: order.orderId,
-      exp:
-        Date.now() +
-        orderAccessTtlMs(Number(process.env.ORDER_ACCESS_TOKEN_TTL_DAYS)),
-    },
-    process.env.ORDER_ACCESS_SECRET ?? "",
-  );
-
   const params = new URLSearchParams({
     order: order.orderId,
     number: String(order.displayId),
-    token,
   });
+
+  try {
+    params.set(
+      "token",
+      signOrderAccessToken(
+        {
+          oid: order.orderId,
+          exp:
+            Date.now() +
+            orderAccessTtlMs(Number(process.env.ORDER_ACCESS_TOKEN_TTL_DAYS)),
+        },
+        process.env.ORDER_ACCESS_SECRET ?? "",
+      ),
+    );
+  } catch {
+    // Send the receipt anyway. Without the token the link only opens for a
+    // signed-in customer, which beats no receipt at all; the missing secret is
+    // already logged loudly where the token is minted at checkout.
+  }
 
   return `${storefrontUrl()}/checkout/confirmation?${params.toString()}`;
 }

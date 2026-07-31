@@ -69,6 +69,26 @@ describe("verifyOrderAccessToken", () => {
     });
   });
 
+  it("fails closed when no secret is configured, rather than verifying against an empty key", () => {
+    // An empty HMAC key produces a signature any caller could compute, so a
+    // token that verifies against one is worthless.
+    const forged = signOrderAccessToken(
+      { oid: orderId, exp: nowMs + 60_000 },
+      "anything",
+    );
+
+    expect(verifyOrderAccessToken(forged, "", { orderId, nowMs })).toEqual({
+      valid: false,
+      reason: "not_configured",
+    });
+  });
+
+  it("refuses to mint a token without a secret", () => {
+    expect(() =>
+      signOrderAccessToken({ oid: orderId, exp: nowMs + 60_000 }, ""),
+    ).toThrow("ORDER_ACCESS_SECRET is not set");
+  });
+
   it("rejects a token that is not two dot-separated parts", () => {
     expect(
       verifyOrderAccessToken("not-a-token", secret, { orderId, nowMs }),

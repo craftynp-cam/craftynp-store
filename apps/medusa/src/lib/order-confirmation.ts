@@ -7,6 +7,10 @@ import type {
   OrderConfirmationLine,
 } from "@craftynp/types";
 
+// `items.*` and `shipping_methods.*` must stay wildcards. Medusa computes the
+// order totals from those relations, and narrowing either one to the handful of
+// columns actually rendered makes every total silently come back as 0 — no
+// error, just a free order on the receipt.
 export const ORDER_CONFIRMATION_FIELDS = [
   "id",
   "display_id",
@@ -19,13 +23,8 @@ export const ORDER_CONFIRMATION_FIELDS = [
   "shipping_subtotal",
   "tax_total",
   "total",
-  "items.id",
-  "items.title",
-  "items.variant_title",
-  "items.thumbnail",
-  "items.quantity",
-  "items.unit_price",
-  "items.metadata",
+  "items.*",
+  "shipping_methods.*",
   "shipping_address.first_name",
   "shipping_address.last_name",
   "shipping_address.phone",
@@ -35,8 +34,10 @@ export const ORDER_CONFIRMATION_FIELDS = [
   "shipping_address.province",
   "shipping_address.postal_code",
   "shipping_address.country_code",
-  "shipping_methods.name",
 ];
+
+type BigNumberish =
+  number | string | Record<string, unknown> | null | undefined;
 
 type OrderRow = {
   id: string;
@@ -46,10 +47,10 @@ type OrderRow = {
   status: string | null;
   currency_code: string | null;
   customer_id: string | null;
-  item_subtotal: number | null;
-  shipping_subtotal: number | null;
-  tax_total: number | null;
-  total: number | null;
+  item_subtotal: BigNumberish;
+  shipping_subtotal: BigNumberish;
+  tax_total: BigNumberish;
+  total: BigNumberish;
   items?: OrderItemRow[] | null;
   shipping_address?: OrderAddressRow | null;
   shipping_methods?: { name: string | null }[] | null;
@@ -61,7 +62,7 @@ type OrderItemRow = {
   variant_title: string | null;
   thumbnail: string | null;
   quantity: number | null;
-  unit_price: number | null;
+  unit_price: BigNumberish;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -76,6 +77,42 @@ type OrderAddressRow = {
   postal_code: string | null;
   country_code: string | null;
 };
+
+// Medusa's money fields are BigNumberValue — a number, a numeric string, or a
+// { value } wrapper depending on how the row was loaded. Reading one straight
+// into a number field puts "15.000000000000000000" on the page.
+function toPrimitiveAmount(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function toAmount(value: unknown): number {
+  const direct = toPrimitiveAmount(value);
+  if (direct != null) return direct;
+
+  if (value == null || typeof value !== "object") return 0;
+
+  const record = value as Record<string, unknown> & { toJSON?: () => unknown };
+
+  // `numeric_` is the BigNumber instance query.graph actually returns; `value`
+  // is the serialized { value, precision } wrapper the same field arrives as
+  // over HTTP. Both have to work or the totals read as a free order.
+  for (const candidate of [
+    record.numeric_,
+    record.numeric,
+    record.value,
+    typeof record.toJSON === "function" ? record.toJSON() : undefined,
+  ]) {
+    const parsed = toPrimitiveAmount(candidate);
+    if (parsed != null) return parsed;
+  }
+
+  return 0;
+}
 
 function toDetails(value: unknown): CheckoutLineItemDetail[] {
   if (!Array.isArray(value)) return [];
@@ -92,7 +129,7 @@ function toDetails(value: unknown): CheckoutLineItemDetail[] {
 
 function toLine(item: OrderItemRow): OrderConfirmationLine {
   const quantity = item.quantity ?? 1;
-  const unitPrice = item.unit_price ?? 0;
+  const unitPrice = toAmount(item.unit_price);
 
   return {
     id: item.id,
@@ -140,10 +177,10 @@ export function toOrderConfirmation(row: OrderRow): OrderConfirmation {
     shippingMethodName: row.shipping_methods?.[0]?.name ?? null,
     lines: (row.items ?? []).map(toLine),
     totals: {
-      subtotal: row.item_subtotal ?? 0,
-      shipping: row.shipping_subtotal ?? 0,
-      tax: row.tax_total ?? 0,
-      total: row.total ?? 0,
+      subtotal: toAmount(row.item_subtotal),
+      shipping: toAmount(row.shipping_subtotal),
+      tax: toAmount(row.tax_total),
+      total: toAmount(row.total),
       currencyCode: row.currency_code ?? "usd",
     },
     shippingAddress: toAddress(row.shipping_address),

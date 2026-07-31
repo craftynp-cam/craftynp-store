@@ -12,6 +12,8 @@ import {
 
 type OrderSummary = { id: string; display_id: number };
 
+export const ORDER_TOKEN_UNAVAILABLE_LOG_TAG = "[order:token-unavailable]";
+
 export async function POST(
   req: MedusaRequest<CheckoutCompleteRequest>,
   res: MedusaResponse,
@@ -22,17 +24,25 @@ export async function POST(
   const { cartId } = req.validatedBody;
 
   function respondWithOrder(order: OrderSummary) {
-    const secret = process.env.ORDER_ACCESS_SECRET ?? "";
-    const ttlDays = Number(process.env.ORDER_ACCESS_TOKEN_TTL_DAYS);
-    const orderToken = signOrderAccessToken(
-      { oid: order.id, exp: Date.now() + orderAccessTtlMs(ttlDays) },
-      secret,
-    );
+    let orderToken: string | undefined;
+
+    try {
+      const ttlDays = Number(process.env.ORDER_ACCESS_TOKEN_TTL_DAYS);
+      orderToken = signOrderAccessToken(
+        { oid: order.id, exp: Date.now() + orderAccessTtlMs(ttlDays) },
+        process.env.ORDER_ACCESS_SECRET ?? "",
+      );
+    } catch (error) {
+      // A missing secret costs the guest their order link, not their order.
+      logger.error(
+        `${ORDER_TOKEN_UNAVAILABLE_LOG_TAG} order=${order.id} error=${describeError(error)}`,
+      );
+    }
 
     return res.json({
       orderId: order.id,
       displayId: order.display_id,
-      orderToken,
+      ...(orderToken ? { orderToken } : {}),
     });
   }
 

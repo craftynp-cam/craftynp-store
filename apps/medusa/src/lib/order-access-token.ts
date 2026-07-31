@@ -35,10 +35,21 @@ export function orderAccessTtlMs(ttlDays?: number): number {
   return days * 24 * 60 * 60 * 1000;
 }
 
+export class OrderAccessSecretMissingError extends Error {
+  constructor() {
+    super("ORDER_ACCESS_SECRET is not set");
+    this.name = "OrderAccessSecretMissingError";
+  }
+}
+
 export function signOrderAccessToken(
   payload: Omit<OrderAccessPayload, "v">,
   secret: string,
 ): string {
+  // An empty HMAC key still produces a signature that verifies, so an unset
+  // secret would silently let anyone forge a token for any order.
+  if (!secret) throw new OrderAccessSecretMissingError();
+
   const fullPayload: OrderAccessPayload = { v: 1, ...payload };
   const json = base64UrlEncode(JSON.stringify(fullPayload));
   const signature = createHmac("sha256", secret)
@@ -51,7 +62,12 @@ export type VerifyOrderAccessResult =
   | { valid: true; payload: OrderAccessPayload }
   | {
       valid: false;
-      reason: "malformed" | "bad_signature" | "expired" | "order_mismatch";
+      reason:
+        | "not_configured"
+        | "malformed"
+        | "bad_signature"
+        | "expired"
+        | "order_mismatch";
     };
 
 function isOrderAccessPayload(value: unknown): value is OrderAccessPayload {
@@ -69,6 +85,10 @@ export function verifyOrderAccessToken(
   secret: string,
   expected: { orderId: string; nowMs?: number },
 ): VerifyOrderAccessResult {
+  // Fail closed. Verifying against an empty key would accept a token any
+  // caller could have computed themselves.
+  if (!secret) return { valid: false, reason: "not_configured" };
+
   const parts = token.split(".");
   if (parts.length !== 2) return { valid: false, reason: "malformed" };
 

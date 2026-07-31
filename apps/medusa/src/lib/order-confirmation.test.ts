@@ -35,6 +35,39 @@ describe("toOrderConfirmation", () => {
     expect(result.placedAt).toBe("2026-07-30T12:00:00.000Z");
   });
 
+  it("coerces every shape Medusa's BigNumber money fields arrive in", () => {
+    // query.graph hands back BigNumber instances (numeric_); the same fields
+    // arrive as a { value, precision } wrapper or a numeric string elsewhere.
+    // Miss any one and the order reads as free.
+    const result = toOrderConfirmation({
+      ...BASE_ROW,
+      item_subtotal: { numeric_: 15, raw_: { value: "15" } },
+      shipping_subtotal: { value: "4.39", precision: 20 },
+      tax_total: "1.3599998500000000000",
+      total: 20.74999985,
+      items: [
+        {
+          id: "item_1",
+          title: "Medusa Shorts",
+          variant_title: "L",
+          thumbnail: null,
+          quantity: 2,
+          unit_price: { numeric_: 15, raw_: { value: "15" } },
+          metadata: null,
+        },
+      ],
+    });
+
+    expect(result.totals).toEqual({
+      subtotal: 15,
+      shipping: 4.39,
+      tax: 1.35999985,
+      total: 20.74999985,
+      currencyCode: "usd",
+    });
+    expect(result.lines[0]).toMatchObject({ unitPrice: 15, lineTotal: 30 });
+  });
+
   it("derives the line total from unit price and quantity", () => {
     const result = toOrderConfirmation({
       ...BASE_ROW,

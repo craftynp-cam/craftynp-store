@@ -266,6 +266,17 @@ provider in `src/modules/notification-resend`, fired by subscribers on
 None of these are caught by `tsc` or a mock-based test — they surface only
 against a real container, schema, or workflow.
 
+- **An order's totals only compute when `items.*` and `shipping_methods.*` are
+  requested as wildcards.** Narrowing either to the few columns you actually
+  render makes `total`, `item_subtotal`, `shipping_subtotal` and `tax_total`
+  all come back as **0** — no error, no warning, just a free order on the page
+  and on the receipt. `ORDER_CONFIRMATION_FIELDS` keeps both wildcards for this
+  reason.
+- **Money fields come back as `BigNumber` instances, not numbers.** They carry
+  `numeric_`/`raw_` and serialize to a plain number through `JSON.stringify`,
+  so a `typeof x === "number"` check silently reads every amount as 0 while a
+  console log of the same value looks correct. Route them through
+  `toAmount()` in `order-confirmation.ts`.
 - **A module service resolves registrations outside its own Awilix scope only if
   its `medusa-config.ts` entry lists them under `dependencies`** — other modules
   and core keys like `ContainerRegistrationKeys.QUERY` alike. An omission throws
