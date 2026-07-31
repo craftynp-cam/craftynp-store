@@ -121,10 +121,26 @@ describe("mapUserInfoToIdentity", () => {
           given_name: undefined,
           family_name: undefined,
           picture: undefined,
+          auth0_sub: "auth0|abc",
         },
         provider_metadata: { auth0_sub: "auth0|abc" },
       },
     });
+  });
+
+  it("carries the sub into user_metadata too, since only user_metadata reaches the storefront's JWT", () => {
+    const result = mapUserInfoToIdentity({
+      sub: "google-oauth2|abc123",
+      email: "cam@example.com",
+      email_verified: true,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.identity.user_metadata.auth0_sub).toBe(
+        "google-oauth2|abc123",
+      );
+    }
   });
 
   it("carries given_name and family_name into user_metadata", () => {

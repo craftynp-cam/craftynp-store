@@ -1,6 +1,8 @@
 import type { ExecArgs } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
+import { purgeCustomerIdentity } from "../lib/purge-customer-identity";
+
 export default async function resetAuth0TestAccount({
   container,
   args,
@@ -18,33 +20,13 @@ export default async function resetAuth0TestAccount({
     return;
   }
 
-  const knex = container.resolve(ContainerRegistrationKeys.PG_CONNECTION);
-
-  const deletedProviderIdentities = await knex("provider_identity")
-    .where({ entity_id: email, provider: "auth0" })
-    .del()
-    .returning("id");
-
-  const deletedAuthIdentities = await knex
-    .from("auth_identity as ai")
-    .whereNotExists(
-      knex
-        .select(1)
-        .from("provider_identity as pi")
-        .whereRaw("pi.auth_identity_id = ai.id"),
-    )
-    .del()
-    .returning("id");
-
-  const deletedCustomers = await knex("customer")
-    .where({ email })
-    .del()
-    .returning("id");
+  const result = await purgeCustomerIdentity(container, email);
 
   logger.info(
-    `Reset ${email}: removed ${deletedProviderIdentities.length} provider identity, ` +
-      `${deletedAuthIdentities.length} orphaned auth identity, and ` +
-      `${deletedCustomers.length} customer row(s).`,
+    `Reset ${email}: removed ${result.deletedAddresses} address(es), ` +
+      `${result.deletedProviderIdentities} provider identity, ` +
+      `${result.deletedAuthIdentities} orphaned auth identity, and ` +
+      `${result.deletedCustomers} customer row(s).`,
   );
   logger.info(
     "This does not remove the user from Auth0 itself — delete it from the tenant's dashboard too for a fully clean slate.",

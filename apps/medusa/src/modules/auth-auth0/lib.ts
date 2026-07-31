@@ -96,6 +96,7 @@ export function mapUserInfoToIdentity(
         given_name: userInfo.given_name,
         family_name: userInfo.family_name,
         picture: userInfo.picture,
+        auth0_sub: userInfo.sub,
       },
       provider_metadata: {
         auth0_sub: userInfo.sub,
