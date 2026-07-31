@@ -43,9 +43,6 @@ type TaxCalculationContext = {
 
 type ItemTaxLineDTO = {
   rate: number;
-  // Medusa's line_item_tax_line table has a non-nullable `code` column —
-  // unlike the "system" provider, this provider has no local tax_rate row
-  // to source a real code from, so it always supplies the same constant.
   code: string;
   name: string;
   provider_id: string;
@@ -62,23 +59,6 @@ type ShippingTaxLineDTO = {
 
 const PLACEHOLDER_ITEM_REFERENCE = "__shipping_only_placeholder__";
 
-/**
- * Calculates tax lines via Stripe Tax at cart-refresh time. Every getTaxLines
- * call is a live Stripe calculation — there is deliberately no cache here
- * (unlike the sibling StripeTaxModuleService, which the tax-quote route still
- * uses for its own signed-token flow); a cart refresh is infrequent enough,
- * and a stale cached rate is worse than an extra round trip.
- *
- * Medusa's tax module calls a provider's getTaxLines twice per refresh, not
- * once — once with only item lines (get-item-tax-lines.ts's
- * normalizeLineItemsForTax branch) and once with only shipping lines
- * (its normalizeLineItemsForShipping branch), e.g. whenever a shipping
- * method is added to a cart without any item having changed. Stripe's
- * Calculation API requires a non-empty `line_items` array even when only
- * `shipping_cost` is wanted, so a shipping-only call gets a zero-amount
- * placeholder item added to the *request* only — it never appears in the
- * returned tax lines, since those are built from the real itemLines array.
- */
 class StripeTaxTaxProvider {
   static identifier = "stripe-tax";
 

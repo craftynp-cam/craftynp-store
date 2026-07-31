@@ -23,19 +23,6 @@ type OrderForTaxTransaction = {
   shipping_methods?: { amount: number | null }[];
 };
 
-/**
- * Records the order's sale in Stripe's own tax reports (AC5's `cid` note).
- * CNP-52 deliberately stopped short of this call — recording a transaction
- * belongs to order placement, which is here for the first time.
- *
- * Rather than plumbing the checkout-time calculation id through the cart
- * pipeline (nothing in Medusa's own tax provider context carries a cart id
- * — see stripe-tax/tax-provider.ts), this recomputes the same calculation
- * from the placed order's own line items, shipping amount, and address.
- * StripeTaxModuleService.calculateTax caches on exactly those inputs, so an
- * order placed shortly after its cart's tax was quoted reuses the cached
- * calculation rather than paying for a second Stripe call.
- */
 export default async function recordTaxTransactionHandler({
   event,
   container,

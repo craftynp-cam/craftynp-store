@@ -26,13 +26,6 @@ function getStripe(): Promise<StripeJs | null> {
   return stripePromise;
 }
 
-/**
- * The Payment Element renders in an iframe, so it cannot read this site's
- * `color-scheme`/`light-dark()` tokens itself — Stripe's `appearance` option
- * is the only way to match it to the page. Built from the same resolved hex
- * values `design-tokens.ts` uses everywhere else, rather than a second,
- * hand-picked palette that could drift from the real one.
- */
 function stripeAppearance(mode: Mode): Appearance {
   return {
     theme: mode === "dark" ? "night" : "stripe",
@@ -67,18 +60,6 @@ const UNAVAILABLE_MESSAGE =
   "Payment isn't ready yet. Please wait a moment and try again.";
 const GENERIC_DECLINE_MESSAGE = "Your payment could not be processed.";
 
-/**
- * Bridges CheckoutView's form submit to Stripe's confirmPayment, since
- * useStripe/useElements only work inside an Elements descendant while the
- * visible submit button and its validation live in CheckoutView. Renders no
- * DOM of its own — CheckoutView holds the ref and calls confirmPayment()
- * from its own handleSubmit once the non-payment fields validate.
- */
-// React 19 accepts `ref` as a plain prop on function components, so this
-// skips forwardRef entirely — its ForwardRefExoticComponent return type
-// conflicts with the workspace's dual @types/react resolution (18 for the
-// Medusa admin, 19 here; see apps/storefront/AGENTS.md's HeroUI section for
-// the same underlying trap) in a way a plain component isn't exposed to.
 function PaymentSubmitBridge({ ref }: { ref?: Ref<PaymentSubmitHandle> }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -134,13 +115,6 @@ export function PaymentFields({
   const mode: Mode = isDark ? "dark" : "light";
 
   return (
-    // Stripe's Elements group only reads `options.clientSecret` on its first
-    // mount — a changed clientSecret on a later render (e.g. the shopper
-    // edits the address after a cart/payment session was already prepared,
-    // and a fresh one supersedes it) is silently ignored, leaving the
-    // mounted PaymentElement bound to a PaymentIntent that no longer matches
-    // reality and surfacing as an "Unhandled payment Element loaderror".
-    // Keying on clientSecret forces a clean remount instead.
     <Elements
       key={`${clientSecret}:${mode}`}
       stripe={getStripe()}

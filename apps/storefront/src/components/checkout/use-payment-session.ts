@@ -46,12 +46,6 @@ function toAddressPayload(draft: CheckoutDraft, prefix: "" | "billing") {
   };
 }
 
-/**
- * Same derived-key / debounce / AbortController / latestRef structure as
- * use-tax-quote.ts and use-shipping-rates.ts. Gates on the live tax status
- * rather than a draft field for the same staleness reason use-tax-quote.ts
- * documents — see isReadyForPayment in src/lib/payment.ts.
- */
 export function usePaymentSession(
   draft: CheckoutDraft,
   cart: Cart,

@@ -18,16 +18,6 @@ function required<T>(value: T | undefined, name: string): T {
   return value;
 }
 
-/**
- * CNP-53 teaches the United States region seeded by seed-us-region.ts (CNP-51)
- * about the three providers registered in medusa-config.ts: Stripe for
- * payment, the ShipStation fulfillment provider for a real calculated
- * shipping option, and Stripe Tax as the region's tax provider (swapped in
- * place of the system provider seed-us-region.ts started it with). A new
- * file, never an edit to seed-us-region.ts — the migration ledger tracks
- * each script independently, so a new file still runs against a database
- * that already migrated.
- */
 export default async function seed_stripe_payment_provider({
   container,
 }: {

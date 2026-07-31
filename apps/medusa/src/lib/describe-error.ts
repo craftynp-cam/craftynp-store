@@ -1,14 +1,5 @@
 const MAX_DEPTH = 4;
 
-/**
- * `String(error)` on anything Medusa's workflow engine rejects with tends to
- * produce `[object Object]` — it throws `errors[0].error`, which is not
- * reliably an `Error` instance by the time a route's catch sees it. That
- * string then reached both the server log and, through `message`, the
- * storefront, making a failed order placement completely opaque from either
- * end. This unwraps the shapes that actually turn up and falls back to JSON
- * rather than to `[object Object]`.
- */
 export function describeError(error: unknown, depth = 0): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;

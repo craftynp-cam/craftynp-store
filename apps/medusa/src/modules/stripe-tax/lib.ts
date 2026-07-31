@@ -34,13 +34,6 @@ export function validateStripeTaxOptions(
   }
 }
 
-/**
- * The tax-line provider (tax-provider.ts) shares the calculation-building
- * helpers below with StripeTaxModuleService but deliberately has no cache —
- * see its own module-doc comment for why — so it takes a narrower options
- * shape than StripeTaxOptions and must not be validated against
- * cacheTtlSeconds, an option it never receives.
- */
 export type StripeTaxProviderOptions = Omit<
   StripeTaxOptions,
   "cacheTtlSeconds"
@@ -206,18 +199,6 @@ export function toStripeTaxError(error: unknown): StripeTaxError {
   );
 }
 
-/**
- * Converts a Stripe-calculated tax amount into the percentage rate Medusa's
- * `ITaxProvider.getTaxLines` contract expects. `getTaxLines` returns rates,
- * not amounts, so Stripe's per-line tax amount is converted to a percentage
- * of that line's base amount — both in the same (minor) unit, so the ratio is
- * unit-independent. This is a deliberate, accepted tradeoff: rounding a
- * calculation-time amount into a rate and then re-multiplying it against the
- * cart's own line amount can drift by up to a cent or two per line versus the
- * Stripe Tax calculation recorded as the transaction of record at order
- * placement (see the `order.placed` subscriber). The cart total is still the
- * authoritative charge either way.
- */
 export function amountToRate(taxAmount: number, baseAmount: number): number {
   if (baseAmount <= 0) return 0;
   return Math.round((taxAmount / baseAmount) * 100 * 10_000) / 10_000;

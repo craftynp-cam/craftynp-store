@@ -59,13 +59,6 @@ function systemPrefersDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-/**
- * The resolved mode actually painted on the page — unlike readStoredTheme,
- * "system" is resolved to a real light/dark answer via matchMedia rather
- * than left as its own value. Third-party embeds that can't read `color-scheme`
- * or `light-dark()` themselves (Stripe's Payment Element, rendered in an
- * iframe) need this to pick a matching appearance.
- */
 export function readIsDarkMode(): boolean {
   if (typeof document === "undefined") return false;
   const pinned = document.documentElement.dataset.theme;

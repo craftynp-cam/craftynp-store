@@ -6,12 +6,6 @@ export type PaymentSessionStatus = "idle" | "loading" | "ready" | "error";
 
 export const PAYMENT_PREPARE_DEBOUNCE_MS = 500;
 
-/**
- * Gates on the live tax status, not `draft.taxQuoteToken !== ""` — the same
- * staleness class `isDestinationReadyForTax` guards against in tax-quote.ts.
- * The draft holds the *previous* tax quote for a moment after an address or
- * shipping-rate edit, until useTaxQuote settles a fresh one.
- */
 export function isReadyForPayment(
   draft: CheckoutDraft,
   taxReady: boolean,
@@ -37,12 +31,6 @@ export function paymentPrepareKey(draft: CheckoutDraft, cart: Cart): string {
         draft.billingCountryCode,
       ].join(":");
 
-  // The tax quote token stands in for the parts of the destination its own
-  // signature covers — postal code, country, state, city, shipping rate, cart
-  // lines — all verified server-side. It does *not* cover the recipient or the
-  // street lines, so those are listed here explicitly: editing only address1
-  // otherwise leaves the key unchanged, no re-prepare fires, and the Medusa
-  // cart keeps the previous street on the order and its shipping label.
   const recipient = [
     draft.firstName,
     draft.lastName,

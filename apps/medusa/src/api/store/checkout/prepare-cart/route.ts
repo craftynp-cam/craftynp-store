@@ -165,16 +165,6 @@ export async function POST(
     });
   }
 
-  // A `cartId` this route can't reuse — unknown, or already turned into an
-  // order — falls through to creating a fresh one rather than erroring. The
-  // storefront holds this id in localStorage and only clears it once
-  // `/checkout/complete` returns, so any failure after the order was actually
-  // placed (the AC9 webhook wins the race, or the response never lands) leaves
-  // a completed cart id in the draft. Rejecting it wedges that shopper out of
-  // checkout for good, behind a Try again button that re-sends the same dead
-  // id. AC10's no-double-order guarantee does not live here — it is
-  // `/checkout/complete`'s own order lookup, which still refuses to place a
-  // second order for one cart.
   let reusableCartId: string | null = null;
 
   if (cartId) {
@@ -230,15 +220,6 @@ export async function POST(
     cartIdToPrepare = (createdCart as { id: string }).id;
   }
 
-  // Re-attached on every call, not only when the cart has no method yet.
-  // `addShippingMethodToCartWorkflow` removes the existing method for the
-  // incoming shipping profile before creating the new one, so this replaces
-  // rather than duplicates — and the method then carries the *current*
-  // request's quote token. Left stale, Medusa's own
-  // `refreshCartShippingMethodsWorkflow` re-prices it by handing the previous
-  // address's token to `calculatePrice`, which can never satisfy the cart
-  // signature and so drops into the re-estimate/tolerance fallback on every
-  // ordinary address edit.
   await addShippingMethodToCartWorkflow(req.scope).run({
     input: {
       cart_id: cartIdToPrepare,
@@ -256,13 +237,6 @@ export async function POST(
     },
   });
 
-  // Every read that feeds the payment decision happens here, *after* both the
-  // cart update and the shipping re-attach. Either can move `cart.total`, and
-  // `refreshPaymentCollectionForCartWorkflow` responds to a moved total by
-  // running `deletePaymentSessionsWorkflow` — which asks the Stripe provider to
-  // delete the session, cancelling its PaymentIntent. A pre-mutation snapshot
-  // therefore hands back the client secret of an intent that is already in a
-  // terminal state, which Stripe.js refuses to initialize Elements against.
   const { data: preparedCarts } = await query.graph({
     entity: "cart",
     fields: [
@@ -305,9 +279,6 @@ export async function POST(
   const existingSession = cart.payment_collection?.payment_sessions?.find(
     (session) => session.provider_id === STRIPE_PAYMENT_PROVIDER_ID,
   );
-  // Medusa syncs the collection's amount and deletes its sessions together, so
-  // an amount still matching the cart total means the session survived the
-  // refresh and its intent is good for exactly what we are about to charge.
   const collectionMatchesTotal =
     cart.payment_collection?.amount != null &&
     Number(cart.payment_collection.amount) === Number(cart.total);
@@ -317,8 +288,6 @@ export async function POST(
     : undefined;
 
   if (!clientSecret) {
-    // Deletes any surviving session for the collection before creating the new
-    // one, and mints it against the collection's refreshed amount.
     const { result: paymentSession } = await createPaymentSessionsWorkflow(
       req.scope,
     ).run({

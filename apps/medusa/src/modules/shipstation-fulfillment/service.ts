@@ -153,13 +153,6 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
       `${SHIPPING_QUOTE_MISMATCH_LOG_TAG} reason=${verified.reason} service=${shippingData.serviceCode} re-estimating`,
     );
 
-    // Medusa's own cart-refresh context (cartFieldsForCalculateShippingOptionsPrices)
-    // only ever fetches items.variant.{weight,length,width,height} and
-    // items.product.weight — it never fetches the product's length/width/height
-    // at all, so a variant relying on product-level dimensions would always
-    // appear to be missing them here. Re-query authoritatively instead, the
-    // same way /store/shipping-rates does, rather than trust whatever subset
-    // of fields this particular caller happened to pass in `context`.
     const variantIds = items.map((item) => item.variantId).filter(Boolean);
     const { data: variants } = await this.query_.graph({
       entity: "variant",

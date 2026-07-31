@@ -17,9 +17,6 @@ export async function POST(
 
   const { cartId } = req.validatedBody;
 
-  // `Order` carries no `cart_id` column — the cart/order association lives in
-  // the `order_cart` link table (@medusajs/link-modules), so this has to be
-  // queried through the link entity rather than filtered on the order itself.
   async function findOrderForCart(): Promise<OrderSummary | null> {
     const { data: links } = await query.graph({
       entity: "order_cart",
@@ -31,9 +28,6 @@ export async function POST(
     );
   }
 
-  // Idempotent on cartId (AC10): a cart that already produced an order
-  // returns that order rather than erroring, so a double-submit or a retried
-  // request after a dropped response cannot create a second order or charge.
   const existingOrder = await findOrderForCart();
   if (existingOrder) {
     return res.json({
@@ -57,11 +51,6 @@ export async function POST(
 
     return res.json({ orderId: order.id, displayId: order.display_id });
   } catch (error) {
-    // AC9's webhook path races this one: Stripe's `payment_intent.succeeded`
-    // drives `processPaymentWorkflow` → `completeCartAfterPaymentStep`, which
-    // can place the order between the lookup above and this call, leaving
-    // `completeCartWorkflow` to throw on an already-completed cart. That is a
-    // success, not a failure, so re-check the link before reporting one.
     const racedOrder = await findOrderForCart();
     if (racedOrder) {
       return res.json({
@@ -72,9 +61,6 @@ export async function POST(
 
     const detail = describeError(error);
     logger.error(`[checkout:complete-failed] cart=${cartId} error=${detail}`);
-    // `message` is the only field @medusajs/js-sdk preserves from an error
-    // body, so the storefront proxy can forward a real reason rather than a
-    // blanket 502 — see prepare-cart's own note.
     return res.status(502).json({
       error: "order_placement_unavailable",
       message: `order_placement_unavailable:${detail}`,

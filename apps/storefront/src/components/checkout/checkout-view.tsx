@@ -90,9 +90,6 @@ export function CheckoutView({
   const [errors, setErrors] = useState<CheckoutErrors>({});
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // Paired with the clientSecret it was raised against, so a stale error
-  // from a superseded Payment Element doesn't linger once PaymentFields has
-  // remounted a clean one for a fresh clientSecret.
   const [payError, setPayError] = useState<{
     message: string;
     clientSecret: string | null;
@@ -175,12 +172,6 @@ export function CheckoutView({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    // A double-click (or a resubmitted native form event) must not fire a
-    // second confirmPayment/complete pair while the first is in flight —
-    // the client-side half of AC10, alongside the server's own idempotent
-    // /store/checkout/complete. A ref guards this synchronously; the
-    // submitting state update that follows is not visible until the next
-    // render, which a second click in the same tick would race past.
     if (submittingRef.current) return;
 
     const nextErrors = validateCheckoutDraft(values);
@@ -199,9 +190,6 @@ export function CheckoutView({
 
     void saveAddressIfRequested(values);
 
-    // Payment isn't ready to submit yet (still preparing, or the prepare
-    // call failed) — the field-level validation above is the only feedback
-    // available until it is.
     if (paymentSession.status !== "ready" || !values.cartId) {
       return;
     }
@@ -213,8 +201,6 @@ export function CheckoutView({
     const result = await paymentSubmitRef.current?.confirmPayment();
 
     if (!result || result.status === "error") {
-      // A decline shows Stripe's own reason, leaves the cart intact, and
-      // allows retry — nothing here has cleared the cart or draft.
       showPayError(result?.message ?? "Your payment could not be processed.");
       submittingRef.current = false;
       setSubmitting(false);
@@ -239,10 +225,6 @@ export function CheckoutView({
       clearCheckoutDraft();
       router.push(checkoutConfirmationHref(order.orderId, order.displayId));
     } catch {
-      // The payment was captured — recorded on Stripe's side regardless of
-      // whether this call succeeds. The webhook (AC9) reconciles the order
-      // even if this request never lands, so this is a delayed confirmation,
-      // not a lost payment.
       showPayError(
         "Your payment was captured, but we couldn't confirm your order just yet. We'll email your confirmation shortly.",
       );
