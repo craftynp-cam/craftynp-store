@@ -1,5 +1,5 @@
 import { MedusaError } from "@medusajs/framework/utils";
-import type Stripe from "stripe";
+import Stripe from "stripe";
 
 export type StripeTaxOptions = {
   secretKey: string;
@@ -154,3 +154,129 @@ export class StripeTaxError extends Error {
 }
 
 export const STRIPE_TAX_UNAVAILABLE_LOG_TAG = "[stripe-tax:unavailable]";
+
+export function toStripeTaxError(error: unknown): StripeTaxError {
+  if (error instanceof Stripe.errors.StripeConnectionError) {
+    return new StripeTaxError("timeout", error.message);
+  }
+
+  if (
+    error instanceof Stripe.errors.StripeInvalidRequestError &&
+    typeof error.param === "string" &&
+    error.param.includes("address")
+  ) {
+    return new StripeTaxError("invalid_address", error.message);
+  }
+
+  if (error instanceof Stripe.errors.StripeError) {
+    return new StripeTaxError("http_error", error.message);
+  }
+
+  return new StripeTaxError(
+    "http_error",
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+/**
+ * Converts a Stripe-calculated tax amount into the percentage rate Medusa's
+ * `ITaxProvider.getTaxLines` contract expects. `getTaxLines` returns rates,
+ * not amounts, so Stripe's per-line tax amount is converted to a percentage
+ * of that line's base amount — both in the same (minor) unit, so the ratio is
+ * unit-independent. This is a deliberate, accepted tradeoff: rounding a
+ * calculation-time amount into a rate and then re-multiplying it against the
+ * cart's own line amount can drift by up to a cent or two per line versus the
+ * Stripe Tax calculation recorded as the transaction of record at order
+ * placement (see the `order.placed` subscriber). The cart total is still the
+ * authoritative charge either way.
+ */
+export function amountToRate(taxAmount: number, baseAmount: number): number {
+  if (baseAmount <= 0) return 0;
+  return Math.round((taxAmount / baseAmount) * 100 * 10_000) / 10_000;
+}
+
+export type ProviderTaxableItem = {
+  id: string;
+  unitPrice: number;
+  quantity: number;
+  currencyCode?: string;
+};
+
+export type ProviderTaxableShipping = {
+  unitPrice: number;
+  currencyCode?: string;
+};
+
+export type ProviderAddress = {
+  countryCode: string;
+  postalCode?: string | null;
+  city?: string | null;
+  provinceCode?: string | null;
+};
+
+export function buildProviderCalculationInput(
+  itemLines: readonly ProviderTaxableItem[],
+  shippingLines: readonly ProviderTaxableShipping[],
+  address: ProviderAddress,
+): CalculationParamsInput {
+  const currencyCode =
+    itemLines[0]?.currencyCode ?? shippingLines[0]?.currencyCode ?? "usd";
+
+  const lineItems = itemLines.map((item) => ({
+    reference: item.id,
+    amount: item.unitPrice,
+    quantity: item.quantity,
+  }));
+
+  const shippingAmount = shippingLines.reduce(
+    (sum, line) => sum + line.unitPrice,
+    0,
+  );
+
+  return {
+    currencyCode,
+    destination: {
+      countryCode: address.countryCode,
+      postalCode: address.postalCode ?? "",
+      city: address.city ?? "",
+      state: address.provinceCode ?? "",
+    },
+    lineItems,
+    shippingAmount,
+  };
+}
+
+export type ProviderLineRate = {
+  reference: string;
+  rate: number;
+};
+
+export type NormalizedProviderCalculation = {
+  calculationId: string;
+  currencyCode: string;
+  itemRates: readonly ProviderLineRate[];
+  shippingRate: number;
+};
+
+export function normalizeProviderCalculation(
+  calculation: Stripe.Tax.Calculation,
+): NormalizedProviderCalculation {
+  const itemRates = (calculation.line_items?.data ?? []).map((line) => ({
+    reference: line.reference,
+    rate: amountToRate(line.amount_tax, line.amount),
+  }));
+
+  const shippingRate = calculation.shipping_cost
+    ? amountToRate(
+        calculation.shipping_cost.amount_tax,
+        calculation.shipping_cost.amount,
+      )
+    : 0;
+
+  return {
+    calculationId: calculation.id ?? "",
+    currencyCode: calculation.currency,
+    itemRates,
+    shippingRate,
+  };
+}
