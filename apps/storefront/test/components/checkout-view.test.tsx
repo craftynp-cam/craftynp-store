@@ -488,7 +488,7 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("Street address")).toHaveValue("");
   });
 
-  it("hides the saved-address picker and save checkbox for a guest even when addresses are passed", () => {
+  it("hides the saved-address picker and save button for a guest even when addresses are passed", () => {
     render(
       <CheckoutView
         customer={null}
@@ -498,6 +498,20 @@ describe("CheckoutView", () => {
     );
 
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Save this address to my account"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the save button once the shopper is using one of their existing saved addresses", () => {
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[savedAddress]}
+        countryOptions={countryOptions}
+      />,
+    );
+
     expect(
       screen.queryByText("Save this address to my account"),
     ).not.toBeInTheDocument();
@@ -604,7 +618,7 @@ describe("CheckoutView", () => {
     expect(mockRouterPush).not.toHaveBeenCalled();
   }, 15000);
 
-  it("posts the mapped address once when the save checkbox is checked", async () => {
+  it("posts the mapped address immediately when Save this address is clicked", async () => {
     const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -617,21 +631,9 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
-    await waitFor(() =>
-      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
-    );
-    await waitFor(
-      () =>
-        expect(fetchMock).toHaveBeenCalledWith(
-          "/checkout/tax",
-          expect.anything(),
-        ),
-      { timeout: 2000 },
-    );
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Save this address to my account" }),
+      screen.getByRole("button", { name: "Save this address to my account" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -650,9 +652,66 @@ describe("CheckoutView", () => {
       state: "IL",
       postalCode: "62704",
     });
-  }, 15000);
 
-  it("shows a non-blocking notice and still completes when the save request fails", async () => {
+    // The button is replaced by a confirmation once the save succeeds, so a
+    // second click can't fire a duplicate save.
+    await waitFor(() =>
+      expect(screen.getByText("Saved to your addresses.")).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Save this address to my account" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("re-enables the save button after the saved address is edited", async () => {
+    const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    fillValidForm();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Saved to your addresses.")).toBeInTheDocument(),
+    );
+
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "456 Oak Avenue" },
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Saved to your addresses."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("validates the address fields before saving, without needing the rest of the form filled", () => {
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    );
+
+    expect(screen.getByText("Enter your street address.")).toBeInTheDocument();
+  });
+
+  it("shows an inline error and stays clickable when the save request fails", async () => {
     const fetchMock = mockFetchWithRatesAnd({ ok: false, status: 502 });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -665,33 +724,21 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
-    await waitFor(() =>
-      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
-    );
-    await waitFor(
-      () =>
-        expect(fetchMock).toHaveBeenCalledWith(
-          "/checkout/tax",
-          expect.anything(),
-        ),
-      { timeout: 2000 },
-    );
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Save this address to my account" }),
+      screen.getByRole("button", { name: "Save this address to my account" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     await waitFor(() =>
       expect(
-        screen.getByText(/We couldn't save this address/),
+        screen.getByText("We couldn't save this address. Please try again."),
       ).toBeInTheDocument(),
     );
-    // The failed address save is non-blocking — validation still passed and
-    // nothing crashed, it just never reached a completed payment.
-    expect(mockRouterPush).not.toHaveBeenCalled();
-  }, 15000);
+    expect(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    ).toBeInTheDocument();
+  });
 
-  it("fires no fetch when the save checkbox is left unchecked", async () => {
+  it("fires no address-save fetch just from submitting the order", async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock;
 
@@ -706,7 +753,10 @@ describe("CheckoutView", () => {
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/checkout/addresses",
+      expect.anything(),
+    );
   });
 
   describe("shipping rates", () => {

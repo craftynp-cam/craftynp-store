@@ -73,8 +73,7 @@ export function CommunicationPreferencesCard({
       </div>
 
       <p className="mt-4 text-sm text-foreground-muted">
-        Order emails are required — they&apos;re how you track what you
-        bought.
+        Order emails are required — they&apos;re how you track what you bought.
       </p>
 
       {error ? (

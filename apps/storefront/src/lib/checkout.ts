@@ -22,7 +22,6 @@ export type CheckoutDraft = {
   billingPostalCode: string;
   billingCountryCode: string;
   savedAddressId: string;
-  saveAddress: boolean;
   shippingRateId: string;
   shippingRateLabel: string;
   shippingRateAmount: number;
@@ -75,7 +74,6 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   billingPostalCode: "",
   billingCountryCode: "us",
   savedAddressId: "",
-  saveAddress: false,
   shippingRateId: "",
   shippingRateLabel: "",
   shippingRateAmount: 0,

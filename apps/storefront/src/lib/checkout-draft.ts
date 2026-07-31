@@ -33,7 +33,6 @@ const STRING_FIELDS = [
 
 const BOOLEAN_FIELDS = [
   "billingSameAsDelivery",
-  "saveAddress",
 ] as const satisfies readonly (keyof CheckoutDraft)[];
 
 const NUMBER_FIELDS = [
