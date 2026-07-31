@@ -22,8 +22,9 @@ jest.mock("next/navigation", () => ({
 }));
 
 const mockConfirmPayment = jest.fn();
-let mockStripeInstance: { confirmPayment: typeof mockConfirmPayment } | null =
-  { confirmPayment: mockConfirmPayment };
+let mockStripeInstance: { confirmPayment: typeof mockConfirmPayment } | null = {
+  confirmPayment: mockConfirmPayment,
+};
 let mockElementsInstance: object | null = {};
 
 // A thin stand-in for @stripe/react-stripe-js: no real Elements provider or
@@ -182,9 +183,7 @@ describe("CheckoutView", () => {
     expect(
       screen.getByRole("region", { name: /Shipping method/ }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("region", { name: /Payment/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /Payment/ })).toBeInTheDocument();
     // No card fields render until a Stripe payment session is ready.
     expect(document.querySelector('input[name="cardNumber"]')).toBeNull();
   });
@@ -1031,7 +1030,9 @@ describe("CheckoutView", () => {
         jest.advanceTimersByTime(1000);
       });
 
-      await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByText("$0.68")).toBeInTheDocument(),
+      );
     });
 
     it("shows an error and blocks submission when Stripe Tax is unavailable", async () => {
@@ -1114,7 +1115,9 @@ describe("CheckoutView", () => {
       await act(async () => {
         jest.advanceTimersByTime(1000);
       });
-      await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByText("$0.68")).toBeInTheDocument(),
+      );
     });
 
     it("does not fire a tax request against a stale quote token while the shipping rate is re-resolving for a changed address", async () => {
@@ -1186,7 +1189,9 @@ describe("CheckoutView", () => {
       await act(async () => {
         jest.advanceTimersByTime(1000);
       });
-      await waitFor(() => expect(screen.getByText("$0.68")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByText("$0.68")).toBeInTheDocument(),
+      );
 
       const taxCallsBeforeEdit = fetchMock.mock.calls.filter(
         ([url]) => url === "/checkout/tax",
@@ -1349,9 +1354,9 @@ describe("CheckoutView", () => {
       );
 
       expect(readCart().lines).toHaveLength(0);
-      expect(
-        window.localStorage.getItem(CHECKOUT_STORAGE_KEY),
-      ).not.toContain("cart_1");
+      expect(window.localStorage.getItem(CHECKOUT_STORAGE_KEY)).not.toContain(
+        "cart_1",
+      );
     });
 
     it("shows Stripe's decline reason, keeps the cart intact, and allows retry", async () => {
@@ -1391,8 +1396,9 @@ describe("CheckoutView", () => {
     it("does not call /checkout/complete twice for a double click (AC10)", async () => {
       const fetchMock = mockFullCheckoutFetch();
       global.fetch = fetchMock as unknown as typeof fetch;
-      const deferred: { resolve: (value: { error?: { message: string } }) => void } =
-        {} as never;
+      const deferred: {
+        resolve: (value: { error?: { message: string } }) => void;
+      } = {} as never;
       mockConfirmPayment.mockReturnValue(
         new Promise((resolve) => {
           deferred.resolve = resolve;

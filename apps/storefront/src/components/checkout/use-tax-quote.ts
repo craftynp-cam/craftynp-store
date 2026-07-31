@@ -134,7 +134,13 @@ export function useTaxQuote(
   const retry = () => setRetryToken((token) => token + 1);
 
   if (!key) {
-    return { status: "idle", taxAmount: null, currencyCode: null, error: null, retry };
+    return {
+      status: "idle",
+      taxAmount: null,
+      currencyCode: null,
+      error: null,
+      retry,
+    };
   }
 
   if (cachedQuote) {
@@ -148,7 +154,13 @@ export function useTaxQuote(
   }
 
   if (!fetchState || fetchState.key !== key) {
-    return { status: "loading", taxAmount: null, currencyCode: null, error: null, retry };
+    return {
+      status: "loading",
+      taxAmount: null,
+      currencyCode: null,
+      error: null,
+      retry,
+    };
   }
 
   return {

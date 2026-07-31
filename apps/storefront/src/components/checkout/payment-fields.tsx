@@ -13,16 +13,14 @@ let stripePromise: Promise<StripeJs | null> | null = null;
 
 function getStripe(): Promise<StripeJs | null> {
   if (!stripePromise) {
-    const publishableKey =
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+    const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
     stripePromise = loadStripe(publishableKey);
   }
   return stripePromise;
 }
 
 export type ConfirmPaymentResult =
-  | { status: "success" }
-  | { status: "error"; message: string };
+  { status: "success" } | { status: "error"; message: string };
 
 export type PaymentSubmitHandle = {
   confirmPayment: () => Promise<ConfirmPaymentResult>;

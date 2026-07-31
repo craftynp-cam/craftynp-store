@@ -487,22 +487,22 @@ completes by placing a real Medusa order.
   `use-shipping-rates.ts`, debouncing `TAX_QUOTE_DEBOUNCE_MS` (500ms, in
   `src/lib/tax-quote.ts`) after `isDestinationReadyForTax` is true. That
   readiness gate is stricter than shipping's: it requires a clean address
-  *and* `shippingRates.status === "ready"`, passed into `useTaxQuote` as a
+  _and_ `shippingRates.status === "ready"`, passed into `useTaxQuote` as a
   `shippingReady` argument from `CheckoutView` rather than being derived
   from `draft.shippingRateId` alone. **This distinction is load-bearing, not
-  stylistic** — the draft still holds the *previous* address's rate and
+  stylistic** — the draft still holds the _previous_ address's rate and
   signed `shippingQuoteToken` for a moment after an edit, until ShipStation
   re-quotes and `useShippingRates` commits a fresh one; gating on
   `shippingRateId !== ""` alone (an earlier version of this code did) fires
   a tax request signed against the old postal code, which the server
   correctly rejects as a cart-signature mismatch and the shopper sees as a
   generic "we couldn't calculate tax" error a few hundred milliseconds after
-  every address edit. Requiring the *live* hook status, not the draft field,
+  every address edit. Requiring the _live_ hook status, not the draft field,
   closes that window — see the regression test in
   `test/components/checkout-view.test.tsx` ("does not fire a tax request
   against a stale quote token…") for the exact race. Since AC1 means
   shipping itself gets taxed, tax genuinely can't be calculated until a rate
-  is chosen and settled — the hook runs *after* step 3 resolves, not
+  is chosen and settled — the hook runs _after_ step 3 resolves, not
   alongside it, and re-runs when the shopper picks a different rate.
   `src/lib/tax-quote-cache.ts`
   is the matching `sessionStorage` cache (same TTL/size shape as
@@ -556,7 +556,7 @@ completes by placing a real Medusa order.
 - **Payment (CNP-53) is step 4, built on Stripe's Payment Element.**
   `use-payment-session.ts` is the fetch hook — same derived-key/debounce/
   `AbortController`/`latestRef` shape as `use-tax-quote.ts`, gating on the
-  *live* `taxQuote.status === "ready"` rather than `draft.taxQuoteToken !== ""`
+  _live_ `taxQuote.status === "ready"` rather than `draft.taxQuoteToken !== ""`
   (`isReadyForPayment` in `src/lib/payment.ts`), for the identical staleness
   reason `use-tax-quote.ts`'s own note documents. It POSTs the full checkout
   payload — email, both addresses, cart lines with their display
@@ -591,7 +591,7 @@ completes by placing a real Medusa order.
   verbatim, leaves the cart and draft untouched, and leaves the button
   usable again for a retry (AC8). A `submittingRef` guards the client side of
   AC10: it blocks a second `confirmPayment`/`complete` pair from firing
-  while the first is still in flight, since the `submitting` *state* update
+  while the first is still in flight, since the `submitting` _state_ update
   isn't visible until the next render and a same-tick double click would
   race past a state-only check.
 - **`/checkout/confirmation` (`src/app/checkout/confirmation/page.tsx`) is a

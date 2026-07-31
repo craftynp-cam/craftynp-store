@@ -80,9 +80,10 @@ export default async function seed_stripe_payment_provider({
   logger.info(
     "Attaching Stripe payment provider to the United States region...",
   );
-  const existingPaymentProviderIds = (
-    region.payment_providers as { id: string }[] | undefined
-  )?.map((provider) => provider.id) ?? [];
+  const existingPaymentProviderIds =
+    (region.payment_providers as { id: string }[] | undefined)?.map(
+      (provider) => provider.id,
+    ) ?? [];
   await updateRegionsWorkflow(container).run({
     input: {
       selector: { id: region.id },

@@ -77,11 +77,7 @@ export function CheckoutView({
 
   const cart = useSyncExternalStore(subscribeToCart, readCart, readServerCart);
   const shippingRates = useShippingRates(values, cart);
-  const taxQuote = useTaxQuote(
-    values,
-    cart,
-    shippingRates.status === "ready",
-  );
+  const taxQuote = useTaxQuote(values, cart, shippingRates.status === "ready");
   const paymentSession = usePaymentSession(
     values,
     cart,
@@ -202,9 +198,7 @@ export function CheckoutView({
     if (!result || result.status === "error") {
       // A decline shows Stripe's own reason, leaves the cart intact, and
       // allows retry — nothing here has cleared the cart or draft.
-      setPayError(
-        result?.message ?? "Your payment could not be processed.",
-      );
+      setPayError(result?.message ?? "Your payment could not be processed.");
       submittingRef.current = false;
       setSubmitting(false);
       return;
@@ -345,7 +339,8 @@ export function CheckoutView({
           {taxQuote.status === "error" ? (
             <div aria-live="polite" className="space-y-3">
               <p className="text-sm text-danger-foreground">
-                {taxQuote.error ?? "We couldn't calculate tax for your address."}
+                {taxQuote.error ??
+                  "We couldn't calculate tax for your address."}
               </p>
               <button
                 type="button"
@@ -358,7 +353,8 @@ export function CheckoutView({
           ) : null}
 
           <CheckoutSection step={4} title="Payment">
-            {paymentSession.status === "ready" && paymentSession.clientSecret ? (
+            {paymentSession.status === "ready" &&
+            paymentSession.clientSecret ? (
               <PaymentFields
                 clientSecret={paymentSession.clientSecret}
                 submitRef={paymentSubmitRef}

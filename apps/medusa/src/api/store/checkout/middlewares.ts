@@ -5,13 +5,15 @@ import {
   checkoutPrepareRequestSchema,
 } from "@craftynp/types";
 
-const validatedPrepareBodySchema = checkoutPrepareRequestSchema as unknown as Parameters<
-  typeof validateAndTransformBody
->[0];
+const validatedPrepareBodySchema =
+  checkoutPrepareRequestSchema as unknown as Parameters<
+    typeof validateAndTransformBody
+  >[0];
 
-const validatedCompleteBodySchema = checkoutCompleteRequestSchema as unknown as Parameters<
-  typeof validateAndTransformBody
->[0];
+const validatedCompleteBodySchema =
+  checkoutCompleteRequestSchema as unknown as Parameters<
+    typeof validateAndTransformBody
+  >[0];
 
 export const checkoutMiddlewares: MiddlewareRoute[] = [
   {

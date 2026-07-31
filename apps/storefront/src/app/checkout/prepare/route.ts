@@ -96,6 +96,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error("Could not prepare checkout", error);
-    return NextResponse.json({ error: "checkout_unavailable" }, { status: 502 });
+    return NextResponse.json(
+      { error: "checkout_unavailable" },
+      { status: 502 },
+    );
   }
 }

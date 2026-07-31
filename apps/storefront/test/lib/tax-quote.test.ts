@@ -44,9 +44,7 @@ describe("isDestinationReadyForTax", () => {
   });
 
   it("is false when the city is blank", () => {
-    expect(isDestinationReadyForTax(makeDraft({ city: "" }), true)).toBe(
-      false,
-    );
+    expect(isDestinationReadyForTax(makeDraft({ city: "" }), true)).toBe(false);
   });
 
   it("is false when the postal code is a 4-digit ZIP", () => {
@@ -86,7 +84,9 @@ describe("taxQuoteKey", () => {
       ],
     });
 
-    expect(taxQuoteKey(draft, cart)).toBe("us|62704|il|springfield|rate_1|a:1,b:2");
+    expect(taxQuoteKey(draft, cart)).toBe(
+      "us|62704|il|springfield|rate_1|a:1,b:2",
+    );
   });
 
   it("changes when the shipping rate changes", () => {

@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { shippingRateDestinationSchema, shippingRateItemSchema } from "./shipping-rates.js";
+import {
+  shippingRateDestinationSchema,
+  shippingRateItemSchema,
+} from "./shipping-rates.js";
 
 export const taxQuoteRequestSchema = z.object({
   destination: shippingRateDestinationSchema,

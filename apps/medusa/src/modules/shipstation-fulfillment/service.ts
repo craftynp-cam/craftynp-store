@@ -52,7 +52,10 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
   protected logger_: Logger;
   protected shipstation_: ShipStationModuleService;
 
-  constructor({ logger, [SHIPSTATION_MODULE]: shipstation }: InjectedDependencies) {
+  constructor({
+    logger,
+    [SHIPSTATION_MODULE]: shipstation,
+  }: InjectedDependencies) {
     super();
     this.logger_ = logger;
     this.shipstation_ = shipstation;
@@ -62,7 +65,9 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
     return [{ id: "shipstation-live-rate" }];
   }
 
-  override async canCalculate(_data: CreateShippingOptionDTO): Promise<boolean> {
+  override async canCalculate(
+    _data: CreateShippingOptionDTO,
+  ): Promise<boolean> {
     return true;
   }
 

@@ -501,7 +501,7 @@ total.
 
 **AC4 (shipping) works by re-verifying, not by trusting the client.**
 `ShipStationFulfillmentProviderService.calculatePrice` recomputes
-`cartSignature` from the *provider-context* cart — never the client-supplied
+`cartSignature` from the _provider-context_ cart — never the client-supplied
 `data` — and calls `verifyShippingQuote` exactly like the shipping-rates
 route does. A valid token charges its signed amount outright. An invalid one
 (expired, tampered, or a cart/address mismatch) re-estimates live via
@@ -516,8 +516,8 @@ no-flat-rate-fallback stance CNP-51 already committed to, just enforced one
 layer further in. Log tag: `[shipping-quote:mismatch]`.
 
 **AC5 (tax) has one real, accepted tradeoff.** `ITaxProvider.getTaxLines`
-returns *rates* (percentages), not amounts — Medusa's own contract, not a
-choice made here. Stripe Tax returns *amounts*. `tax-provider.ts` calls
+returns _rates_ (percentages), not amounts — Medusa's own contract, not a
+choice made here. Stripe Tax returns _amounts_. `tax-provider.ts` calls
 `stripe.tax.calculations.create` with `expand: ["line_items"]` and converts
 each line's `amount_tax`/`amount` into a percentage
 (`amountToRate` in `stripe-tax/lib.ts`), then feeds the sale that percentage
@@ -532,7 +532,7 @@ rate is worse than the extra round trip.
 
 **AC1's conversion happens in `POST /store/checkout/prepare-cart`**
 (`src/api/store/checkout/prepare-cart/route.ts`), the first place in this
-app a Medusa cart gets created. It re-verifies *both* the shipping and tax
+app a Medusa cart gets created. It re-verifies _both_ the shipping and tax
 signed tokens up front (the same `verifyShippingQuote`/`verifyTaxQuote` calls
 the routes above use — a fast, explicit check ahead of the provider layer,
 which is the actual safety net), resolves the region, creates the cart with

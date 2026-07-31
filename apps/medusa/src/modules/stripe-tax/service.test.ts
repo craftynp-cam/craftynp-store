@@ -92,9 +92,9 @@ describe("StripeTaxModuleService", () => {
     });
     create.mockRejectedValueOnce(error);
 
-    await expect(
-      service.calculateTax(calculationInput),
-    ).rejects.toMatchObject({ reason: "invalid_address" });
+    await expect(service.calculateTax(calculationInput)).rejects.toMatchObject({
+      reason: "invalid_address",
+    });
   });
 
   it("throws timeout on a connection error", async () => {
@@ -106,9 +106,9 @@ describe("StripeTaxModuleService", () => {
       }),
     );
 
-    await expect(
-      service.calculateTax(calculationInput),
-    ).rejects.toMatchObject({ reason: "timeout" });
+    await expect(service.calculateTax(calculationInput)).rejects.toMatchObject({
+      reason: "timeout",
+    });
   });
 
   it("throws http_error on any other Stripe error", async () => {
@@ -120,9 +120,9 @@ describe("StripeTaxModuleService", () => {
       }),
     );
 
-    await expect(
-      service.calculateTax(calculationInput),
-    ).rejects.toMatchObject({ reason: "http_error" });
+    await expect(service.calculateTax(calculationInput)).rejects.toMatchObject({
+      reason: "http_error",
+    });
   });
 
   it("skips the Stripe call entirely on a cache hit", async () => {

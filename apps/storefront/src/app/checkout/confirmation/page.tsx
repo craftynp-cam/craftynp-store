@@ -28,8 +28,9 @@ export default async function CheckoutConfirmationPage({
 
       {displayId ? (
         <p className="mt-4 text-lg text-foreground-muted">
-          Order <span className="font-medium text-foreground">#{displayId}</span>{" "}
-          is confirmed. We&rsquo;ll email you when it ships.
+          Order{" "}
+          <span className="font-medium text-foreground">#{displayId}</span> is
+          confirmed. We&rsquo;ll email you when it ships.
         </p>
       ) : (
         <p className="mt-4 text-lg text-foreground-muted">

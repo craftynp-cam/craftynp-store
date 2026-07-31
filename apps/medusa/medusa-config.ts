@@ -81,7 +81,10 @@ module.exports = defineConfig({
       options: {
         providers: [
           { resolve: "@medusajs/medusa/fulfillment-manual", id: "manual" },
-          { resolve: "./src/modules/shipstation-fulfillment", id: "shipstation" },
+          {
+            resolve: "./src/modules/shipstation-fulfillment",
+            id: "shipstation",
+          },
         ],
       },
     },

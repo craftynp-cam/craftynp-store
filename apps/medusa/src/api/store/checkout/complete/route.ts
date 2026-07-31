@@ -22,8 +22,7 @@ export async function POST(
     filters: { cart_id: cartId },
   });
   const existingOrder = existingOrders[0] as
-    | { id: string; display_id: number }
-    | undefined;
+    { id: string; display_id: number } | undefined;
 
   if (existingOrder) {
     return res.json({
@@ -42,9 +41,7 @@ export async function POST(
     logger.error(
       `[checkout:complete-failed] cart=${cartId} error=${error instanceof Error ? error.message : String(error)}`,
     );
-    return res
-      .status(502)
-      .json({ error: "order_placement_unavailable" });
+    return res.status(502).json({ error: "order_placement_unavailable" });
   }
 
   const { data: orders } = await query.graph({

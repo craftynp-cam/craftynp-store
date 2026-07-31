@@ -138,10 +138,7 @@ export function taxCacheKey(input: TaxCacheKeyInput): string {
 }
 
 export type StripeTaxErrorReason =
-  | "timeout"
-  | "http_error"
-  | "invalid_address"
-  | "misconfigured";
+  "timeout" | "http_error" | "invalid_address" | "misconfigured";
 
 export class StripeTaxError extends Error {
   reason: StripeTaxErrorReason;

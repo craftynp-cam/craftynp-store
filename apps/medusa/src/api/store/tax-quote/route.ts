@@ -1,5 +1,8 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import { ContainerRegistrationKeys, QueryContext } from "@medusajs/framework/utils";
+import {
+  ContainerRegistrationKeys,
+  QueryContext,
+} from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type { TaxQuoteRequest } from "@craftynp/types";
 
@@ -9,7 +12,10 @@ import {
   StripeTaxError,
 } from "../../../modules/stripe-tax/lib";
 import type StripeTaxModuleService from "../../../modules/stripe-tax/service";
-import { cartSignature, verifyShippingQuote } from "../../../lib/shipping-quote";
+import {
+  cartSignature,
+  verifyShippingQuote,
+} from "../../../lib/shipping-quote";
 import { signTaxQuote, taxSignature } from "../../../lib/tax-quote";
 
 type VariantWithPrice = {

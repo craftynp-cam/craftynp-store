@@ -29,10 +29,7 @@ type FetchState = {
 const UNAVAILABLE_MESSAGE =
   "We couldn't set up payment for this order right now.";
 
-function toAddressPayload(
-  draft: CheckoutDraft,
-  prefix: "" | "billing",
-) {
+function toAddressPayload(draft: CheckoutDraft, prefix: "" | "billing") {
   const field = (name: string) =>
     prefix === "" ? name : `billing${name[0]?.toUpperCase()}${name.slice(1)}`;
 

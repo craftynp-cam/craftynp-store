@@ -10,7 +10,10 @@ import {
 } from "@medusajs/medusa/core-flows";
 import type { CheckoutAddress, CheckoutPrepareRequest } from "@craftynp/types";
 
-import { cartSignature, verifyShippingQuote } from "../../../../lib/shipping-quote";
+import {
+  cartSignature,
+  verifyShippingQuote,
+} from "../../../../lib/shipping-quote";
 import { taxSignature, verifyTaxQuote } from "../../../../lib/tax-quote";
 
 const STRIPE_PAYMENT_PROVIDER_ID = "pp_stripe_stripe";
@@ -259,7 +262,9 @@ export async function POST(
   }
 
   if (!clientSecret) {
-    logger.error(`[checkout:unavailable] reason=no_client_secret cart=${cart.id}`);
+    logger.error(
+      `[checkout:unavailable] reason=no_client_secret cart=${cart.id}`,
+    );
     return res
       .status(502)
       .json({ error: "checkout_unavailable", reason: "payment_unavailable" });

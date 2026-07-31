@@ -30,7 +30,10 @@ function isTaxQuotePayload(value: unknown): value is TaxQuotePayload {
     return false;
   }
 
-  if (typeof body.shippingQuoteToken !== "string" || body.shippingQuoteToken === "") {
+  if (
+    typeof body.shippingQuoteToken !== "string" ||
+    body.shippingQuoteToken === ""
+  ) {
     return false;
   }
 
