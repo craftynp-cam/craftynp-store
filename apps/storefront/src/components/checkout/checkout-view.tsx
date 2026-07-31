@@ -2,6 +2,7 @@
 
 import { flushSync } from "react-dom";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   draftFromSavedAddress,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/saved-address";
 import type { AuthedCustomer } from "@/lib/auth";
 import {
+  checkoutTotals,
   type CheckoutDraft,
   type CheckoutErrors,
   type CountryOption,
@@ -18,14 +20,21 @@ import {
   validateCheckoutDraft,
 } from "@/lib/checkout";
 import {
+  clearCheckoutDraft,
   patchCheckoutDraft,
   readCheckoutDraft,
   readServerCheckoutDraft,
   subscribeToCheckoutDraft,
 } from "@/lib/checkout-draft";
-import { readCart, readServerCart, subscribeToCart } from "@/lib/cart";
+import {
+  clearCart,
+  readCart,
+  readServerCart,
+  subscribeToCart,
+} from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
-import { checkoutHref } from "@/lib/routes";
+import { checkoutConfirmationHref, checkoutHref } from "@/lib/routes";
+import { formatMoney } from "@/lib/money";
 
 import { Breadcrumbs } from "../nav";
 import { Button, Checkbox } from "../ui";
@@ -33,9 +42,11 @@ import { AddressFields } from "./address-fields";
 import { CheckoutSection } from "./checkout-section";
 import { CheckoutSummary } from "./checkout-summary";
 import { ContactFields } from "./contact-fields";
+import { PaymentFields, type PaymentSubmitHandle } from "./payment-fields";
 import { SavedAddressPicker } from "./saved-address-picker";
 import { ShippingMethodFields } from "./shipping-method-fields";
 import { useShippingRates } from "./use-shipping-rates";
+import { usePaymentSession } from "./use-payment-session";
 import { useTaxQuote } from "./use-tax-quote";
 
 export type CheckoutViewProps = {
@@ -43,8 +54,6 @@ export type CheckoutViewProps = {
   savedAddresses: readonly SavedAddress[];
   countryOptions: readonly CountryOption[];
 };
-
-type SubmitStatus = "idle" | "submitted";
 
 function summaryMessage(errors: CheckoutErrors): string | null {
   const count = Object.keys(errors).length;
@@ -57,6 +66,7 @@ export function CheckoutView({
   savedAddresses,
   countryOptions,
 }: CheckoutViewProps) {
+  const router = useRouter();
   const draft = useSyncExternalStore(
     subscribeToCheckoutDraft,
     readCheckoutDraft,
@@ -72,11 +82,21 @@ export function CheckoutView({
     cart,
     shippingRates.status === "ready",
   );
+  const paymentSession = usePaymentSession(
+    values,
+    cart,
+    taxQuote.status === "ready",
+  );
+
+  const { total, currencyCode } = checkoutTotals(cart, values);
 
   const [errors, setErrors] = useState<CheckoutErrors>({});
-  const [status, setStatus] = useState<SubmitStatus>("idle");
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const paymentSubmitRef = useRef<PaymentSubmitHandle>(null);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!isSignedIn || draft.savedAddressId !== "") return;
@@ -139,8 +159,16 @@ export function CheckoutView({
     }
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // A double-click (or a resubmitted native form event) must not fire a
+    // second confirmPayment/complete pair while the first is in flight —
+    // the client-side half of AC10, alongside the server's own idempotent
+    // /store/checkout/complete. A ref guards this synchronously; the
+    // submitting state update that follows is not visible until the next
+    // render, which a second click in the same tick would race past.
+    if (submittingRef.current) return;
 
     const nextErrors = validateCheckoutDraft(values);
 
@@ -157,7 +185,59 @@ export function CheckoutView({
     }
 
     void saveAddressIfRequested(values);
-    setStatus("submitted");
+
+    // Payment isn't ready to submit yet (still preparing, or the prepare
+    // call failed) — the field-level validation above is the only feedback
+    // available until it is.
+    if (paymentSession.status !== "ready" || !values.cartId) {
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    setPayError(null);
+
+    const result = await paymentSubmitRef.current?.confirmPayment();
+
+    if (!result || result.status === "error") {
+      // A decline shows Stripe's own reason, leaves the cart intact, and
+      // allows retry — nothing here has cleared the cart or draft.
+      setPayError(
+        result?.message ?? "Your payment could not be processed.",
+      );
+      submittingRef.current = false;
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/checkout/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cartId: values.cartId }),
+      });
+
+      if (!response.ok) throw new Error("order_placement_unavailable");
+
+      const order = (await response.json()) as {
+        orderId: string;
+        displayId: number;
+      };
+
+      clearCart();
+      clearCheckoutDraft();
+      router.push(checkoutConfirmationHref(order.orderId, order.displayId));
+    } catch {
+      // The payment was captured — recorded on Stripe's side regardless of
+      // whether this call succeeds. The webhook (AC9) reconciles the order
+      // even if this request never lands, so this is a delayed confirmation,
+      // not a lost payment.
+      setPayError(
+        "Your payment was captured, but we couldn't confirm your order just yet. We'll email your confirmation shortly.",
+      );
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -277,6 +357,44 @@ export function CheckoutView({
             </div>
           ) : null}
 
+          <CheckoutSection step={4} title="Payment">
+            {paymentSession.status === "ready" && paymentSession.clientSecret ? (
+              <PaymentFields
+                clientSecret={paymentSession.clientSecret}
+                submitRef={paymentSubmitRef}
+              />
+            ) : paymentSession.status === "error" ? (
+              <div aria-live="polite" className="space-y-3">
+                <p className="text-sm text-danger-foreground">
+                  {paymentSession.error ??
+                    "We couldn't set up payment for this order."}
+                </p>
+                <button
+                  type="button"
+                  onClick={paymentSession.retry}
+                  className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-foreground-muted" aria-live="polite">
+                {paymentSession.status === "loading"
+                  ? "Preparing payment…"
+                  : "Complete the steps above to enter payment details."}
+              </p>
+            )}
+          </CheckoutSection>
+
+          {payError ? (
+            <div
+              aria-live="assertive"
+              className="text-sm text-danger-foreground"
+            >
+              {payError}
+            </div>
+          ) : null}
+
           <div
             aria-live="polite"
             aria-atomic="true"
@@ -290,19 +408,11 @@ export function CheckoutView({
             variant="primary"
             size="lg"
             className="w-full rounded-full"
-            aria-describedby="checkout-payment-note"
+            isLoading={submitting}
+            loadingLabel="Placing your order"
           >
-            {status === "submitted" ? "Details saved" : "Continue"}
+            {`Pay ${formatMoney(total, currencyCode)}`}
           </Button>
-
-          <p
-            id="checkout-payment-note"
-            className="text-sm text-foreground-muted"
-          >
-            {status === "submitted"
-              ? "Your details are saved on this device. Payment isn't available yet — checkout completes in an upcoming release."
-              : "Payment isn't available yet — your details are saved on this device and checkout completes in an upcoming release."}
-          </p>
         </form>
 
         <CheckoutSummary onEditCart={openCartDrawer} />

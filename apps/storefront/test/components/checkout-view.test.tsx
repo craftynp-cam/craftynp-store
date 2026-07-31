@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   act,
   fireEvent,
@@ -10,11 +11,33 @@ import { CheckoutView } from "@/components";
 import type { SavedAddress } from "@/lib/saved-address";
 import type { AuthedCustomer } from "@/lib/auth";
 import { CHECKOUT_STORAGE_KEY, clearCheckoutDraft } from "@/lib/checkout-draft";
-import { clearCart } from "@/lib/cart";
+import { addCartLine, clearCart, readCart } from "@/lib/cart";
 import { setCartDrawerOpen } from "@/lib/cart-drawer";
+
+const mockRouterPush = jest.fn();
 
 jest.mock("next/navigation", () => ({
   usePathname: () => "/checkout",
+  useRouter: () => ({ push: mockRouterPush }),
+}));
+
+const mockConfirmPayment = jest.fn();
+let mockStripeInstance: { confirmPayment: typeof mockConfirmPayment } | null =
+  { confirmPayment: mockConfirmPayment };
+let mockElementsInstance: object | null = {};
+
+// A thin stand-in for @stripe/react-stripe-js: no real Elements provider or
+// iframe-backed PaymentElement, so nothing here makes a network call. Tests
+// that need a specific outcome set mockStripeInstance/mockConfirmPayment.
+jest.mock("@stripe/react-stripe-js", () => ({
+  Elements: ({ children }: { children: ReactNode }) => children,
+  PaymentElement: () => null,
+  useStripe: () => mockStripeInstance,
+  useElements: () => mockElementsInstance,
+}));
+
+jest.mock("@stripe/stripe-js", () => ({
+  loadStripe: () => Promise.resolve(null),
 }));
 
 const countryOptions = [{ id: "us", label: "United States" }];
@@ -134,9 +157,13 @@ describe("CheckoutView", () => {
     clearCheckoutDraft();
     setCartDrawerOpen(false);
     jest.restoreAllMocks();
+    mockRouterPush.mockClear();
+    mockConfirmPayment.mockReset();
+    mockStripeInstance = { confirmPayment: mockConfirmPayment };
+    mockElementsInstance = {};
   });
 
-  it("renders the page heading, both sections, and no later steps", () => {
+  it("renders the page heading and all four sections", () => {
     render(
       <CheckoutView
         customer={null}
@@ -156,8 +183,9 @@ describe("CheckoutView", () => {
       screen.getByRole("region", { name: /Shipping method/ }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("region", { name: /Payment/ }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("region", { name: /Payment/ }),
+    ).toBeInTheDocument();
+    // No card fields render until a Stripe payment session is ready.
     expect(document.querySelector('input[name="cardNumber"]')).toBeNull();
   });
 
@@ -202,11 +230,11 @@ describe("CheckoutView", () => {
         ),
       { timeout: 2000 },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
-    expect(
-      screen.getByRole("button", { name: "Details saved" }),
-    ).toBeInTheDocument();
+    // The guest's fields all validate, but payment never becomes ready in
+    // this test (no /checkout/prepare mock), so nothing navigates away.
+    expect(mockRouterPush).not.toHaveBeenCalled();
   }, 15000);
 
   it("shows a specific message for every required field left blank", () => {
@@ -218,7 +246,7 @@ describe("CheckoutView", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     expect(screen.getByText("Enter your first name.")).toBeInTheDocument();
     expect(screen.getByText("Enter your last name.")).toBeInTheDocument();
@@ -244,13 +272,13 @@ describe("CheckoutView", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
     expect(screen.getByText("Enter your first name.")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("First name"), {
       target: { value: "Jamie" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     expect(
       screen.queryByText("Enter your first name."),
@@ -269,7 +297,7 @@ describe("CheckoutView", () => {
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "not-an-email" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     expect(
       screen.getByText("Enter an email address like name@example.com."),
@@ -296,14 +324,12 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("Billing Street address")).toBeInTheDocument();
 
     fillValidForm();
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     expect(
       screen.getByText("Enter the billing street address."),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Details saved" }),
-    ).not.toBeInTheDocument();
+    expect(mockRouterPush).not.toHaveBeenCalled();
   });
 
   it("drops stale billing error messages once billing is marked same as delivery again", () => {
@@ -320,7 +346,7 @@ describe("CheckoutView", () => {
         name: "Billing address is the same as delivery",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
     expect(
       screen.getByText("Enter the billing street address."),
     ).toBeInTheDocument();
@@ -493,7 +519,7 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("Email")).toHaveValue("typed@example.com");
   });
 
-  it("submits as a real button described by the payment note, with no navigation", async () => {
+  it("submits as a real button, with no navigation until payment succeeds", async () => {
     const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -505,12 +531,9 @@ describe("CheckoutView", () => {
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Continue" });
+    const button = screen.getByRole("button", { name: /^Pay/ });
     expect(button).toHaveAttribute("type", "submit");
     expect(button.tagName).toBe("BUTTON");
-    expect(button.getAttribute("aria-describedby")).toBe(
-      "checkout-payment-note",
-    );
 
     fillValidForm();
     await waitFor(() =>
@@ -526,9 +549,9 @@ describe("CheckoutView", () => {
     );
     fireEvent.click(button);
 
-    expect(
-      screen.getByText(/Your details are saved on this device/),
-    ).toBeInTheDocument();
+    // No /checkout/prepare mock in this test, so payment never becomes
+    // ready — clicking Pay validates the fields but does not navigate.
+    expect(mockRouterPush).not.toHaveBeenCalled();
   }, 15000);
 
   it("posts the mapped address once when the save checkbox is checked", async () => {
@@ -558,7 +581,7 @@ describe("CheckoutView", () => {
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Save this address to my account" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -606,16 +629,16 @@ describe("CheckoutView", () => {
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Save this address to my account" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
-    expect(
-      screen.getByRole("button", { name: "Details saved" }),
-    ).toBeInTheDocument();
     await waitFor(() =>
       expect(
         screen.getByText(/We couldn't save this address/),
       ).toBeInTheDocument(),
     );
+    // The failed address save is non-blocking — validation still passed and
+    // nothing crashed, it just never reached a completed payment.
+    expect(mockRouterPush).not.toHaveBeenCalled();
   }, 15000);
 
   it("fires no fetch when the save checkbox is left unchecked", async () => {
@@ -631,7 +654,7 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -768,15 +791,13 @@ describe("CheckoutView", () => {
       );
 
       fillValidForm();
-      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
       expect(screen.getByText("Check 1 field below.")).toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: "Details saved" }),
-      ).not.toBeInTheDocument();
+      expect(mockRouterPush).not.toHaveBeenCalled();
     });
 
-    it("auto-selects the returned rate and lets submission complete once it loads", async () => {
+    it("auto-selects the returned rate and lets tax and payment proceed", async () => {
       const fetchMock = mockRatesFetch();
       global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -806,11 +827,16 @@ describe("CheckoutView", () => {
         ),
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
+      // No rate/tax error remains once the auto-selected rate resolves and
+      // the tax quote follows it — the shopper reaches the payment step.
       expect(
-        screen.getByRole("button", { name: "Details saved" }),
-      ).toBeInTheDocument();
+        screen.queryByText(
+          "We couldn't get a shipping rate for your address right now.",
+        ),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("We couldn't calculate tax for your address."),
+      ).not.toBeInTheDocument();
     });
 
     it("shows an error and blocks submission when ShipStation is unavailable — no flat-rate fallback", async () => {
@@ -844,11 +870,9 @@ describe("CheckoutView", () => {
 
       expect(screen.queryByRole("radio")).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
-      expect(
-        screen.queryByRole("button", { name: "Details saved" }),
-      ).not.toBeInTheDocument();
+      expect(mockRouterPush).not.toHaveBeenCalled();
       expect(screen.getByText("Check 1 field below.")).toBeInTheDocument();
     });
 
@@ -1040,11 +1064,9 @@ describe("CheckoutView", () => {
         ).toBeInTheDocument(),
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
-      expect(
-        screen.queryByRole("button", { name: "Details saved" }),
-      ).not.toBeInTheDocument();
+      expect(mockRouterPush).not.toHaveBeenCalled();
       expect(screen.getByText("Check 1 field below.")).toBeInTheDocument();
     });
 
@@ -1194,6 +1216,209 @@ describe("CheckoutView", () => {
             .length,
         ).toBeGreaterThan(taxCallsBeforeEdit),
       );
+    });
+  });
+
+  describe("payment", () => {
+    const prepareResponse = {
+      cartId: "cart_1",
+      clientSecret: "pi_1_secret_abc",
+      totals: {
+        subtotal: 20,
+        shipping: 7.42,
+        tax: 0.68,
+        total: 28.1,
+        currencyCode: "usd",
+      },
+    };
+
+    function mockFullCheckoutFetch(
+      overrides: {
+        prepare?: { ok: boolean; status?: number; body?: unknown };
+        complete?: { ok: boolean; status?: number; body?: unknown };
+      } = {},
+    ) {
+      const prepare = overrides.prepare ?? { ok: true, body: prepareResponse };
+      const complete = overrides.complete ?? {
+        ok: true,
+        body: { orderId: "order_1", displayId: 42 },
+      };
+
+      return jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(singleRateResponse),
+          });
+        }
+        if (url === "/checkout/tax") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(taxQuoteResponse),
+          });
+        }
+        if (url === "/checkout/prepare") {
+          return Promise.resolve({
+            ok: prepare.ok,
+            status: prepare.status ?? (prepare.ok ? 200 : 502),
+            json: () => Promise.resolve(prepare.body),
+          });
+        }
+        if (url === "/checkout/complete") {
+          return Promise.resolve({
+            ok: complete.ok,
+            status: complete.status ?? (complete.ok ? 200 : 502),
+            json: () => Promise.resolve(complete.body),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+    }
+
+    async function reachReadyPayment(fetchMock: jest.Mock) {
+      render(
+        <CheckoutView
+          customer={null}
+          savedAddresses={[]}
+          countryOptions={countryOptions}
+        />,
+      );
+
+      fillValidForm();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/tax",
+          expect.anything(),
+        ),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/prepare",
+          expect.anything(),
+        ),
+      );
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers({ legacyFakeTimers: false });
+      addCartLine({
+        id: "variant_1",
+        href: "/craft/mug",
+        title: "Custom Mug",
+        unitPrice: 20,
+        currencyCode: "usd",
+        quantity: 1,
+      });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("confirms payment, clears the cart, and redirects to the confirmation page", async () => {
+      const fetchMock = mockFullCheckoutFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+      mockConfirmPayment.mockResolvedValue({});
+
+      await reachReadyPayment(fetchMock);
+
+      fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/checkout/complete",
+          expect.anything(),
+        ),
+      );
+      await waitFor(() =>
+        expect(mockRouterPush).toHaveBeenCalledWith(
+          "/checkout/confirmation?order=order_1&number=42",
+        ),
+      );
+
+      expect(readCart().lines).toHaveLength(0);
+      expect(
+        window.localStorage.getItem(CHECKOUT_STORAGE_KEY),
+      ).not.toContain("cart_1");
+    });
+
+    it("shows Stripe's decline reason, keeps the cart intact, and allows retry", async () => {
+      const fetchMock = mockFullCheckoutFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+      mockConfirmPayment.mockResolvedValue({
+        error: { message: "Your card was declined." },
+      });
+
+      await reachReadyPayment(fetchMock);
+
+      fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
+
+      await waitFor(() =>
+        expect(screen.getByText("Your card was declined.")).toBeInTheDocument(),
+      );
+
+      expect(mockRouterPush).not.toHaveBeenCalled();
+      expect(readCart().lines).toHaveLength(1);
+
+      const completeCalls = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/complete",
+      );
+      expect(completeCalls).toHaveLength(0);
+
+      // Retry: the button is usable again, not stuck in a loading state.
+      mockConfirmPayment.mockResolvedValue({});
+      fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
+
+      await waitFor(() =>
+        expect(mockRouterPush).toHaveBeenCalledWith(
+          "/checkout/confirmation?order=order_1&number=42",
+        ),
+      );
+    });
+
+    it("does not call /checkout/complete twice for a double click (AC10)", async () => {
+      const fetchMock = mockFullCheckoutFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+      const deferred: { resolve: (value: { error?: { message: string } }) => void } =
+        {} as never;
+      mockConfirmPayment.mockReturnValue(
+        new Promise((resolve) => {
+          deferred.resolve = resolve;
+        }),
+      );
+
+      await reachReadyPayment(fetchMock);
+
+      const button = screen.getByRole("button", { name: /^Pay/ });
+      fireEvent.click(button);
+      fireEvent.click(button);
+      fireEvent.click(button);
+
+      deferred.resolve({});
+
+      await waitFor(() =>
+        expect(mockRouterPush).toHaveBeenCalledWith(
+          "/checkout/confirmation?order=order_1&number=42",
+        ),
+      );
+
+      expect(mockConfirmPayment).toHaveBeenCalledTimes(1);
+      const completeCalls = fetchMock.mock.calls.filter(
+        ([url]) => url === "/checkout/complete",
+      );
+      expect(completeCalls).toHaveLength(1);
     });
   });
 });

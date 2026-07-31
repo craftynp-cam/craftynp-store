@@ -17,6 +17,17 @@ export function checkoutHref(): string {
   return "/checkout";
 }
 
+export function checkoutConfirmationHref(
+  orderId: string,
+  displayId: number,
+): string {
+  const params = new URLSearchParams({
+    order: orderId,
+    number: String(displayId),
+  });
+  return `/checkout/confirmation?${params.toString()}`;
+}
+
 export function signInHref(options?: {
   returnTo?: string;
   error?: string;

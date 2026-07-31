@@ -11,6 +11,11 @@ export {
   ShippingMethodFields,
   type ShippingMethodFieldsProps,
 } from "./shipping-method-fields";
+export {
+  PaymentFields,
+  type PaymentFieldsProps,
+  type PaymentSubmitHandle,
+} from "./payment-fields";
 export { shippingRateToOption } from "./shipping-rate-option";
 export { useShippingRates } from "./use-shipping-rates";
 export { useTaxQuote } from "./use-tax-quote";
