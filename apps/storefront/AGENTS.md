@@ -18,8 +18,11 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   `"url" parameter is not allowed` — the real cause, `resolved to private ip`,
   appears only in the server log. Without it every Medusa-uploaded image 400s.
 - **There is deliberately no `middleware.ts`.** Guard server-side inside the
-  page instead (`/account` redirects when `getCustomer()` returns null); a broad
-  middleware matcher would intercept those same rewrites.
+  page instead — a broad middleware matcher would intercept those same
+  rewrites. `src/app/account/layout.tsx` redirects when `getCustomer()` returns
+  null, but each page under `/account` repeats the same guard rather than
+  trusting the layout alone, since Next does not guarantee a layout's own data
+  fetch runs before a page's.
 - Catalog URLs are `/products`, `/{category}`, and `/{category}/{product}`.
   Literal top-level segments in `src/app` — `products`, `about`, `account`,
   `auth`, `checkout`, `design`, `sign-in` — shadow the `/{category}` dynamic
@@ -128,6 +131,14 @@ built on React Aria Components.
   HeroUI and the React Aria packages because both React majors are installed. Do
   not "fix" a resulting type error by hoisting or by adding `@types/react` to
   the root `package.json` — see the root AGENTS.md.
+- **`Modal` and `AlertDialog` (`src/components/ui/dialog.tsx`) resolve their own
+  `React.ReactNode` against a different `@types/react` copy than the rest of
+  the app.** Typing a prop that gets embedded as their children with
+  `import type { ReactNode } from "react"` fails with a `ReactPortal` /
+  `children` mismatch that only appears once you nest it inside a plain
+  `<p>`/`<div>`. Use the ambient `React.ReactNode` instead (no import needed —
+  `select.tsx` already relies on the same global), as `card.tsx` and
+  `dialog.tsx` do.
 
 ## Checkout
 
@@ -186,6 +197,45 @@ exchanges the code for a Medusa JWT and sets the session cookie.
   separate machine-readable code, so `classifyAuthCallbackError` switches on
   `error_description` to tell a cancelled sign-in from one blocked by the
   tenant's email-verification Action. The two call for opposite messages.
+
+## Account
+
+`/account` (Account settings) and `/account/addresses` (Addresses) share
+`src/app/account/layout.tsx` for the header band and sidebar. Order-history
+tabs are not built yet — CNP-60 covers them.
+
+- **This app has zero server actions.** Every account mutation is a route
+  handler under `src/app/account/*/route.ts` (never `/api`, same reason as
+  checkout) called with a plain client `fetch()`, following the exact shape of
+  the pre-existing `src/app/checkout/addresses/route.ts`: cookie guard → `401`,
+  a hand-written type guard → `400 invalid_body`, `validateAddressFields` →
+  `400` with a `fields` map, upstream failure → `502`.
+- **The email field is read-only.** Auth0 keys the auth identity's `entity_id`
+  on the lowercased verified email; changing it only in Medusa would desync the
+  two and lock the customer out. A full change-email flow (uniqueness check,
+  verification, then updating both Auth0 and Medusa) is deliberately deferred
+  to its own story.
+- **There is no password form**, for the same reason `SignInPanel` has none —
+  Auth0 Universal Login owns credentials. `SignInSecurityCard` shows the linked
+  provider instead, derived from `authProviderFromUserMetadata` in
+  `src/lib/auth.ts`, which reads `auth0_sub` off the decoded JWT's
+  `user_metadata` (see `apps/medusa/AGENTS.md` for where that field comes
+  from). A JWT minted before that field existed decodes to `"unknown"` — the
+  card then shows neither a provider row nor a reset button until the customer
+  signs in again.
+- **`src/lib/account-preferences.ts` is medusa-free on purpose** (same rule as
+  `saved-address.ts`) so `CommunicationPreferencesCard` can value-import it. The
+  two marketing toggles persist on `customer.metadata`, merged in — never
+  replacing the whole object — by `PATCH /account/preferences`, since Medusa
+  customer metadata is not guaranteed to merge on its own.
+- **`DELETE /account/close` proxies `DELETE /store/customers/me`** on the
+  Medusa side (see `apps/medusa/AGENTS.md`) rather than deleting the customer
+  directly from this app, because the safe cleanup order — addresses, then the
+  Auth0 identity rows, then the customer — has to run in one place.
+- **`AddressFormDialog` resets its form by remounting, not by `useEffect` +
+  `setState`.** The parent (`addresses-view.tsx`) keys it on the target
+  address's id; calling `setState` synchronously inside an effect trips this
+  repo's `react-hooks/set-state-in-effect` lint rule.
 
 ## Testing
 

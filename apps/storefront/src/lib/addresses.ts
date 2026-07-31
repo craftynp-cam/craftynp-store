@@ -29,6 +29,7 @@ export function toSavedAddress(source: CustomerAddressSource): SavedAddress {
   return {
     id: source.id,
     label: savedAddressLabel(source),
+    addressName: source.address_name ?? "",
     firstName: source.first_name ?? "",
     lastName: source.last_name ?? "",
     address1: source.address_1 ?? "",

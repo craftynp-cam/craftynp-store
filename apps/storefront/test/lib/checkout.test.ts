@@ -224,6 +224,7 @@ describe("prefillCheckoutDraft", () => {
     email: "customer@example.com",
     first_name: "Sarah",
     last_name: "Nguyen",
+    authProvider: "email" as const,
   };
 
   it("fills blank name and email fields from the customer", () => {

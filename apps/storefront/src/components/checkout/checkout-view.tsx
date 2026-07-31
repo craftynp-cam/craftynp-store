@@ -17,6 +17,7 @@ import {
   type CountryOption,
   EMPTY_CHECKOUT_DRAFT,
   prefillCheckoutDraft,
+  validateAddressFields,
   validateCheckoutDraft,
 } from "@/lib/checkout";
 import {
@@ -38,7 +39,7 @@ import { checkoutConfirmationHref, checkoutHref } from "@/lib/routes";
 import { formatMoney } from "@/lib/money";
 
 import { Breadcrumbs } from "../nav";
-import { Button, Checkbox } from "../ui";
+import { Button } from "../ui";
 import { AddressFields } from "./address-fields";
 import { CheckoutSection } from "./checkout-section";
 import { CheckoutSummary } from "./checkout-summary";
@@ -61,6 +62,18 @@ function summaryMessage(errors: CheckoutErrors): string | null {
   if (count === 0) return null;
   return count === 1 ? "Check 1 field below." : `Check ${count} fields below.`;
 }
+
+const SAVED_ADDRESS_FIELDS = [
+  "firstName",
+  "lastName",
+  "phone",
+  "address1",
+  "address2",
+  "city",
+  "state",
+  "postalCode",
+  "countryCode",
+] as const satisfies readonly (keyof CheckoutDraft)[];
 
 export function CheckoutView({
   customer,
@@ -88,6 +101,9 @@ export function CheckoutView({
   const { total, currencyCode } = checkoutTotals(cart, values);
 
   const [errors, setErrors] = useState<CheckoutErrors>({});
+  const [addressSaveStatus, setAddressSaveStatus] = useState<
+    "idle" | "saving" | "saved"
+  >("idle");
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [payError, setPayError] = useState<{
@@ -109,7 +125,13 @@ export function CheckoutView({
   }
 
   useEffect(() => {
-    if (!isSignedIn || draft.savedAddressId !== "") return;
+    if (!isSignedIn) return;
+
+    const currentSelectionIsKnown =
+      draft.savedAddressId === NEW_ADDRESS_ID ||
+      savedAddresses.some((address) => address.id === draft.savedAddressId);
+    if (currentSelectionIsKnown) return;
+
     const defaultAddress = savedAddresses[0];
     if (!defaultAddress) return;
 
@@ -135,37 +157,63 @@ export function CheckoutView({
         return rest;
       });
     }
+
+    if (SAVED_ADDRESS_FIELDS.some((field) => field in patch)) {
+      setAddressSaveStatus("idle");
+    }
   }
 
-  async function saveAddressIfRequested(current: CheckoutDraft) {
-    if (!isSignedIn || !current.saveAddress) return;
+  async function handleSaveAddress() {
+    const addressErrors = validateAddressFields(values);
+
+    setErrors((current) => {
+      const next = { ...current };
+      for (const field of [
+        "firstName",
+        "lastName",
+        "address1",
+        "city",
+        "state",
+        "postalCode",
+        "countryCode",
+      ] as const) {
+        delete next[field];
+      }
+      return { ...next, ...addressErrors };
+    });
+
+    if (Object.keys(addressErrors).length > 0) return;
+
+    setAddressSaveStatus("saving");
+    setSaveNotice(null);
 
     try {
       const response = await fetch("/checkout/addresses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName: current.firstName,
-          lastName: current.lastName,
-          address1: current.address1,
-          address2: current.address2,
-          city: current.city,
-          state: current.state,
-          postalCode: current.postalCode,
-          countryCode: current.countryCode,
-          phone: current.phone,
+          firstName: values.firstName,
+          lastName: values.lastName,
+          address1: values.address1,
+          address2: values.address2,
+          city: values.city,
+          state: values.state,
+          postalCode: values.postalCode,
+          countryCode: values.countryCode,
+          phone: values.phone,
         }),
       });
 
       if (!response.ok) {
-        setSaveNotice(
-          "We couldn't save this address to your account, but your details are kept on this device.",
-        );
+        setAddressSaveStatus("idle");
+        setSaveNotice("We couldn't save this address. Please try again.");
+        return;
       }
+
+      setAddressSaveStatus("saved");
     } catch {
-      setSaveNotice(
-        "We couldn't save this address to your account, but your details are kept on this device.",
-      );
+      setAddressSaveStatus("idle");
+      setSaveNotice("We couldn't save this address. Please try again.");
     }
   }
 
@@ -187,8 +235,6 @@ export function CheckoutView({
       firstInvalid?.focus();
       return;
     }
-
-    void saveAddressIfRequested(values);
 
     if (paymentSession.status !== "ready" || !values.cartId) {
       return;
@@ -232,6 +278,10 @@ export function CheckoutView({
       setSubmitting(false);
     }
   }
+
+  const isUsingExistingAddress = savedAddresses.some(
+    (address) => address.id === values.savedAddressId,
+  );
 
   return (
     <>
@@ -293,19 +343,31 @@ export function CheckoutView({
               countryOptions={countryOptions}
             />
 
-            {isSignedIn ? (
-              <Checkbox
-                isSelected={values.saveAddress}
-                onChange={(isSelected) =>
-                  handleChange({ saveAddress: isSelected })
-                }
-              >
-                Save this address to my account
-              </Checkbox>
+            {isSignedIn && !isUsingExistingAddress ? (
+              <div className="flex items-center gap-3">
+                {addressSaveStatus === "saved" ? (
+                  <p className="text-sm text-foreground-muted">
+                    Saved to your addresses.
+                  </p>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onPress={handleSaveAddress}
+                    isLoading={addressSaveStatus === "saving"}
+                    loadingLabel="Saving"
+                  >
+                    Save this address to my account
+                  </Button>
+                )}
+              </div>
             ) : null}
 
             {saveNotice ? (
-              <p className="text-sm text-foreground-muted">{saveNotice}</p>
+              <p role="alert" className="text-sm text-danger-foreground">
+                {saveNotice}
+              </p>
             ) : null}
           </CheckoutSection>
 

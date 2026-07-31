@@ -10,7 +10,11 @@ import {
 import { CheckoutView } from "@/components";
 import type { SavedAddress } from "@/lib/saved-address";
 import type { AuthedCustomer } from "@/lib/auth";
-import { CHECKOUT_STORAGE_KEY, clearCheckoutDraft } from "@/lib/checkout-draft";
+import {
+  CHECKOUT_STORAGE_KEY,
+  clearCheckoutDraft,
+  patchCheckoutDraft,
+} from "@/lib/checkout-draft";
 import { addCartLine, clearCart, readCart } from "@/lib/cart";
 import { setCartDrawerOpen } from "@/lib/cart-drawer";
 
@@ -66,11 +70,13 @@ const customer: AuthedCustomer = {
   email: "sarah@example.com",
   first_name: "Sarah",
   last_name: "Nguyen",
+  authProvider: "email",
 };
 
 const savedAddress: SavedAddress = {
   id: "caddr_1",
   label: "123 Maple Street, Springfield, IL 62704",
+  addressName: "",
   firstName: "Jamie",
   lastName: "Rivera",
   address1: "123 Maple Street",
@@ -86,6 +92,7 @@ const savedAddress: SavedAddress = {
 const otherAddress: SavedAddress = {
   id: "caddr_2",
   label: "456 Oak Avenue, Portland, OR 97201",
+  addressName: "",
   firstName: "Jamie",
   lastName: "Rivera",
   address1: "456 Oak Avenue",
@@ -406,6 +413,31 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("ZIP code")).toHaveValue("62704");
   });
 
+  it("recovers to the default address when the persisted selection points at an address that no longer exists", () => {
+    // A savedAddressId can outlive the address it names — the checkout draft
+    // persists in localStorage across sessions, and nothing clears it when an
+    // account address is deleted, or when a different default is chosen after
+    // the draft last synced.
+    patchCheckoutDraft({ savedAddressId: "caddr_deleted" });
+
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[savedAddress, otherAddress]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    expect(
+      screen.getByRole("radio", {
+        name: "123 Maple Street, Springfield, IL 62704",
+      }),
+    ).toBeChecked();
+    expect(screen.getByLabelText("Street address")).toHaveValue(
+      "123 Maple Street",
+    );
+  });
+
   it("fills the fields for the address the shopper manually selects", () => {
     render(
       <CheckoutView
@@ -456,7 +488,7 @@ describe("CheckoutView", () => {
     expect(screen.getByLabelText("Street address")).toHaveValue("");
   });
 
-  it("hides the saved-address picker and save checkbox for a guest even when addresses are passed", () => {
+  it("hides the saved-address picker and save button for a guest even when addresses are passed", () => {
     render(
       <CheckoutView
         customer={null}
@@ -466,6 +498,20 @@ describe("CheckoutView", () => {
     );
 
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Save this address to my account"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the save button once the shopper is using one of their existing saved addresses", () => {
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[savedAddress]}
+        countryOptions={countryOptions}
+      />,
+    );
+
     expect(
       screen.queryByText("Save this address to my account"),
     ).not.toBeInTheDocument();
@@ -572,7 +618,7 @@ describe("CheckoutView", () => {
     expect(mockRouterPush).not.toHaveBeenCalled();
   }, 15000);
 
-  it("posts the mapped address once when the save checkbox is checked", async () => {
+  it("posts the mapped address immediately when Save this address is clicked", async () => {
     const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -585,21 +631,9 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
-    await waitFor(() =>
-      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
-    );
-    await waitFor(
-      () =>
-        expect(fetchMock).toHaveBeenCalledWith(
-          "/checkout/tax",
-          expect.anything(),
-        ),
-      { timeout: 2000 },
-    );
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Save this address to my account" }),
+      screen.getByRole("button", { name: "Save this address to my account" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -618,9 +652,66 @@ describe("CheckoutView", () => {
       state: "IL",
       postalCode: "62704",
     });
-  }, 15000);
 
-  it("shows a non-blocking notice and still completes when the save request fails", async () => {
+    // The button is replaced by a confirmation once the save succeeds, so a
+    // second click can't fire a duplicate save.
+    await waitFor(() =>
+      expect(screen.getByText("Saved to your addresses.")).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Save this address to my account" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("re-enables the save button after the saved address is edited", async () => {
+    const fetchMock = mockFetchWithRatesAnd({ ok: true, status: 201 });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    fillValidForm();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Saved to your addresses.")).toBeInTheDocument(),
+    );
+
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "456 Oak Avenue" },
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Saved to your addresses."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("validates the address fields before saving, without needing the rest of the form filled", () => {
+    render(
+      <CheckoutView
+        customer={customer}
+        savedAddresses={[]}
+        countryOptions={countryOptions}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    );
+
+    expect(screen.getByText("Enter your street address.")).toBeInTheDocument();
+  });
+
+  it("shows an inline error and stays clickable when the save request fails", async () => {
     const fetchMock = mockFetchWithRatesAnd({ ok: false, status: 502 });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -633,33 +724,21 @@ describe("CheckoutView", () => {
     );
 
     fillValidForm();
-    await waitFor(() =>
-      expect(screen.getByText("USPS Ground Advantage")).toBeInTheDocument(),
-    );
-    await waitFor(
-      () =>
-        expect(fetchMock).toHaveBeenCalledWith(
-          "/checkout/tax",
-          expect.anything(),
-        ),
-      { timeout: 2000 },
-    );
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Save this address to my account" }),
+      screen.getByRole("button", { name: "Save this address to my account" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
     await waitFor(() =>
       expect(
-        screen.getByText(/We couldn't save this address/),
+        screen.getByText("We couldn't save this address. Please try again."),
       ).toBeInTheDocument(),
     );
-    // The failed address save is non-blocking — validation still passed and
-    // nothing crashed, it just never reached a completed payment.
-    expect(mockRouterPush).not.toHaveBeenCalled();
-  }, 15000);
+    expect(
+      screen.getByRole("button", { name: "Save this address to my account" }),
+    ).toBeInTheDocument();
+  });
 
-  it("fires no fetch when the save checkbox is left unchecked", async () => {
+  it("fires no address-save fetch just from submitting the order", async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock;
 
@@ -674,7 +753,10 @@ describe("CheckoutView", () => {
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/checkout/addresses",
+      expect.anything(),
+    );
   });
 
   describe("shipping rates", () => {

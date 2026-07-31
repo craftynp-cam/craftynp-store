@@ -22,7 +22,6 @@ export type CheckoutDraft = {
   billingPostalCode: string;
   billingCountryCode: string;
   savedAddressId: string;
-  saveAddress: boolean;
   shippingRateId: string;
   shippingRateLabel: string;
   shippingRateAmount: number;
@@ -75,7 +74,6 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   billingPostalCode: "",
   billingCountryCode: "us",
   savedAddressId: "",
-  saveAddress: false,
   shippingRateId: "",
   shippingRateLabel: "",
   shippingRateAmount: 0,
@@ -96,11 +94,43 @@ function isBlank(value: string): boolean {
   return value.trim().length === 0;
 }
 
-export function validateCheckoutDraft(draft: CheckoutDraft): CheckoutErrors {
+export type AddressFields = Pick<
+  CheckoutDraft,
+  | "firstName"
+  | "lastName"
+  | "address1"
+  | "city"
+  | "state"
+  | "postalCode"
+  | "countryCode"
+>;
+
+export function validateAddressFields(fields: AddressFields): CheckoutErrors {
   const errors: CheckoutErrors = {};
 
-  if (isBlank(draft.firstName)) errors.firstName = "Enter your first name.";
-  if (isBlank(draft.lastName)) errors.lastName = "Enter your last name.";
+  if (isBlank(fields.firstName)) errors.firstName = "Enter your first name.";
+  if (isBlank(fields.lastName)) errors.lastName = "Enter your last name.";
+
+  if (isBlank(fields.address1)) errors.address1 = "Enter your street address.";
+  if (isBlank(fields.city)) errors.city = "Enter your city.";
+  if (isBlank(fields.state)) errors.state = "Enter your state.";
+
+  const isUs = fields.countryCode === "us";
+  if (isBlank(fields.postalCode)) {
+    errors.postalCode = isUs
+      ? "Enter your ZIP code."
+      : "Enter your postal code.";
+  } else if (isUs && !US_ZIP_PATTERN.test(fields.postalCode.trim())) {
+    errors.postalCode = "Enter a 5-digit ZIP code, like 12345.";
+  }
+
+  if (isBlank(fields.countryCode)) errors.countryCode = "Choose a country.";
+
+  return errors;
+}
+
+export function validateCheckoutDraft(draft: CheckoutDraft): CheckoutErrors {
+  const errors: CheckoutErrors = validateAddressFields(draft);
 
   if (isBlank(draft.email)) {
     errors.email = "Enter your email address.";
@@ -113,21 +143,6 @@ export function validateCheckoutDraft(draft: CheckoutDraft): CheckoutErrors {
   } else if (draft.phone.replace(/\D/g, "").length < 10) {
     errors.phone = "Enter a phone number with at least 10 digits.";
   }
-
-  if (isBlank(draft.address1)) errors.address1 = "Enter your street address.";
-  if (isBlank(draft.city)) errors.city = "Enter your city.";
-  if (isBlank(draft.state)) errors.state = "Enter your state.";
-
-  const isUs = draft.countryCode === "us";
-  if (isBlank(draft.postalCode)) {
-    errors.postalCode = isUs
-      ? "Enter your ZIP code."
-      : "Enter your postal code.";
-  } else if (isUs && !US_ZIP_PATTERN.test(draft.postalCode.trim())) {
-    errors.postalCode = "Enter a 5-digit ZIP code, like 12345.";
-  }
-
-  if (isBlank(draft.countryCode)) errors.countryCode = "Choose a country.";
 
   if (!draft.billingSameAsDelivery) {
     if (isBlank(draft.billingAddress1)) {

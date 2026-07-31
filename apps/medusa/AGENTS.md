@@ -52,7 +52,19 @@ for both actors.
   address, with nothing surfaced to the customer. Use a fresh email per run, or
   `pnpm run reset-auth0-account <email>` — the email is a bare trailing
   argument, with no `--` before it, or the script sees no argument at all. It
-  does not touch Auth0 itself.
+  does not touch Auth0 itself. `src/lib/purge-customer-identity.ts` is the
+  cleanup that actually avoids the poisoned-identity trap (delete addresses,
+  then `provider_identity`, then orphaned `auth_identity`, then the customer
+  row, leaving orders untouched) — both the reset script and the storefront's
+  self-serve close-account route call it rather than duplicating the sequence.
+  That route (`DELETE /store/customers/me`, under
+  `src/api/store/customers/me/`) needs no explicit auth middleware: core
+  already authenticates `ALL /store/customers/me*` and takes the identity from
+  `req.auth_context.actor_id`, never the request body.
+- **`auth-auth0/lib.ts` duplicates `auth0_sub` into `user_metadata`** as well as
+  `provider_metadata`. Only `user_metadata` reaches the storefront's JWT
+  (`provider_metadata` never leaves this module), and the storefront needs the
+  sub to tell an email/password customer from a Google one on the account page.
 - **Never register `@medusajs/auth-google`.** It is a dependency but is
   deliberately unregistered: it ignores the `hd` claim, so any personal Gmail
   account would authenticate as an admin. The real gate is server-side in

@@ -5,6 +5,7 @@ export const NEW_ADDRESS_ID = "new";
 export type SavedAddress = {
   id: string;
   label: string;
+  addressName: string;
   firstName: string;
   lastName: string;
   address1: string;

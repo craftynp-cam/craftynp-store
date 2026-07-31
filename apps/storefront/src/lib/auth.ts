@@ -81,11 +81,30 @@ export function customerNameFromUserMetadata(
   };
 }
 
+export type AuthProvider = "email" | "google" | "unknown";
+
+export function authProviderFromSub(sub: string | undefined): AuthProvider {
+  if (!sub) return "unknown";
+  if (sub.startsWith("google-oauth2|")) return "google";
+  return "email";
+}
+
+export function authProviderFromUserMetadata(
+  userMetadata: Record<string, unknown> | null | undefined,
+): AuthProvider {
+  const sub = userMetadata?.auth0_sub;
+  return authProviderFromSub(typeof sub === "string" ? sub : undefined);
+}
+
 export type AuthedCustomer = {
   id: string;
   email: string;
   first_name?: string | null;
   last_name?: string | null;
+  phone?: string | null;
+  created_at?: string | null;
+  metadata?: Record<string, unknown> | null;
+  authProvider: AuthProvider;
 };
 
 export const getCustomer = cache(async (): Promise<AuthedCustomer | null> => {
@@ -96,15 +115,23 @@ export const getCustomer = cache(async (): Promise<AuthedCustomer | null> => {
 
   try {
     const { customer } = await sdk.store.customer.retrieve(
-      { fields: "id,email,first_name,last_name" },
+      { fields: "id,email,first_name,last_name,phone,created_at,metadata" },
       { Authorization: `Bearer ${token}` },
     );
+
+    const decoded = decodeJwtPayload(token);
 
     return {
       id: customer.id,
       email: customer.email,
       first_name: customer.first_name,
       last_name: customer.last_name,
+      phone: customer.phone,
+      created_at: customer.created_at
+        ? new Date(customer.created_at).toISOString()
+        : null,
+      metadata: customer.metadata,
+      authProvider: authProviderFromUserMetadata(decoded?.user_metadata),
     };
   } catch (error) {
     console.error("Could not load the signed-in customer", error);

@@ -4,7 +4,7 @@ import { Button as HeroButton } from "@heroui/react/button";
 import { Spinner } from "@heroui/react/spinner";
 import type { ReactNode } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 type ButtonProps = Omit<

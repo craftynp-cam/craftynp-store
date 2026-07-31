@@ -1,4 +1,5 @@
 import {
+  accountAddressesHref,
   accountHref,
   authLoginHref,
   authLogoutHref,
@@ -26,6 +27,12 @@ describe("productHref", () => {
 describe("accountHref", () => {
   it("points at /account", () => {
     expect(accountHref()).toBe("/account");
+  });
+});
+
+describe("accountAddressesHref", () => {
+  it("points at /account/addresses", () => {
+    expect(accountAddressesHref()).toBe("/account/addresses");
   });
 });
 

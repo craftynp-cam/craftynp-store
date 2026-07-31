@@ -80,7 +80,11 @@ describe("checkout draft", () => {
   it("drops a wrong-typed field but keeps its valid siblings", async () => {
     window.localStorage.setItem(
       CHECKOUT_STORAGE_KEY,
-      JSON.stringify({ email: 42, firstName: "Jamie", saveAddress: "yes" }),
+      JSON.stringify({
+        email: 42,
+        firstName: "Jamie",
+        billingSameAsDelivery: "yes",
+      }),
     );
 
     jest.resetModules();
@@ -88,7 +92,9 @@ describe("checkout draft", () => {
     const draft = fresh.readCheckoutDraft();
     expect(draft.email).toBe(EMPTY_CHECKOUT_DRAFT.email);
     expect(draft.firstName).toBe("Jamie");
-    expect(draft.saveAddress).toBe(EMPTY_CHECKOUT_DRAFT.saveAddress);
+    expect(draft.billingSameAsDelivery).toBe(
+      EMPTY_CHECKOUT_DRAFT.billingSameAsDelivery,
+    );
   });
 
   it("ignores unknown extra keys", async () => {

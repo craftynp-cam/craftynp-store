@@ -2,6 +2,7 @@ import {
   draftFromSavedAddress,
   fetchCustomerAddresses,
   savedAddressLabel,
+  toSavedAddress,
   type CustomerAddressSource,
 } from "@/lib/addresses";
 
@@ -118,6 +119,21 @@ describe("fetchCustomerAddresses", () => {
     expect(consoleError).toHaveBeenCalled();
 
     consoleError.mockRestore();
+  });
+});
+
+describe("toSavedAddress", () => {
+  it("carries the address name separately from the composed label", () => {
+    const address = toSavedAddress(makeAddress({ address_name: "Home" }));
+
+    expect(address.addressName).toBe("Home");
+    expect(address.label).toBe(
+      "Home — 123 Maple Street, Springfield, IL 62704",
+    );
+  });
+
+  it("maps a missing address name to an empty string", () => {
+    expect(toSavedAddress(makeAddress()).addressName).toBe("");
   });
 });
 

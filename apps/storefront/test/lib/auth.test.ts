@@ -1,5 +1,7 @@
 import {
   AUTH_COOKIE_NAME,
+  authProviderFromSub,
+  authProviderFromUserMetadata,
   classifyAuthCallbackError,
   customerNameFromUserMetadata,
   decodeJwtPayload,
@@ -150,6 +152,34 @@ describe("customerNameFromUserMetadata", () => {
   });
 });
 
+describe("authProviderFromSub", () => {
+  it("classifies a Google sub", () => {
+    expect(authProviderFromSub("google-oauth2|123456")).toBe("google");
+  });
+
+  it("classifies any other sub as email", () => {
+    expect(authProviderFromSub("auth0|123456")).toBe("email");
+  });
+
+  it("falls back to unknown when there is no sub", () => {
+    expect(authProviderFromSub(undefined)).toBe("unknown");
+  });
+});
+
+describe("authProviderFromUserMetadata", () => {
+  it("reads the sub out of user_metadata", () => {
+    expect(
+      authProviderFromUserMetadata({ auth0_sub: "google-oauth2|123456" }),
+    ).toBe("google");
+  });
+
+  it("falls back to unknown for a JWT minted before auth0_sub was added", () => {
+    expect(authProviderFromUserMetadata({ email: "a@b.com" })).toBe("unknown");
+    expect(authProviderFromUserMetadata(undefined)).toBe("unknown");
+    expect(authProviderFromUserMetadata(null)).toBe("unknown");
+  });
+});
+
 describe("getCustomer", () => {
   afterEach(() => {
     jest.resetAllMocks();
@@ -196,6 +226,8 @@ describe("getCustomer", () => {
       email: "cam@example.com",
       first_name: "Cam",
       last_name: null,
+      created_at: null,
+      authProvider: "unknown",
     });
     expect(sdk.store.customer.retrieve).toHaveBeenCalledWith(
       expect.anything(),

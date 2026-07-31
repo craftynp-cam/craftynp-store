@@ -7,6 +7,7 @@ function makeAddress(overrides: Partial<SavedAddress> = {}): SavedAddress {
   return {
     id: "caddr_1",
     label: "123 Maple Street, Springfield, IL 62704",
+    addressName: "",
     firstName: "Jamie",
     lastName: "Rivera",
     address1: "123 Maple Street",
