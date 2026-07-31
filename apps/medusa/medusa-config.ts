@@ -110,6 +110,28 @@ module.exports = defineConfig({
       },
     },
     {
+      resolve: "@medusajs/medusa/notification",
+      options: {
+        providers: [
+          {
+            resolve: "./src/modules/notification-resend",
+            id: "resend",
+            options: {
+              channels: ["email"],
+              apiKey: process.env.RESEND_API_KEY,
+              from: process.env.RESEND_FROM_EMAIL,
+              replyTo: process.env.RESEND_REPLY_TO,
+              timeoutMs: Number(process.env.RESEND_TIMEOUT_MS ?? 5000),
+              maxRetries: Number(process.env.RESEND_MAX_RETRIES ?? 2),
+              dailyQuotaAlertThreshold: Number(
+                process.env.RESEND_DAILY_QUOTA_ALERT_THRESHOLD ?? 20,
+              ),
+            },
+          },
+        ],
+      },
+    },
+    {
       resolve: "@medusajs/medusa/file",
       options: {
         providers: [

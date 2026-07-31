@@ -1,0 +1,136 @@
+import { AbstractNotificationProviderService } from "@medusajs/framework/utils";
+import type { Logger } from "@medusajs/framework/types";
+import type {
+  ProviderSendNotificationDTO,
+  ProviderSendNotificationResultsDTO,
+} from "@medusajs/framework/types";
+
+import {
+  isQuotaExceeded,
+  readQuotaHeaders,
+  RESEND_API_URL,
+  RESEND_FREE_TIER_DAILY_CAP,
+  RESEND_QUOTA_LOG_TAG,
+  RESEND_QUOTA_LOW_LOG_TAG,
+  RESEND_SEND_FAILED_LOG_TAG,
+  ResendQuotaExceededError,
+  ResendSendError,
+  validateResendOptions,
+  type ResendOptions,
+} from "./lib";
+
+// The module service hands the whole notification row to send(), so the
+// idempotency key is there at runtime even though the published DTO omits it.
+type NotificationWithIdempotency = ProviderSendNotificationDTO & {
+  idempotency_key?: string | null;
+};
+
+class ResendNotificationProviderService extends AbstractNotificationProviderService {
+  static override identifier = "resend";
+
+  private readonly options_: ResendOptions;
+  private readonly logger_: Logger;
+
+  constructor({ logger }: { logger: Logger }, options: unknown) {
+    super();
+    this.options_ = validateResendOptions(options);
+    this.logger_ = logger;
+  }
+
+  override async send(
+    notification: NotificationWithIdempotency,
+  ): Promise<ProviderSendNotificationResultsDTO> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.options_.apiKey}`,
+      "Content-Type": "application/json",
+    };
+    if (notification.idempotency_key) {
+      headers["Idempotency-Key"] = notification.idempotency_key;
+    }
+
+    const body = JSON.stringify({
+      from: notification.from?.trim() || this.options_.from,
+      to: [notification.to],
+      ...(this.options_.replyTo ? { reply_to: this.options_.replyTo } : {}),
+      template: { id: notification.template },
+      variables: notification.data ?? {},
+    });
+
+    const response = await this.fetchWithRetry_(headers, body);
+    const payload = (await response.json().catch(() => ({}))) as {
+      id?: string;
+    };
+
+    return payload.id ? { id: payload.id } : {};
+  }
+
+  private async fetchWithRetry_(
+    headers: Record<string, string>,
+    body: string,
+  ): Promise<Response> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= this.options_.maxRetries; attempt += 1) {
+      try {
+        const response = await fetch(RESEND_API_URL, {
+          method: "POST",
+          headers,
+          body,
+          signal: AbortSignal.timeout(this.options_.timeoutMs),
+        });
+
+        this.reportQuota_(response);
+
+        if (response.ok) return response;
+
+        const text = await response.text();
+
+        if (isQuotaExceeded(response.status, text)) {
+          // Thrown, not swallowed: the module records the row as FAILURE so the
+          // retry job picks it up instead of the mail vanishing.
+          throw new ResendQuotaExceededError(
+            `Resend daily quota exhausted: ${text}`,
+          );
+        }
+
+        const error = new ResendSendError(
+          `Resend rejected the send (${response.status}): ${text}`,
+          response.status,
+        );
+
+        // 4xx other than 429 will fail identically on every retry.
+        if (response.status < 500 && response.status !== 429) throw error;
+        lastError = error;
+      } catch (error) {
+        if (error instanceof ResendQuotaExceededError) throw error;
+        if (error instanceof ResendSendError && error.status < 500) throw error;
+        lastError = error;
+      }
+    }
+
+    const detail =
+      lastError instanceof Error ? lastError.message : String(lastError);
+    this.logger_.error(`${RESEND_SEND_FAILED_LOG_TAG} error=${detail}`);
+    throw lastError instanceof Error ? lastError : new Error(detail);
+  }
+
+  private reportQuota_(response: Response): void {
+    const { remaining, limit } = readQuotaHeaders(response.headers);
+    if (remaining == null) return;
+
+    const cap = limit ?? RESEND_FREE_TIER_DAILY_CAP;
+
+    if (remaining <= this.options_.dailyQuotaAlertThreshold) {
+      this.logger_.warn(
+        `${RESEND_QUOTA_LOW_LOG_TAG} remaining=${remaining} cap=${cap}`,
+      );
+      return;
+    }
+
+    this.logger_.info(
+      `${RESEND_QUOTA_LOG_TAG} remaining=${remaining} cap=${cap}`,
+    );
+  }
+}
+
+export default ResendNotificationProviderService;
