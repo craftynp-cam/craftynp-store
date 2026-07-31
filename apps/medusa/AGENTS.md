@@ -615,6 +615,18 @@ nothing — MikroORM rejects the unknown property outright with
 `entity: "order_cart"` with `fields: ["order_id", "order.id", "order.display_id"]`
 and filters on `cart_id` instead.
 
+**`String(error)` is not good enough in these routes' catch blocks — use
+`describeError` (`src/lib/describe-error.ts`).** Medusa's workflow engine
+rejects with `errors[0].error` (`@medusajs/workflows-sdk`'s
+`workflow-export.js`), which is not reliably an `Error` instance by the time a
+route's catch sees it, so `error instanceof Error ? error.message :
+String(error)` yields the literal string `[object Object]`. That went into both
+the `[checkout:complete-failed]` log line and the `message` the storefront
+proxy forwards, leaving a failed order placement opaque from both ends at once
+— the log said nothing and the browser said nothing. `describeError` unwraps a
+nested `error`, reads a `message` off a plain object, joins an array of
+workflow errors, and falls back to JSON rather than to `[object Object]`.
+
 **AC9's webhook races this route, and losing that race is a success.** Stripe's
 `payment_intent.succeeded` drives `processPaymentWorkflow` →
 `completeCartAfterPaymentStep`, which can place the order in the window between
@@ -869,7 +881,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **195** of the repo's 1065 tests. The `siteContent`
+This app currently holds **203** of the repo's 1073 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including

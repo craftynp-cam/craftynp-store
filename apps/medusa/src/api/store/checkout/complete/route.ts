@@ -4,6 +4,8 @@ import type { Logger } from "@medusajs/framework/types";
 import { completeCartWorkflow } from "@medusajs/medusa/core-flows";
 import type { CheckoutCompleteRequest } from "@craftynp/types";
 
+import { describeError } from "../../../../lib/describe-error";
+
 type OrderSummary = { id: string; display_id: number };
 
 export async function POST(
@@ -68,7 +70,7 @@ export async function POST(
       });
     }
 
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = describeError(error);
     logger.error(`[checkout:complete-failed] cart=${cartId} error=${detail}`);
     // `message` is the only field @medusajs/js-sdk preserves from an error
     // body, so the storefront proxy can forward a real reason rather than a

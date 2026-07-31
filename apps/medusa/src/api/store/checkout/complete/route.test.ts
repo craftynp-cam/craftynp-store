@@ -136,4 +136,28 @@ describe("POST /store/checkout/complete", () => {
       expect.stringContaining("[checkout:complete-failed]"),
     );
   });
+
+  it("names the cause when the workflow rejects with a non-Error", async () => {
+    // Medusa's workflow engine throws errors[0].error, which is not reliably
+    // an Error instance — String()-ing it put "[object Object]" in both the
+    // server log and the storefront's own error message.
+    const { req, res, json, logger } = buildHarness(() => null);
+    mockCompleteCartRun.mockRejectedValue({
+      name: "MedusaError",
+      message: "Cart id not found",
+    });
+
+    await POST(req, res);
+
+    expect(json).toHaveBeenCalledWith({
+      error: "order_placement_unavailable",
+      message: "order_placement_unavailable:Cart id not found",
+    });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("Cart id not found"),
+    );
+    expect(logger.error).not.toHaveBeenCalledWith(
+      expect.stringContaining("[object Object]"),
+    );
+  });
 });
