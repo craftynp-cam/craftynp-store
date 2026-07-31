@@ -9,9 +9,29 @@ jest.mock("@medusajs/medusa/core-flows", () => ({
 }));
 
 import { POST } from "./route";
+import { verifyOrderAccessToken } from "../../../../lib/order-access-token";
 
 const CART_ID = "cart_01";
 const ORDER = { id: "order_01", display_id: 42 };
+const ORDER_ACCESS_SECRET = "test-order-access-secret";
+
+/**
+ * All three success paths — first placement, the pre-check, and the webhook
+ * race — have to hand back a token that actually opens this order, which is
+ * why they share one responder.
+ */
+function expectOrderResponse(json: jest.Mock) {
+  expect(json).toHaveBeenCalledWith(
+    expect.objectContaining({ orderId: ORDER.id, displayId: 42 }),
+  );
+
+  const { orderToken } = json.mock.calls[0]![0] as { orderToken: string };
+  expect(
+    verifyOrderAccessToken(orderToken, ORDER_ACCESS_SECRET, {
+      orderId: ORDER.id,
+    }),
+  ).toMatchObject({ valid: true });
+}
 
 type Harness = {
   req: MedusaRequest<CheckoutCompleteRequest>;
@@ -74,6 +94,7 @@ function buildHarness(linkedOrder: () => typeof ORDER | null): Harness {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  process.env.ORDER_ACCESS_SECRET = ORDER_ACCESS_SECRET;
   mockCompleteCartRun.mockResolvedValue({ result: { id: ORDER.id } });
 });
 
@@ -86,7 +107,7 @@ describe("POST /store/checkout/complete", () => {
     expect(mockCompleteCartRun).toHaveBeenCalledWith({
       input: { id: CART_ID },
     });
-    expect(json).toHaveBeenCalledWith({ orderId: ORDER.id, displayId: 42 });
+    expectOrderResponse(json);
   });
 
   it("returns the existing order through the order_cart link instead of placing a second", async () => {
@@ -98,7 +119,7 @@ describe("POST /store/checkout/complete", () => {
     await POST(req, res);
 
     expect(mockCompleteCartRun).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith({ orderId: ORDER.id, displayId: 42 });
+    expectOrderResponse(json);
   });
 
   it("reports success when the webhook completed the cart mid-request", async () => {
@@ -114,7 +135,7 @@ describe("POST /store/checkout/complete", () => {
 
     await POST(req, res);
 
-    expect(json).toHaveBeenCalledWith({ orderId: ORDER.id, displayId: 42 });
+    expectOrderResponse(json);
     expect(status).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
   });
