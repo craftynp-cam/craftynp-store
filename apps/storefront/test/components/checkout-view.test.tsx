@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
   act,
   fireEvent,
@@ -26,13 +26,31 @@ let mockStripeInstance: { confirmPayment: typeof mockConfirmPayment } | null = {
   confirmPayment: mockConfirmPayment,
 };
 let mockElementsInstance: object | null = {};
+let mockPaymentElementLoadErrorMessage: string | null = null;
 
 // A thin stand-in for @stripe/react-stripe-js: no real Elements provider or
 // iframe-backed PaymentElement, so nothing here makes a network call. Tests
 // that need a specific outcome set mockStripeInstance/mockConfirmPayment.
+// Setting mockPaymentElementLoadErrorMessage simulates the real element
+// firing its onLoadError callback once mounted.
 jest.mock("@stripe/react-stripe-js", () => ({
   Elements: ({ children }: { children: ReactNode }) => children,
-  PaymentElement: () => null,
+  PaymentElement: ({
+    onLoadError,
+  }: {
+    onLoadError?: (event: { error: { message?: string } }) => void;
+  }) => {
+    useEffect(() => {
+      if (mockPaymentElementLoadErrorMessage) {
+        onLoadError?.({
+          error: { message: mockPaymentElementLoadErrorMessage },
+        });
+      }
+      // Only fire once per mount, mirroring the real element.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return null;
+  },
   useStripe: () => mockStripeInstance,
   useElements: () => mockElementsInstance,
 }));
@@ -162,6 +180,7 @@ describe("CheckoutView", () => {
     mockConfirmPayment.mockReset();
     mockStripeInstance = { confirmPayment: mockConfirmPayment };
     mockElementsInstance = {};
+    mockPaymentElementLoadErrorMessage = null;
   });
 
   it("renders the page heading and all four sections", () => {
@@ -1425,6 +1444,94 @@ describe("CheckoutView", () => {
         ([url]) => url === "/checkout/complete",
       );
       expect(completeCalls).toHaveLength(1);
+    });
+
+    it("surfaces a Payment Element load error instead of leaving it unhandled", async () => {
+      const fetchMock = mockFullCheckoutFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+      mockPaymentElementLoadErrorMessage = "We couldn't load the payment form.";
+
+      await reachReadyPayment(fetchMock);
+
+      await waitFor(() =>
+        expect(
+          screen.getByText("We couldn't load the payment form."),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it("clears a stale load error once a fresh clientSecret arrives", async () => {
+      // Editing the address after the Payment Element mounted must not leave
+      // an error tied to the now-superseded clientSecret on screen forever —
+      // this is the exact regression a changed address triggered in
+      // production, since Stripe's Elements group never re-reads a changed
+      // clientSecret after its first mount. The tax token and clientSecret
+      // both increment per call, the same way real re-quoting after an
+      // address edit would produce a genuinely different pair.
+      let taxCalls = 0;
+      let prepareCalls = 0;
+      const fetchMock = jest.fn().mockImplementation((url: string) => {
+        if (url === "/checkout/shipping-rates") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(singleRateResponse),
+          });
+        }
+        if (url === "/checkout/tax") {
+          taxCalls += 1;
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                ...taxQuoteResponse,
+                quoteToken: `tax-token-${taxCalls}.signature`,
+              }),
+          });
+        }
+        if (url === "/checkout/prepare") {
+          prepareCalls += 1;
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                ...prepareResponse,
+                clientSecret: `pi_${prepareCalls}_secret`,
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 201 });
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+      mockPaymentElementLoadErrorMessage = "We couldn't load the payment form.";
+
+      await reachReadyPayment(fetchMock);
+      await waitFor(() =>
+        expect(
+          screen.getByText("We couldn't load the payment form."),
+        ).toBeInTheDocument(),
+      );
+
+      mockPaymentElementLoadErrorMessage = null;
+      fireEvent.change(screen.getByLabelText("ZIP code"), {
+        target: { value: "60605" },
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.length).toBeGreaterThan(0),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      await waitFor(() => expect(prepareCalls).toBeGreaterThanOrEqual(2));
+
+      expect(
+        screen.queryByText("We couldn't load the payment form."),
+      ).not.toBeInTheDocument();
     });
   });
 });

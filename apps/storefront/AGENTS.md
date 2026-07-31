@@ -590,11 +590,23 @@ completes by placing a real Medusa order.
   `theme.ts`'s `readIsDarkMode`/`subscribeToIsDarkMode` resolve the
   _actual_ painted mode — unlike `readStoredTheme`, "system" is resolved to
   a real light/dark answer via `matchMedia` rather than left as its own
-  value, since Stripe's `appearance` needs one concrete answer. `PaymentFields`
-  keys `<Elements>` on the resolved mode, so toggling the theme mid-checkout
-  remounts the Payment Element with the new appearance rather than calling
-  Stripe's `elements.update()` — an accepted simplification for a short-lived,
-  one-time flow.
+  value, since Stripe's `appearance` needs one concrete answer.
+  `PaymentFields` keys `<Elements>` on **both** the resolved mode and the
+  `clientSecret` (`` `${clientSecret}:${mode}` ``), not just the mode.
+  Stripe's `Elements` group only ever reads `options.clientSecret` on its
+  _first_ mount — a changed value on a later render is silently ignored,
+  so a shopper who edits the address after the Payment Element has already
+  rendered (a fresh cart/payment session supersedes the old one, i.e. AC10's
+  idempotent-on-`cartId` path returning a _different_ payment session for
+  the changed cart) leaves the mounted element bound to a PaymentIntent that
+  no longer matches reality, surfacing as an unhandled
+  `"Unhandled payment Element loaderror"`. Keying on `clientSecret` forces a
+  clean remount instead of trying to reconcile in place. `PaymentElement`'s
+  own `onLoadError` is wired through to `CheckoutView`'s error area rather
+  than left unhandled, and that error is paired with the `clientSecret` it
+  was raised against (in state, not a ref — reading a ref during render
+  trips this repo's `react-hooks/refs` lint rule) so a stale error from a
+  superseded element doesn't linger once a fresh one has mounted cleanly.
 - **The submit button reads `Pay $X`**, computed from `checkoutTotals`, and
   is a real `<button type="submit">` — the "Continue"/never-says-Pay stance
   CNP-50–52 held is exactly what CNP-53 supersedes. `handleSubmit` validates
@@ -730,5 +742,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **774** of the repo's 1037 tests. A smaller number
+The storefront currently holds **776** of the repo's 1044 tests. A smaller number
 after your change means something was dropped.

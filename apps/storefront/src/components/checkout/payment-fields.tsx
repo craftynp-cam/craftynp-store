@@ -112,12 +112,20 @@ function PaymentSubmitBridge({ ref }: { ref?: Ref<PaymentSubmitHandle> }) {
   return null;
 }
 
+const ELEMENT_LOAD_ERROR_MESSAGE =
+  "We couldn't load the payment form. Please try again.";
+
 export type PaymentFieldsProps = {
   clientSecret: string;
   submitRef: Ref<PaymentSubmitHandle>;
+  onLoadError?: (message: string) => void;
 };
 
-export function PaymentFields({ clientSecret, submitRef }: PaymentFieldsProps) {
+export function PaymentFields({
+  clientSecret,
+  submitRef,
+  onLoadError,
+}: PaymentFieldsProps) {
   const isDark = useSyncExternalStore(
     subscribeToIsDarkMode,
     readIsDarkMode,
@@ -126,12 +134,23 @@ export function PaymentFields({ clientSecret, submitRef }: PaymentFieldsProps) {
   const mode: Mode = isDark ? "dark" : "light";
 
   return (
+    // Stripe's Elements group only reads `options.clientSecret` on its first
+    // mount — a changed clientSecret on a later render (e.g. the shopper
+    // edits the address after a cart/payment session was already prepared,
+    // and a fresh one supersedes it) is silently ignored, leaving the
+    // mounted PaymentElement bound to a PaymentIntent that no longer matches
+    // reality and surfacing as an "Unhandled payment Element loaderror".
+    // Keying on clientSecret forces a clean remount instead.
     <Elements
-      key={mode}
+      key={`${clientSecret}:${mode}`}
       stripe={getStripe()}
       options={{ clientSecret, appearance: stripeAppearance(mode) }}
     >
-      <PaymentElement />
+      <PaymentElement
+        onLoadError={(event) => {
+          onLoadError?.(event.error.message ?? ELEMENT_LOAD_ERROR_MESSAGE);
+        }}
+      />
       <PaymentSubmitBridge ref={submitRef} />
     </Elements>
   );

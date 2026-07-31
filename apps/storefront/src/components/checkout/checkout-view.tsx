@@ -89,10 +89,26 @@ export function CheckoutView({
   const [errors, setErrors] = useState<CheckoutErrors>({});
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [payError, setPayError] = useState<string | null>(null);
+  // Paired with the clientSecret it was raised against, so a stale error
+  // from a superseded Payment Element doesn't linger once PaymentFields has
+  // remounted a clean one for a fresh clientSecret.
+  const [payError, setPayError] = useState<{
+    message: string;
+    clientSecret: string | null;
+  } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const paymentSubmitRef = useRef<PaymentSubmitHandle>(null);
   const submittingRef = useRef(false);
+  const displayedPayError =
+    payError?.clientSecret === paymentSession.clientSecret
+      ? payError.message
+      : null;
+
+  function showPayError(message: string | null) {
+    setPayError(
+      message ? { message, clientSecret: paymentSession.clientSecret } : null,
+    );
+  }
 
   useEffect(() => {
     if (!isSignedIn || draft.savedAddressId !== "") return;
@@ -191,14 +207,14 @@ export function CheckoutView({
 
     submittingRef.current = true;
     setSubmitting(true);
-    setPayError(null);
+    showPayError(null);
 
     const result = await paymentSubmitRef.current?.confirmPayment();
 
     if (!result || result.status === "error") {
       // A decline shows Stripe's own reason, leaves the cart intact, and
       // allows retry — nothing here has cleared the cart or draft.
-      setPayError(result?.message ?? "Your payment could not be processed.");
+      showPayError(result?.message ?? "Your payment could not be processed.");
       submittingRef.current = false;
       setSubmitting(false);
       return;
@@ -226,7 +242,7 @@ export function CheckoutView({
       // whether this call succeeds. The webhook (AC9) reconciles the order
       // even if this request never lands, so this is a delayed confirmation,
       // not a lost payment.
-      setPayError(
+      showPayError(
         "Your payment was captured, but we couldn't confirm your order just yet. We'll email your confirmation shortly.",
       );
       submittingRef.current = false;
@@ -358,6 +374,7 @@ export function CheckoutView({
               <PaymentFields
                 clientSecret={paymentSession.clientSecret}
                 submitRef={paymentSubmitRef}
+                onLoadError={showPayError}
               />
             ) : paymentSession.status === "error" ? (
               <div aria-live="polite" className="space-y-3">
@@ -382,12 +399,12 @@ export function CheckoutView({
             )}
           </CheckoutSection>
 
-          {payError ? (
+          {displayedPayError ? (
             <div
               aria-live="assertive"
               className="text-sm text-danger-foreground"
             >
-              {payError}
+              {displayedPayError}
             </div>
           ) : null}
 
