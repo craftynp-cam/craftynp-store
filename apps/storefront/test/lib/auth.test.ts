@@ -226,6 +226,7 @@ describe("getCustomer", () => {
       email: "cam@example.com",
       first_name: "Cam",
       last_name: null,
+      created_at: null,
       authProvider: "unknown",
     });
     expect(sdk.store.customer.retrieve).toHaveBeenCalledWith(

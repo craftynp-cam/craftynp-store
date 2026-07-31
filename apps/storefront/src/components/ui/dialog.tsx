@@ -2,7 +2,6 @@
 
 import { AlertDialog as HeroAlertDialog } from "@heroui/react/alert-dialog";
 import { Modal as HeroModal } from "@heroui/react/modal";
-import type { ReactNode } from "react";
 
 import { X } from "../icons";
 import { Button } from "./button";
@@ -11,7 +10,8 @@ export type DialogProps = {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   title: string;
-  children: ReactNode | ((props: { close: () => void }) => ReactNode);
+  children:
+    React.ReactNode | ((props: { close: () => void }) => React.ReactNode);
 };
 
 export function Dialog({ isOpen, onOpenChange, title, children }: DialogProps) {
@@ -45,7 +45,7 @@ export type ConfirmDialogProps = {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   title: string;
-  description: ReactNode;
+  description: React.ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   onConfirm: () => void;

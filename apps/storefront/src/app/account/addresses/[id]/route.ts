@@ -31,11 +31,16 @@ function isAddressPayload(value: unknown): value is AddressPayload {
   );
 }
 
-export async function POST(request: NextRequest) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   if (!token) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
+
+  const { id } = await params;
 
   let body: unknown;
   try {
@@ -66,7 +71,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await sdk.store.customer.createAddress(
+    await sdk.store.customer.updateAddress(
+      id,
       {
         address_name: body.addressName || null,
         first_name: body.firstName,
@@ -79,13 +85,36 @@ export async function POST(request: NextRequest) {
         country_code: body.countryCode,
         phone: body.phone || null,
       },
-      {},
+      undefined,
       { Authorization: `Bearer ${token}` },
     );
   } catch (error) {
-    console.error("Could not save the customer's address", error);
+    console.error("Could not update the customer's address", error);
     return NextResponse.json({ error: "save_failed" }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  if (!token) {
+    return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    await sdk.store.customer.deleteAddress(id, {
+      Authorization: `Bearer ${token}`,
+    });
+  } catch (error) {
+    console.error("Could not delete the customer's address", error);
+    return NextResponse.json({ error: "delete_failed" }, { status: 502 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

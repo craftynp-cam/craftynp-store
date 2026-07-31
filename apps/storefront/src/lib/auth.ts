@@ -127,7 +127,9 @@ export const getCustomer = cache(async (): Promise<AuthedCustomer | null> => {
       first_name: customer.first_name,
       last_name: customer.last_name,
       phone: customer.phone,
-      created_at: customer.created_at,
+      created_at: customer.created_at
+        ? new Date(customer.created_at).toISOString()
+        : null,
       metadata: customer.metadata,
       authProvider: authProviderFromUserMetadata(decoded?.user_metadata),
     };
