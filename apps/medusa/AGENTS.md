@@ -475,6 +475,123 @@ Stripe client's `tax.calculations.create` method directly (constructing a real
 `Stripe` client with a fake key is safe — it performs no I/O until a method is
 called), rather than mocking the whole `stripe` module.
 
+## Payments and order placement (CNP-53)
+
+**This is the first story to reverse CNP-51/52's own reasoning.** Both of
+those stories chose a custom store route over Medusa's native
+provider/workflow pipeline specifically because there was no Medusa cart to
+hang a provider call off of. CNP-53 is where that cart finally gets created,
+so the two prior stories' logic is now taught to Medusa's own provider seams
+instead of staying in a third bespoke route: `src/modules/shipstation-fulfillment/`
+implements `AbstractFulfillmentProviderService.calculatePrice` (registered
+alongside `fulfillment-manual` under `@medusajs/medusa/fulfillment` in
+`medusa-config.ts`, id `shipstation`), and `src/modules/stripe-tax/tax-provider.ts`
+implements `ITaxProvider.getTaxLines` (registered as a sibling provider under
+`@medusajs/medusa/tax`, `./tax-provider-module`, id `stripe`) — both live
+beside, not instead of, the existing `shipstation`/`stripeTax` custom modules
+and their store routes, which CNP-51/52's shipping-rate and tax-quote steps
+still use unchanged.
+
+**`cart.total` is the one authoritative number.** Subtotal comes from
+Medusa's own `calculated_price`; shipping and tax are resolved by the two
+providers above at cart-refresh time, the same way any Medusa store computes
+them. The client never gets to name a price — the PaymentIntent amount is
+whatever the payment collection was created against, i.e. the cart's own
+total.
+
+**AC4 (shipping) works by re-verifying, not by trusting the client.**
+`ShipStationFulfillmentProviderService.calculatePrice` recomputes
+`cartSignature` from the *provider-context* cart — never the client-supplied
+`data` — and calls `verifyShippingQuote` exactly like the shipping-rates
+route does. A valid token charges its signed amount outright. An invalid one
+(expired, tampered, or a cart/address mismatch) re-estimates live via
+`ShipStationModuleService.getUspsRates` (verbatim reuse, per CNP-51's own
+note that a future fulfillment provider would call it this way) and compares
+the fresh amount against the client-supplied `data.amount` — the price the
+shopper was shown — within a tolerance of `≤ max($0.50, 5%)`
+(`withinShippingTolerance` in `shipstation-fulfillment/lib.ts`). Outside
+tolerance, or no ShipStation service matching the requested `serviceCode`,
+`calculatePrice` throws and Medusa blocks the cart refresh — the same
+no-flat-rate-fallback stance CNP-51 already committed to, just enforced one
+layer further in. Log tag: `[shipping-quote:mismatch]`.
+
+**AC5 (tax) has one real, accepted tradeoff.** `ITaxProvider.getTaxLines`
+returns *rates* (percentages), not amounts — Medusa's own contract, not a
+choice made here. Stripe Tax returns *amounts*. `tax-provider.ts` calls
+`stripe.tax.calculations.create` with `expand: ["line_items"]` and converts
+each line's `amount_tax`/`amount` into a percentage
+(`amountToRate` in `stripe-tax/lib.ts`), then feeds the sale that percentage
+back through Medusa's own rate × line-amount arithmetic. Expect up to ~1¢ of
+per-line drift between what Medusa's cart shows and what the Stripe Tax
+calculation actually said — the recorded transaction (below) reflects the
+Stripe calculation, not Medusa's re-derived total, so Stripe's own reports
+stay internally consistent regardless. There is deliberately no cache on this
+provider (unlike the sibling `StripeTaxModuleService`, still cached for the
+tax-quote route) — a cart refresh is infrequent enough that a stale cached
+rate is worse than the extra round trip.
+
+**AC1's conversion happens in `POST /store/checkout/prepare-cart`**
+(`src/api/store/checkout/prepare-cart/route.ts`), the first place in this
+app a Medusa cart gets created. It re-verifies *both* the shipping and tax
+signed tokens up front (the same `verifyShippingQuote`/`verifyTaxQuote` calls
+the routes above use — a fast, explicit check ahead of the provider layer,
+which is the actual safety net), resolves the region, creates the cart with
+one line item per cart line carrying the storefront's display `details`/
+`isCustomizable` as `metadata` (AC7 — full structured customization capture,
+per `lineItemCustomizationSchema`, is future work; the storefront's `CartLine`
+doesn't produce that payload yet), attaches the live-rate shipping method,
+and creates a payment collection plus a Stripe payment session. **Idempotent
+on `cartId`**: a repeat call with the same id reuses the existing cart,
+skips re-adding a shipping method it already has, and reuses an existing
+Stripe payment session rather than minting a second — the server half of
+AC10.
+
+**`POST /store/checkout/complete`** runs `completeCartWorkflow` and is
+idempotent the same way: it looks up an existing order by `cart_id` first and
+returns that instead of erroring, so a resubmitted request cannot double-place
+an order.
+
+**AC9 needed no code here.** Medusa core already ships
+`/hooks/payment/:provider` with raw-body signature verification, and
+`@medusajs/payment-stripe`'s `getWebhookActionAndData` drives
+`processPaymentWorkflow`, which calls `completeCartAfterPaymentStep` when a
+payment is authorized out-of-band — so an order still gets placed even if the
+storefront's own `/checkout/complete` call never lands (browser closed
+mid-redirect). The provider only acts on intents carrying its own
+`metadata.session_id`, so events from another integration on the same Stripe
+account are ignored.
+
+**Recording the Stripe Tax transaction is the app's first subscriber**
+(`src/subscribers/record-tax-transaction.ts`, on `order.placed`) — this is
+what CNP-52's own notes meant by "recording that transaction is CNP-53's
+job." Rather than plumbing a cart-scoped calculation id through Medusa's tax
+provider context (which carries no cart id — see the note in
+`tax-provider.ts`), it recomputes the calculation from the placed order's own
+line items and address via `StripeTaxModuleService.calculateTax`, which
+caches on exactly those inputs, so it reuses the checkout-time calculation
+rather than paying for a second Stripe call in the common case. The new
+`StripeTaxModuleService.recordTransaction` method wraps
+`stripe.tax.transactions.createFromCalculation`, passing the order id as
+`reference` — Stripe's own uniqueness constraint on that field means a
+retried subscriber invocation for the same order fails cleanly rather than
+double-recording. A failure logs `[stripe-tax:unavailable] reason=transaction_failed`
+and never rolls back the already-paid order.
+
+**`seed-us-region.ts` (CNP-51) already set this story up.** Its own comment —
+"so CNP-53 has something to attach a cart to" — is why this story's own
+migration script, `seed-us-stripe-payment-provider.ts`, only has to attach
+providers rather than build a region from scratch: it adds `pp_stripe_stripe`
+to the US region's `payment_providers`, switches the US tax region's
+`provider_id` from `tp_system` to `tp_stripe-tax_stripe`, and adds a
+`calculated`-price shipping option (`Live USPS Rate`) on the existing US
+service zone, backed by the new fulfillment provider. It sorts **after**
+`seed-us-region.ts` by filename (`seed-us-region.ts` < `seed-us-stripe-payment-provider.ts`)
+since it depends on the region, tax region, and service zone that script
+creates — the same filename-ordering discipline `seed-product-shipping-dimensions.ts`
+already established. The flat `Standard Shipping` option from
+`seed-us-region.ts` is untouched and stays as the catalogue-price row it
+always was.
+
 ## React 18 — do not "fix" it
 
 The admin dashboard runs **React 18**, and this app declares `react`,
@@ -531,15 +648,24 @@ that is scriptable), `STRIPE_TAX_DEFAULT_TAX_CODE`, `STRIPE_TAX_SHIPPING_TAX_COD
 and `TAX_QUOTE_SECRET` (`replace-me-…` placeholder, regenerate the same way as
 `JWT_SECRET` — do not reuse `SHIPPING_QUOTE_SECRET` or `JWT_SECRET` here).
 
+For [Payments and order placement](#payments-and-order-placement-cnp-53):
+`STRIPE_WEBHOOK_SECRET` — the signing secret for `/hooks/payment/stripe_stripe`,
+from the Stripe dashboard's webhook endpoint settings, or printed by
+`stripe listen --forward-to localhost:9000/hooks/payment/stripe_stripe` for
+local development (see the README's Stripe payments section). `STRIPE_SECRET_KEY`
+is reused from Sales tax above — the same Stripe account backs both.
+
 ## Database
 
 Run both from the repo root:
 
 - `pnpm run db:migrate` — runs migrations, which includes every migration
   script under `src/migration-scripts/` — the initial data seed,
-  `seed-site-content.ts` (CNP-23), `seed-us-region.ts`, and
+  `seed-site-content.ts` (CNP-23), `seed-us-region.ts` and
   `seed-product-shipping-dimensions.ts` (both CNP-51, see
-  [Shipping rates](#shipping-rates-cnp-51)) all run this way. Add a new seed
+  [Shipping rates](#shipping-rates-cnp-51)), and `seed-us-stripe-payment-provider.ts`
+  (CNP-53, see [Payments and order placement](#payments-and-order-placement-cnp-53))
+  all run this way. Add a new seed
   as a new file here, not an edit to `initial-data-seed.ts`: the ledger tracks
   each script independently, so a new file still runs against a database that
   has already migrated, while editing an already-run script does nothing. Its
@@ -565,7 +691,7 @@ would otherwise be collected twice.
 
 The lint script is the plain `eslint src`, since tests live under `src`.
 
-This app currently holds **148** of the repo's 968 tests. The `siteContent`
+This app currently holds **173** of the repo's 1024 tests. The `siteContent`
 module's field validation and value resolution are pure functions living in
 `@craftynp/types` and are tested there instead — see that package's own test
 count. The admin's `.tsx` extensions (including

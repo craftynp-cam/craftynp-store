@@ -265,6 +265,6 @@ live — are in each app's `AGENTS.md`. What holds everywhere:
 - A test must be able to fail. Write it so you have seen it fail for the right
   reason before you make it pass; a test that passes against a broken
   implementation is worse than no test.
-- Current suite: **968 tests** across the three workspaces (types 66, medusa 148,
-  storefront 754). A smaller number after your change means something was
+- Current suite: **1024 tests** across the three workspaces (types 85, medusa 173,
+  storefront 766). A smaller number after your change means something was
   dropped.

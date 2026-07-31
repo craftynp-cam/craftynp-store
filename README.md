@@ -11,9 +11,10 @@ products, discounts, and orders from the Medusa admin.
 ## Status
 
 Scaffolded and running locally. A clone reaches a working dev environment — the
-storefront server-renders products fetched live from Medusa — but no environment
-has been provisioned yet, so nothing is deployed. Payments, shipping rates, and
-artwork storage are wired in later stories (CNP-16/17/20).
+storefront server-renders products fetched live from Medusa, checkout takes a
+real Stripe payment and places a Medusa order — but no environment has been
+provisioned yet, so nothing is deployed. Artwork storage is wired in a later
+story (CNP-16/17/20).
 
 ## Stack
 
@@ -198,14 +199,48 @@ these are the real ship-from address, so never commit real values to a
 shared example file. `db:migrate` seeds a second, USD `United States` region
 from these values (`seed-us-region.ts`), plus a flat `Standard Shipping`
 option priced from `SHIPPING_OPTION_DEFAULT_AMOUNT`/`SHIPPING_OPTION_DEFAULT_LABEL`
-— that price is a Medusa catalogue entry for the future cart-based checkout
-(CNP-53), **not** a checkout-time fallback: if ShipStation is unreachable or a
-rate can't be calculated, checkout shows an error and blocks Continue rather
-than quoting a guessed price. Point `NEXT_PUBLIC_DEFAULT_REGION` at the new
-region (its country, `us`) so the storefront quotes in the same currency its
+— a Medusa catalogue entry, **not** a checkout-time fallback: if ShipStation is
+unreachable or a rate can't be calculated, checkout shows an error and blocks
+Continue rather than quoting a guessed price. A second, live-rate shipping
+option is seeded by `seed-us-stripe-payment-provider.ts` once Stripe payments
+are configured below. Point `NEXT_PUBLIC_DEFAULT_REGION` at the new region
+(its country, `us`) so the storefront quotes in the same currency its
 shipping rates come back in — the seed's original EUR `Europe` region is not
 a sensible pairing with USPS rates. Do not point automated tests at the
 ShipStation sandbox: its 20 requests/minute ceiling causes sporadic failures.
+
+#### Stripe payments
+
+Checkout (CNP-53) needs a Stripe account in test mode. Set `STRIPE_SECRET_KEY`
+in `apps/medusa/.env` (shared with Sales tax below if you've already set that
+up) and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in `apps/storefront/.env.local` —
+both come from the Stripe dashboard's Developers → API keys page, same
+account. `STRIPE_WEBHOOK_SECRET` isn't a value you generate yourself — run
+the Stripe CLI locally instead, which prints its own signing secret:
+
+```bash
+stripe listen --forward-to localhost:9000/hooks/payment/stripe_stripe
+```
+
+Paste the `whsec_…` it prints into `STRIPE_WEBHOOK_SECRET` and leave the
+command running while you test checkout — it's what delivers the webhook
+Medusa uses to reconcile an order if the browser closes mid-redirect (AC9).
+`db:migrate` runs `seed-us-stripe-payment-provider.ts`, which attaches Stripe
+to the seeded US region as its payment provider, switches the region's tax
+provider from the system default to Stripe Tax, and adds a live-rate
+shipping option backed by ShipStation — all three providers CNP-53 registers
+in `medusa-config.ts`. Pay with Stripe's test card `4242 4242 4242 4242` (any
+future expiry, any CVC) for a successful charge, or `4000 0000 0000 0002` to
+exercise a decline. Never point automated tests at the Stripe sandbox — same
+reasoning as the ShipStation sandbox note above.
+
+#### Sales tax (Stripe Tax)
+
+Configured by the same `STRIPE_SECRET_KEY` as Stripe payments above. Enable
+Stripe Tax in the dashboard with an origin address and at least one state
+registration — neither is scriptable. See `apps/medusa/.env.example` for the
+remaining `STRIPE_TAX_*` variables and `apps/medusa/AGENTS.md`'s Sales tax
+section for how the calculation itself works.
 
 ### Running locally
 

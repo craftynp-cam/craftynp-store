@@ -224,7 +224,11 @@ what's inside, just what a reader wouldn't get from the code:
   formatting — and, like `saved-address.ts`, carries no `medusa.ts` import so
   `checkout-view.tsx` can value-import it directly.
   `shipping-rates-cache.ts` is its `sessionStorage` cache, same shape as
-  `cart.ts`/`checkout-draft.ts`.
+  `cart.ts`/`checkout-draft.ts`. `payment.ts` (CNP-53) is the pure logic
+  behind step 4 — `isReadyForPayment` (gating on the live tax status, the
+  same staleness discipline `tax-quote.ts` documents) and
+  `paymentPrepareKey` — and, like `shipping-rates.ts`, carries no `medusa.ts`
+  import.
 - `test` — a mirror of `src/`; see [Testing](#testing).
 
 Each directory has its own barrel (`index.ts`); a new component is unreachable
@@ -244,6 +248,11 @@ never sent to the browser — and `NEXT_PUBLIC_SITE_URL`, this site's own base
 URL, used to build the absolute `callback_url` sent to Medusa and the
 `returnTo` sent to Auth0's logout endpoint. The client secret lives only in
 `apps/medusa/.env`; the storefront never holds it.
+
+For [Payment](#checkout-cnp-50-cnp-51-cnp-52-cnp-53) (CNP-53):
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, safe to expose to the browser — it only
+ever authorizes creating a Payment Element, never a charge. Must be the same
+Stripe account as `apps/medusa/.env`'s `STRIPE_SECRET_KEY`.
 
 ## Design tokens
 
@@ -450,19 +459,19 @@ up but hasn't clicked the verification link yet (blocked by the tenant's
 cancelled" — the two look identical at the OAuth-error-code level but call for
 opposite next steps.
 
-## Checkout (CNP-50, CNP-51, CNP-52)
+## Checkout (CNP-50, CNP-51, CNP-52, CNP-53)
 
-`/checkout` builds the contact/delivery-address, shipping-method, and tax
-steps — sections 1–3 of the eventual page, plus the sticky cart summary.
-Section 4 (Payment) is still out of scope; the decisions below should hold
-until the stories that supersede them:
+`/checkout` builds all four steps of the page — contact/delivery-address,
+shipping-method, tax, and payment — plus the sticky cart summary, and
+completes by placing a real Medusa order.
 
-- **There is still no Medusa cart, and no `sdk.store.cart.*` call anywhere in
-  the storefront.** The checkout form is a client-only draft persisted to
-  `localStorage` (`checkout-draft.ts`); it is not wired to a Medusa cart or
-  payment session. Shipping rates and tax work without one — see below — but
-  creating a real cart at checkout time is still future work, alongside
-  Stripe payments.
+- **CNP-53 is where the first Medusa cart gets created.** Contact, address,
+  shipping, and tax (CNP-50–52) all deliberately stayed client-only-draft
+  until now — see the notes below for why each of those worked without a
+  cart. The draft's `cartId` and `paymentClientSecret` fields, and
+  `use-payment-session.ts`'s `POST /checkout/prepare` call, are the seam
+  where that changes: the payment step is also the first point in checkout
+  that talks to a real Medusa cart at all.
 - **The cart summary shows Subtotal, Shipping, Tax, and Total.** Both
   Shipping and Tax read `"Calculated above"` until resolved, never a guessed
   number. `checkoutTotals(cart, draft)` sums the draft's `shippingRateAmount`
@@ -544,9 +553,51 @@ until the stories that supersede them:
   `medusa.ts` import**, the same `saved-address.ts` split documented below —
   `checkout-view.tsx` and `use-shipping-rates.ts` value-import them directly,
   and a `medusa.ts` import would throw at module eval with no env vars set.
-- Sections beyond 4 (Payment) are still not rendered at all — no inert
-  card-number inputs. `CheckoutSection` exists so adding it later is additive
-  (see the `src/components/checkout` bullet above).
+- **Payment (CNP-53) is step 4, built on Stripe's Payment Element.**
+  `use-payment-session.ts` is the fetch hook — same derived-key/debounce/
+  `AbortController`/`latestRef` shape as `use-tax-quote.ts`, gating on the
+  *live* `taxQuote.status === "ready"` rather than `draft.taxQuoteToken !== ""`
+  (`isReadyForPayment` in `src/lib/payment.ts`), for the identical staleness
+  reason `use-tax-quote.ts`'s own note documents. It POSTs the full checkout
+  payload — email, both addresses, cart lines with their display
+  `details`/`isCustomizable`, and both signed quote tokens — to
+  `/checkout/prepare` (`src/app/checkout/prepare/route.ts`, the same
+  POST-only-route-handler-outside-`/api` shape as the other checkout proxies),
+  which forwards to Medusa's `POST /store/checkout/prepare-cart` (see
+  `apps/medusa/AGENTS.md`'s own Payments section for that side). On success it
+  writes `cartId` and `paymentClientSecret` onto the draft.
+- **`PaymentFields` (`src/components/checkout/payment-fields.tsx`) only
+  mounts once `paymentSession.status === "ready"`.** It wraps Stripe's
+  `Elements`/`PaymentElement` around the client secret and bridges
+  `CheckoutView`'s form submit to `stripe.confirmPayment` via a ref
+  (`PaymentSubmitHandle`) rather than `forwardRef` — `useStripe`/`useElements`
+  only work inside an `Elements` descendant, while the single visible submit
+  button and its field validation live in `CheckoutView`, so `CheckoutView`
+  holds the ref and calls `confirmPayment()` from its own `handleSubmit` once
+  the non-payment fields validate. `forwardRef` was tried first and rejected
+  by `tsc`: its `ForwardRefExoticComponent` return type collides with this
+  workspace's dual `@types/react` resolution (18 for the Medusa admin, 19
+  here — the same trap the HeroUI section above documents) in a way a plain
+  function component isn't exposed to. React 19 accepts `ref` as an ordinary
+  prop on function components, which sidesteps it entirely.
+- **The submit button reads `Pay $X`**, computed from `checkoutTotals`, and
+  is a real `<button type="submit">` — the "Continue"/never-says-Pay stance
+  CNP-50–52 held is exactly what CNP-53 supersedes. `handleSubmit` validates
+  the non-payment fields first (unchanged from before), then — only once
+  `paymentSession.status === "ready"` — calls `confirmPayment()`, POSTs
+  `/checkout/complete` (proxying Medusa's own idempotent-on-`cartId`
+  `POST /store/checkout/complete`), clears the cart and draft, and redirects
+  to `/checkout/confirmation`. A decline surfaces Stripe's own `error.message`
+  verbatim, leaves the cart and draft untouched, and leaves the button
+  usable again for a retry (AC8). A `submittingRef` guards the client side of
+  AC10: it blocks a second `confirmPayment`/`complete` pair from firing
+  while the first is still in flight, since the `submitting` *state* update
+  isn't visible until the next render and a same-tick double click would
+  race past a state-only check.
+- **`/checkout/confirmation` (`src/app/checkout/confirmation/page.tsx`) is a
+  minimal receipt** — order number and a confirmation reference read from
+  query params, no Medusa order fetch. A fuller confirmation/account-orders
+  view is a later story.
 - **Unchecking "Billing address is the same as delivery" unfurls a real
   billing-address block**, not an inert checkbox — `AddressFields` holds a
   shared internal `AddressBlock` used for both, and `CheckoutDraft` carries
@@ -554,9 +605,8 @@ until the stories that supersede them:
   ones. Billing fields validate (with their own messages) only when the
   checkbox is unchecked; `autoComplete` tokens are scoped with the HTML
   spec's `shipping`/`billing` prefix so browser autofill can tell the two
-  address blocks apart. The billing address is not yet sent anywhere — no
-  payment session exists to send it to — so it currently only round-trips
-  through the same `localStorage` draft the delivery address does.
+  address blocks apart. The billing address now round-trips through
+  `use-payment-session.ts`'s prepare call too, alongside the delivery one.
 - **A signed-in customer's default saved address is preselected on load**
   (CNP-50 AC — moved here from CNP-61, which only owns add/edit/delete).
   `CheckoutView` commits it with a `useEffect` that calls
@@ -570,12 +620,11 @@ until the stories that supersede them:
   `""` — reusing `""` there would make the effect indistinguishable from
   "untouched" and re-preselect the default the instant the shopper picked
   "new," undoing their choice.
-- The submit button reads **"Continue"**, is a real, enabled
-  `<button type="submit">`, and never says "Pay $x" — it takes no money.
-  It stays enabled deliberately: it is the only event AC4's inline
-  validation can hang off (a shopper who never focuses an empty field would
-  otherwise never see its message), and the only thing that can reach
-  `/checkout/addresses`. A permanently disabled CTA was considered and
+- The submit button (now "Pay $X" — see the Payment bullet above) stays a
+  real, enabled `<button type="submit">` deliberately: it is the only event
+  AC4's inline validation can hang off (a shopper who never focuses an empty
+  field would otherwise never see its message), and the only thing that can
+  reach `/checkout/addresses`. A permanently disabled CTA was considered and
   rejected for exactly this reason. `validateCheckoutDraft` also requires
   `shippingRateId`, with the message "Choose a delivery option." — while
   rates are still loading there is no field to attach that message to, so
@@ -666,5 +715,5 @@ fail to run.
   `require` (dedent, via tailwind-variants) resolves to an `.mjs` that Jest
   classifies as native ESM and then cannot load.
 
-The storefront currently holds **754** of the repo's 968 tests. A smaller number
+The storefront currently holds **766** of the repo's 1024 tests. A smaller number
 after your change means something was dropped.
