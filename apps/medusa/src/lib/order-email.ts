@@ -51,16 +51,16 @@ const BRAND_FONT_LINK =
 function brandHeaderHtml(dateLabel: string): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
-<td align="left" valign="middle" width="104" style="width:104px;">
-<img src="${storefrontUrl()}/logo.png" width="104" height="93" alt="${SITE_NAME}" style="display:block; border:0;">
+<td align="left" valign="middle" width="72" style="width:72px;">
+<img src="${storefrontUrl()}/logo.png" width="72" height="64" alt="" style="display:block; border:0;">
 </td>
-<td align="right" valign="middle" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:18px; color:#5a6377;">
+<td align="left" valign="middle" style="padding-left:14px;">
+<span style="font-family:${BRAND_FONT}; font-size:30px; line-height:32px; color:#04133b;">${SITE_NAME}</span>
+<br>
+<span style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:0.5px; color:#5a6377;">${SITE_TAGLINE}</span>
+</td>
+<td align="right" valign="top" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:18px; color:#5a6377; white-space:nowrap;">
 ${dateLabel}
-</td>
-</tr>
-<tr>
-<td colspan="2" style="padding-top:12px; font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:15px; letter-spacing:0.5px; color:#5a6377;">
-${SITE_TAGLINE}
 </td>
 </tr>
 </table>`;
