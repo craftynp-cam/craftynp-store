@@ -12,6 +12,20 @@ touch the sandbox, so this run is the only thing that proves the real API path
 works. It costs about one label — roughly $5. **Nothing before step 6 spends
 money.**
 
+> **This run cannot be done on the sandbox.** A sandbox label is a sample
+> label: it is never handed to a carrier and never scanned, and
+> `GET /v2/labels/{id}/track` reports `status_code: "UN"` — "No tracking
+> information available" — forever. No `track` webhook is ever emitted for one,
+> so AC 13b is unreachable there. It also cannot settle AC 4's _actual_ cost
+> the way production does, because sandbox labels report `shipment_cost` of
+> $0.00 when `test_label` is true. Use a production API key with a funded
+> balance, and check `Settings > Payment & Subscription` in the ShipStation
+> dashboard reads `Environment: Production` before starting.
+>
+> A sandbox account is still worth a dry run for everything up to step 16 —
+> see [Sandbox dry run, 1 Aug 2026](#sandbox-dry-run-1-aug-2026) below for what
+> that did and did not establish.
+
 Record the results at the bottom of this file when you run it.
 
 ## Setup
@@ -127,9 +141,61 @@ Record the results at the bottom of this file when you run it.
 
 Set `SHIPSTATION_TEST_LABELS` back to `true`.
 
+## Sandbox dry run, 1 Aug 2026
+
+Everything below was exercised against the **sandbox** while building CNP-76.
+It is recorded here so the production run knows what is already load-bearing
+and what genuinely remains.
+
+**Verified against the real ShipStation API:**
+
+| Step                             | Result                                                                                                                                                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Queue, derived parcel (AC 1)     | Orders listed with weight in grams and parcel in cm                                                                                                                                                                                   |
+| Live rates (AC 2)                | 27 options. UPS Ground $24.43 **including $11.58 of surcharges** against USPS $4.39 with none — the carrier-mix cost difference the story exists to surface                                                                           |
+| Parcel override (AC 3)           | 400 g quotes Media Mail $4.39; 5000 g drops Media Mail and First Class entirely on weight limits and the cheapest becomes $6.15. Editing a field clears the quote; "Reset to calculated" restores it                                  |
+| Label purchase (AC 4)            | `shipment_cost` recorded as a real `6.16`, with carrier id and service code                                                                                                                                                           |
+| Label geometry (AC 5)            | The stored PDF measures exactly 288 x 432 pt = 4.00 x 6.00 in                                                                                                                                                                         |
+| Batch print (AC 6)               | Two labels merged into one PDF. A third order without a label returned 200 with the others plus `X-Labels-Unavailable` naming it                                                                                                      |
+| Void (AC 7)                      | Carrier refusal recorded verbatim, order returned to `packing`, tracking hidden                                                                                                                                                       |
+| No half-writes (AC 8)            | Proven by a genuine failure: purchase succeeded, a later step failed, the compensating void was refused, **nothing was written locally**, the order stayed shippable, and a `system` history entry named the orphaned tracking number |
+| Shipped without a webhook (AC 9) | Order reached `shipped` with tracking before any webhook existed                                                                                                                                                                      |
+| Balance (AC 10)                  | Rendered in the workspace header                                                                                                                                                                                                      |
+| Own storage (AC 11)              | 66 KiB PDF in the private bucket; the admin route 401s when signed out and `/static` exposes nothing                                                                                                                                  |
+
+**The webhook receiver was proven with a locally signed delivery.** A keypair
+was served from a local JWKS, `SHIPSTATION_JWKS_URL` pointed at it, and a
+payload signed exactly as ShipStation documents — `timestamp` + `.` + raw body,
+RSA-SHA256, base64 — was POSTed over a public tunnel to the real route:
+
+| Case                     | Result                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Signed `IT`              | 200, tracking status `in_transit`                                                                                 |
+| Signed `DE`              | 200, order `delivered`, Medusa's fulfillment stamped `delivered_at`, `webhook` actor in history                   |
+| **Raw body fidelity**    | Verified across a real Express request, `preserveRawBody` and a tunnel — the likeliest failure mode, and it holds |
+| Tampered body            | 401 `bad_signature`                                                                                               |
+| Timestamp 10 minutes old | 401 `stale_timestamp`                                                                                             |
+| Replayed `DE`            | 200 with **no duplicate transition**                                                                              |
+
+The signing format, `kid`, header names and payload shape were each checked
+against ShipStation's own documentation and their live JWKS at
+`https://api.shipengine.com/jwks`, whose key set contains an EC key alongside
+the RSA one — the parser selects by `kid` and ignores the rest.
+
+**What the sandbox could not establish, and the production run must:**
+
+1. That ShipStation's own signature bytes match their documentation. Ours match
+   the documented format, but only a genuine delivery proves theirs do. A
+   mismatch shows up as `[shipstation:track] rejected reason=bad_signature`.
+2. That a physical parcel produces carrier scans that reach `delivered`.
+3. `shipment_cost` from a genuinely funded purchase.
+4. A real carrier void refusal. The sandbox refuses every void with
+   "Label could not be found ... or if you are attempting to refund a sample
+   label", which is an artefact, not a carrier decision.
+
 ## Results
 
-Fill this in when the run is done.
+Fill this in when the production run is done.
 
 | Item                              | Value              |
 | --------------------------------- | ------------------ |
