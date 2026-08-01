@@ -8,10 +8,17 @@ const validOptions = {
   uspsCarrierId: "se-123",
   rateLimitPerMinute: 200,
   timeoutMs: 5000,
+  labelTimeoutMs: 30000,
   maxRetries: 2,
   weightUnit: "gram",
   dimensionUnit: "centimeter",
   cacheTtlSeconds: 900,
+  testLabels: true,
+  fromName: "The Crafty NP",
+  fromPhone: "5125550123",
+  fromAddress1: "1 Maker Way",
+  fromCity: "Austin",
+  fromState: "TX",
   fromCountryCode: "US",
   fromPostalCode: "78756",
 };
@@ -163,5 +170,232 @@ describe("ShipStationModuleService", () => {
       service.getUspsRates({ destination, parcel }),
     ).rejects.toBeInstanceOf(ShipStationRateError);
     expect(cache.set).not.toHaveBeenCalled();
+  });
+});
+
+const labelDestination = {
+  name: "Ada Lovelace",
+  phone: "4085550147",
+  addressLine1: "500 Almaden Blvd",
+  cityLocality: "San Jose",
+  stateProvince: "CA",
+  postalCode: "95128",
+  countryCode: "US",
+  isResidential: true,
+};
+
+const labelResponse = {
+  label_id: "se-1",
+  status: "completed",
+  tracking_number: "9400100000000000000000",
+  carrier_code: "usps",
+  carrier_id: "se-123",
+  service_code: "usps_ground_advantage",
+  shipment_cost: { currency: "usd", amount: 8.47 },
+  insurance_cost: { currency: "usd", amount: 0 },
+  label_download: { pdf: "https://api.shipstation.example/labels/se-1.pdf" },
+};
+
+function timeoutError() {
+  const error = new Error("aborted");
+  error.name = "TimeoutError";
+  return error;
+}
+
+function buyInput() {
+  return {
+    destination: labelDestination,
+    parcel,
+    carrierId: "se-123",
+    serviceCode: "usps_ground_advantage",
+    externalShipmentId: "order_01",
+  };
+}
+
+describe("ShipStationModuleService.purchaseLabel", () => {
+  beforeEach(() => {
+    __resetForTests();
+    jest.restoreAllMocks();
+  });
+
+  it("never retries a timeout, because a retry could buy a second label", async () => {
+    const fetchSpy = jest
+      .spyOn(global, "fetch")
+      .mockRejectedValue(timeoutError());
+
+    const { service } = makeService();
+
+    await expect(service.purchaseLabel(buyInput())).rejects.toMatchObject({
+      reason: "timeout_unconfirmed",
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does retry a 429, which is refused before any label is made", async () => {
+    const fetchSpy = jest
+      .spyOn(global, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({}, { status: 429, headers: { "retry-after": "0" } }),
+      )
+      .mockResolvedValueOnce(jsonResponse(labelResponse));
+
+    const { service } = makeService();
+    const label = await service.purchaseLabel(buyInput());
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(label.trackingNumber).toBe("9400100000000000000000");
+    expect(label.shipmentCost).toBe(8.47);
+  });
+
+  it("reports a low balance as its own reason so the operator knows to top up", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValueOnce(
+      jsonResponse(
+        {
+          errors: [
+            { error_code: "insufficient_funds", message: "Not enough funds" },
+          ],
+        },
+        { status: 400 },
+      ),
+    );
+
+    const { service } = makeService();
+    await expect(service.purchaseLabel(buyInput())).rejects.toMatchObject({
+      reason: "insufficient_funds",
+      carrierMessage: "Not enough funds",
+    });
+  });
+
+  it("treats any other 4xx as a rejection and keeps the carrier's words", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            errors: [
+              { error_code: "invalid_address", message: "Bad postcode" },
+            ],
+          },
+          { status: 400 },
+        ),
+      );
+
+    const { service } = makeService();
+    await expect(service.purchaseLabel(buyInput())).rejects.toMatchObject({
+      reason: "rejected",
+      carrierMessage: "Bad postcode",
+    });
+  });
+
+  it("refuses a response it cannot read rather than inventing a label", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ label_id: "se-1" }));
+
+    const { service } = makeService();
+    await expect(service.purchaseLabel(buyInput())).rejects.toMatchObject({
+      reason: "http_error",
+    });
+  });
+});
+
+describe("ShipStationModuleService.getShipmentRates", () => {
+  beforeEach(() => {
+    __resetForTests();
+    jest.restoreAllMocks();
+  });
+
+  it("never caches, because the operator is choosing what to spend", async () => {
+    const cache = createMemoryCache();
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(
+      jsonResponse({
+        rate_response: {
+          rates: [
+            {
+              rate_id: "r1",
+              carrier_id: "se-123",
+              carrier_code: "usps",
+              service_code: "usps_ground_advantage",
+              shipping_amount: { currency: "usd", amount: 7.42 },
+            },
+          ],
+        },
+      }),
+    );
+
+    const { service } = makeService(cache);
+    await service.getShipmentRates({ destination: labelDestination, parcel });
+    await service.getShipmentRates({ destination: labelDestination, parcel });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+});
+
+describe("ShipStationModuleService.voidLabel", () => {
+  beforeEach(() => {
+    __resetForTests();
+    jest.restoreAllMocks();
+  });
+
+  it("returns a refused void rather than throwing, so we can show the reason", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({ approved: false, message: "Label already scanned" }),
+      );
+
+    const { service } = makeService();
+
+    await expect(service.voidLabel("se-1")).resolves.toEqual({
+      approved: false,
+      message: "Label already scanned",
+    });
+  });
+
+  it("throws when the call itself fails, so we never stamp a void we did not confirm", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue(jsonResponse({}, { status: 500 }));
+
+    const { service } = makeService();
+    await expect(service.voidLabel("se-1")).rejects.toMatchObject({
+      reason: "http_error",
+    });
+  });
+});
+
+describe("ShipStationModuleService.getCarrierBalances", () => {
+  beforeEach(() => {
+    __resetForTests();
+    jest.restoreAllMocks();
+  });
+
+  it("degrades to an empty list and logs rather than blocking the workspace", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue(jsonResponse({}, { status: 500 }));
+
+    const { service, logger } = makeService();
+
+    await expect(service.getCarrierBalances()).resolves.toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("[shipstation:balance]"),
+    );
+  });
+
+  it("caches so a busy queue page does not burn the rate limit", async () => {
+    const cache = createMemoryCache();
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(
+      jsonResponse({
+        carriers: [{ friendly_name: "USPS", balance: 42.5, currency: "usd" }],
+      }),
+    );
+
+    const { service } = makeService(cache);
+    await service.getCarrierBalances();
+    await service.getCarrierBalances();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

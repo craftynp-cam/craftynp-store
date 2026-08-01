@@ -2,8 +2,15 @@ import { MedusaError } from "@medusajs/framework/utils";
 
 import {
   applyRetryAfter,
+  buildAddressPayload,
   buildEstimateRequest,
+  buildLabelRequest,
+  buildRatesRequest,
+  extractCarrierBalances,
   extractRates,
+  extractVoidResult,
+  matchReconciledLabel,
+  normalizeLiveRates,
   normalizeUspsRates,
   packItemsIntoOneBox,
   parseRetryAfterMs,
@@ -20,10 +27,16 @@ const validOptions = {
   uspsCarrierId: "se-123",
   rateLimitPerMinute: 200,
   timeoutMs: 5000,
+  labelTimeoutMs: 30000,
   maxRetries: 2,
   weightUnit: "gram",
   dimensionUnit: "centimeter",
   cacheTtlSeconds: 900,
+  fromName: "The Crafty NP",
+  fromPhone: "5125550123",
+  fromAddress1: "1 Maker Way",
+  fromCity: "Austin",
+  fromState: "TX",
   fromCountryCode: "US",
   fromPostalCode: "78756",
 };
@@ -406,5 +419,285 @@ describe("token bucket reducers", () => {
     const next = applyRetryAfter(state, 1000, 5000);
     expect(next.tokens).toBe(0);
     expect(next.blockedUntilMs).toBe(6000);
+  });
+});
+
+const shipFrom = {
+  name: "The Crafty NP",
+  phone: "5125550123",
+  addressLine1: "1 Maker Way",
+  cityLocality: "Austin",
+  stateProvince: "TX",
+  postalCode: "78756",
+  countryCode: "US",
+  isResidential: false,
+};
+
+const shipTo = {
+  name: "Ada Lovelace",
+  phone: "4085550147",
+  addressLine1: "500 Almaden Blvd",
+  addressLine2: "Apt 4",
+  cityLocality: "San Jose",
+  stateProvince: "CA",
+  postalCode: "95128",
+  countryCode: "us",
+  isResidential: true,
+};
+
+const labelParcel = { weight: 640, length: 30, width: 20, height: 12 };
+
+function shipmentOf(body: Record<string, unknown>): Record<string, unknown> {
+  return body.shipment as Record<string, unknown>;
+}
+
+describe("buildAddressPayload", () => {
+  it("upper-cases the country and maps the residential indicator", () => {
+    const payload = buildAddressPayload(shipTo);
+    expect(payload.country_code).toBe("US");
+    expect(payload.address_residential_indicator).toBe("yes");
+  });
+
+  it("says unknown when residential is not stated", () => {
+    const payload = buildAddressPayload({
+      ...shipTo,
+      isResidential: undefined,
+    });
+    expect(payload.address_residential_indicator).toBe("unknown");
+  });
+
+  it("omits the optional lines rather than sending empty ones", () => {
+    const payload = buildAddressPayload(shipFrom);
+    expect(payload).not.toHaveProperty("address_line2");
+    expect(payload).not.toHaveProperty("company_name");
+  });
+});
+
+describe("buildRatesRequest", () => {
+  const request = buildRatesRequest({
+    shipFrom,
+    shipTo,
+    parcel: labelParcel,
+    carrierIds: [],
+    weightUnit: "gram",
+    dimensionUnit: "centimeter",
+    shipDate: new Date("2026-08-01T00:00:00.000Z"),
+  });
+
+  it("sends a ship_from carrying the name and phone the full rate call requires", () => {
+    const from = shipmentOf(request).ship_from as Record<string, unknown>;
+    expect(from.name).toBe("The Crafty NP");
+    expect(from.phone).toBe("5125550123");
+  });
+
+  it("omits carrier_ids so every connected carrier is quoted", () => {
+    expect(request).not.toHaveProperty("rate_options");
+  });
+
+  it("restricts to the named carriers when some are given", () => {
+    const restricted = buildRatesRequest({
+      shipFrom,
+      shipTo,
+      parcel: labelParcel,
+      carrierIds: ["se-123"],
+      weightUnit: "gram",
+      dimensionUnit: "centimeter",
+      shipDate: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    expect(restricted.rate_options).toEqual({ carrier_ids: ["se-123"] });
+  });
+});
+
+describe("buildLabelRequest", () => {
+  const request = buildLabelRequest({
+    shipFrom,
+    shipTo,
+    parcel: labelParcel,
+    carrierId: "se-123",
+    serviceCode: "usps_ground_advantage",
+    externalShipmentId: "order_01",
+    weightUnit: "gram",
+    dimensionUnit: "centimeter",
+    shipDate: new Date("2026-08-01T00:00:00.000Z"),
+    testLabel: true,
+  });
+
+  it("asks for a 4x6 pdf, which is what the print flow depends on", () => {
+    expect(request.label_format).toBe("pdf");
+    expect(request.label_layout).toBe("4x6");
+    expect(request.label_download_type).toBe("url");
+  });
+
+  it("passes the test flag through so development cannot spend money", () => {
+    expect(request.test_label).toBe(true);
+  });
+
+  it("sends the parcel in grams and centimetres", () => {
+    const pkg = (shipmentOf(request).packages as Record<string, unknown>[])[0];
+    expect(pkg?.weight).toEqual({ value: 640, unit: "gram" });
+    expect(pkg?.dimensions).toEqual({
+      unit: "centimeter",
+      length: 30,
+      width: 20,
+      height: 12,
+    });
+  });
+
+  it("anchors the shipment to our order id for later reconciliation", () => {
+    expect(shipmentOf(request).external_shipment_id).toBe("order_01");
+  });
+});
+
+describe("normalizeLiveRates", () => {
+  const base = {
+    rate_id: "r1",
+    carrier_id: "se-123",
+    carrier_code: "usps",
+    carrier_friendly_name: "USPS",
+    service_code: "usps_ground_advantage",
+    service_type: "USPS Ground Advantage",
+    shipping_amount: { currency: "usd", amount: 7.42 },
+    delivery_days: 4,
+    estimated_delivery_date: null,
+  };
+
+  it("adds surcharges to the shipping amount so the operator sees the true cost", () => {
+    const [rate] = normalizeLiveRates([
+      {
+        ...base,
+        insurance_amount: { currency: "usd", amount: 0.5 },
+        confirmation_amount: { currency: "usd", amount: 0.35 },
+        other_amount: { currency: "usd", amount: 6.5 },
+      },
+    ]);
+
+    expect(rate?.shippingAmount).toBe(7.42);
+    expect(rate?.surcharges).toBe(7.35);
+    expect(rate?.amount).toBe(14.77);
+  });
+
+  it("treats missing surcharge blocks as zero rather than dropping the rate", () => {
+    const [rate] = normalizeLiveRates([base]);
+    expect(rate?.amount).toBe(7.42);
+    expect(rate?.surcharges).toBe(0);
+  });
+
+  it("sorts by true cost, not by the shipping amount alone", () => {
+    const rates = normalizeLiveRates([
+      {
+        ...base,
+        rate_id: "expensive",
+        other_amount: { currency: "usd", amount: 6.5 },
+      },
+      {
+        ...base,
+        rate_id: "cheap",
+        service_code: "usps_priority",
+        shipping_amount: { currency: "usd", amount: 9.0 },
+      },
+    ]);
+
+    expect(rates.map((rate) => rate.rateId)).toEqual(["cheap", "expensive"]);
+  });
+
+  it("filters to one carrier when asked", () => {
+    const rates = normalizeLiveRates(
+      [base, { ...base, rate_id: "r2", carrier_id: "se-999" }],
+      { carrierId: "se-123" },
+    );
+    expect(rates).toHaveLength(1);
+  });
+
+  it("drops a rate with no usable shipping amount", () => {
+    expect(normalizeLiveRates([{ ...base, shipping_amount: null }])).toEqual(
+      [],
+    );
+  });
+});
+
+describe("extractVoidResult", () => {
+  it("reports a refused void as an answer, not a failure", () => {
+    expect(
+      extractVoidResult({ approved: false, message: "Label already scanned" }),
+    ).toEqual({ approved: false, message: "Label already scanned" });
+  });
+
+  it("falls back to plain words when the carrier sent no message", () => {
+    const result = extractVoidResult({ approved: true });
+    expect(result.approved).toBe(true);
+    expect(result.message).toBe("The carrier gave no reason.");
+  });
+
+  it("treats an unreadable body as unapproved", () => {
+    expect(extractVoidResult(null).approved).toBe(false);
+  });
+});
+
+describe("extractCarrierBalances", () => {
+  it("keeps only carriers that reported a numeric balance", () => {
+    const balances = extractCarrierBalances({
+      carriers: [
+        { friendly_name: "USPS", balance: 42.5, currency: "usd" },
+        { friendly_name: "UPS", balance: null },
+      ],
+    });
+
+    expect(balances).toEqual([
+      { carrierName: "USPS", balance: 42.5, currencyCode: "usd" },
+    ]);
+  });
+
+  it("returns nothing for an unreadable body", () => {
+    expect(extractCarrierBalances({ nope: true })).toEqual([]);
+  });
+});
+
+describe("matchReconciledLabel", () => {
+  const criteria = {
+    externalShipmentId: "order_01",
+    shipToName: "Ada Lovelace",
+    shipToPostalCode: "95128",
+    serviceCode: "usps_ground_advantage",
+    sinceMs: Date.parse("2026-08-01T12:00:00.000Z"),
+  };
+
+  const candidate = {
+    label_id: "se-1",
+    tracking_number: "9400100000000000000000",
+    service_code: "usps_ground_advantage",
+    created_at: "2026-08-01T12:00:30.000Z",
+    shipment_cost: { currency: "usd", amount: 7.42 },
+    ship_to: { name: "ada  LOVELACE", postal_code: "95128" },
+  };
+
+  it("matches on name and postal code within the window", () => {
+    expect(matchReconciledLabel([candidate], criteria)?.labelId).toBe("se-1");
+  });
+
+  it("matches on our own shipment id without needing the address", () => {
+    const byId = {
+      ...candidate,
+      external_shipment_id: "order_01",
+      ship_to: { name: "Someone Else", postal_code: "00000" },
+    };
+    expect(matchReconciledLabel([byId], criteria)?.labelId).toBe("se-1");
+  });
+
+  it("does not match the same service at a different postal code", () => {
+    const elsewhere = {
+      ...candidate,
+      ship_to: { name: "Ada Lovelace", postal_code: "78756" },
+    };
+    expect(matchReconciledLabel([elsewhere], criteria)).toBeNull();
+  });
+
+  it("does not match a label created before the window", () => {
+    const earlier = { ...candidate, created_at: "2026-08-01T11:00:00.000Z" };
+    expect(matchReconciledLabel([earlier], criteria)).toBeNull();
+  });
+
+  it("does not match a different service", () => {
+    const other = { ...candidate, service_code: "usps_priority_mail" };
+    expect(matchReconciledLabel([other], criteria)).toBeNull();
   });
 });
