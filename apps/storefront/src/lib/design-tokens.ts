@@ -387,6 +387,40 @@ export const typeScale: readonly TypeStep[] = [
     lineHeight: "1.05",
     usage: "Display, marketing.",
   },
+  {
+    utility: "text-6xl",
+    size: "4.5rem",
+    lineHeight: "1",
+    usage: "Widescreen hero display.",
+  },
+];
+
+export type FontToken = {
+  token: string;
+  loader: string;
+  variable: string;
+  usage: string;
+};
+
+export const fontTokens: readonly FontToken[] = [
+  {
+    token: "display",
+    loader: "Libre_Baskerville",
+    variable: "--font-libre-baskerville",
+    usage: "Display copy and headings.",
+  },
+  {
+    token: "sans",
+    loader: "Source_Sans_3",
+    variable: "--font-source-sans-3",
+    usage: "Body and interface.",
+  },
+  {
+    token: "brand",
+    loader: "Cookie",
+    variable: "--font-cookie",
+    usage: "The wordmark only.",
+  },
 ];
 
 export type ScaleStep = { utility: string; value: string };
@@ -401,6 +435,29 @@ export const spacingScale: readonly ScaleStep[] = [
   { utility: "12", value: "3rem" },
   { utility: "16", value: "4rem" },
   { utility: "24", value: "6rem" },
+];
+
+export type WidthStep = ScaleStep & { breakpoint: string; usage: string };
+
+export const widthScale: readonly WidthStep[] = [
+  {
+    utility: "max-w-page",
+    value: "80rem",
+    breakpoint: "base",
+    usage: "Every page and the chrome, up to 1279px.",
+  },
+  {
+    utility: "max-w-page-xl",
+    value: "96rem",
+    breakpoint: "xl",
+    usage: "From 1280px.",
+  },
+  {
+    utility: "max-w-page-2xl",
+    value: "110rem",
+    breakpoint: "2xl",
+    usage: "From 1536px. The deliberate cap — wider degrades line length.",
+  },
 ];
 
 export const radiusScale: readonly ScaleStep[] = [

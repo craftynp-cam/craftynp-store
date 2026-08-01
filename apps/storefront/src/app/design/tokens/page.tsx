@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components";
 import { gradeContrast } from "@/lib/contrast";
 import {
   brandColors,
+  fontTokens,
   modes,
   pairingsFor,
   palette,
@@ -15,8 +16,10 @@ import {
   surfaceTokens,
   tokenHex,
   typeScale,
+  widthScale,
   type Mode,
 } from "@/lib/design-tokens";
+import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Design tokens — The Crafty NP",
@@ -295,14 +298,30 @@ export default function DesignTokensPage() {
 
       <Section
         title="Typography"
-        description="Libre Baskerville sets display copy; Source Sans 3 sets everything else. Both load with font-display: swap."
+        description="Libre Baskerville sets display copy, Source Sans 3 sets everything else, and Cookie sets the wordmark and nothing else. All three load with font-display: swap."
       >
         <div className="rounded-lg border border-border bg-surface p-6">
           <p className="font-display text-2xl">
             Libre Baskerville — display and headings
           </p>
           <p className="mt-2 text-lg">Source Sans 3 — body and interface</p>
+          <div className="mt-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 font-brand leading-none">
+            <span style={{ fontSize: "20px" }}>{SITE_NAME}</span>
+            <span style={{ fontSize: "24px" }}>{SITE_NAME}</span>
+          </div>
+          <p className="mt-2 text-sm text-foreground-muted">
+            Cookie — the wordmark at 20px and 24px, its two real sizes.
+          </p>
         </div>
+
+        <ul className="mt-6 space-y-2">
+          {fontTokens.map((font) => (
+            <li key={font.token} className="font-mono text-sm">
+              <span className="text-foreground-muted">font-{font.token}</span> ·{" "}
+              {font.variable} · {font.usage}
+            </li>
+          ))}
+        </ul>
 
         <ul className="mt-6 space-y-6">
           {typeScale.map((step) => (
@@ -336,6 +355,25 @@ export default function DesignTokensPage() {
               </span>
               <span
                 className="h-4 rounded-xs bg-accent"
+                style={{ width: step.value }}
+              />
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section
+        title="Page width"
+        description="One ladder for every page and the chrome alike, so the navbar, the hero and the grids all share a left edge. Container applies it; nothing sets a page width by hand."
+      >
+        <ul className="space-y-3">
+          {widthScale.map((step) => (
+            <li key={step.utility}>
+              <p className="font-mono text-sm text-foreground-muted">
+                {step.utility} · {step.value} · {step.breakpoint} · {step.usage}
+              </p>
+              <span
+                className="mt-2 block h-4 max-w-full rounded-xs bg-success"
                 style={{ width: step.value }}
               />
             </li>

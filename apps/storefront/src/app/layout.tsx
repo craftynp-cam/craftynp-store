@@ -1,9 +1,10 @@
 import { Footer, Navbar } from "@/components";
 import { fetchNavCategories } from "@/lib/categories";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
 import { fetchSiteContent } from "@/lib/site-content";
 import { themeInitScript } from "@/lib/theme";
 import type { Metadata } from "next";
-import { Libre_Baskerville, Source_Sans_3 } from "next/font/google";
+import { Cookie, Libre_Baskerville, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
 const libreBaskerville = Libre_Baskerville({
@@ -20,9 +21,23 @@ const sourceSans3 = Source_Sans_3({
   display: "swap",
 });
 
+const cookie = Cookie({
+  variable: "--font-cookie",
+  subsets: ["latin"],
+  weight: ["400"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "The Crafty NP",
-  description: "Handmade and personalised gifts by The Crafty NP.",
+  title: { default: SITE_NAME, template: `%s — ${SITE_NAME}` },
+  description: SITE_TAGLINE,
+  applicationName: SITE_NAME,
+  openGraph: {
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_TAGLINE,
+    type: "website",
+  },
 };
 
 export default async function RootLayout({
@@ -43,7 +58,7 @@ export default async function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${libreBaskerville.variable} ${sourceSans3.variable} h-full antialiased`}
+      className={`${libreBaskerville.variable} ${sourceSans3.variable} ${cookie.variable} h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
