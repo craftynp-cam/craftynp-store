@@ -1,10 +1,7 @@
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
-import type {
-  IFileModuleService,
-  Logger,
-  MedusaContainer,
-} from "@medusajs/framework/types";
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import type { Logger, MedusaContainer } from "@medusajs/framework/types";
 
+import { getLabel } from "./label-storage";
 import { ORDER_STATUS_MODULE } from "../modules/order-status";
 import type OrderStatusModuleService from "../modules/order-status/service";
 import { SHIPSTATION_MODULE } from "../modules/shipstation";
@@ -36,8 +33,7 @@ export async function loadLabelBytes(
       }
 
       if (shipment.label_file_id) {
-        const fileService = scope.resolve<IFileModuleService>(Modules.FILE);
-        buffers.push(await fileService.getAsBuffer(shipment.label_file_id));
+        buffers.push(await getLabel(shipment.label_file_id));
         continue;
       }
 

@@ -9,10 +9,14 @@ import { LABEL_PAGE_PT } from "../../../../../lib/merge-label-pdfs";
 import { LABELS_UNAVAILABLE_HEADER, POST } from "./route";
 
 const activeShipment = jest.fn();
-const getAsBuffer = jest.fn();
+const getLabel = jest.fn();
 
 jest.mock("../../../../../modules/order-status", () => ({
   ORDER_STATUS_MODULE: "orderStatus",
+}));
+
+jest.mock("../../../../../lib/label-storage", () => ({
+  getLabel: (key: string) => getLabel(key) as unknown,
 }));
 
 async function labelPdf(): Promise<Buffer> {
@@ -30,7 +34,6 @@ function makeRequest(orderIds: string[]) {
     scope: {
       resolve: (key: string) => {
         if (key === "orderStatus") return { activeShipment };
-        if (key === "file") return { getAsBuffer };
         return logger;
       },
     },
@@ -57,7 +60,7 @@ describe("POST /admin/fulfilment/labels/print", () => {
   it("merges the selected orders into one print job", async () => {
     const pdf = await labelPdf();
     activeShipment.mockResolvedValue({ label_file_id: "file_1" });
-    getAsBuffer.mockResolvedValue(pdf);
+    getLabel.mockResolvedValue(pdf);
 
     const { req, res, send } = makeRequest(["order_1", "order_2"]);
     await POST(req, res);
@@ -71,7 +74,7 @@ describe("POST /admin/fulfilment/labels/print", () => {
     activeShipment.mockImplementation(async (orderId: string) =>
       orderId === "order_2" ? null : { label_file_id: "file_1" },
     );
-    getAsBuffer.mockResolvedValue(pdf);
+    getLabel.mockResolvedValue(pdf);
 
     const { req, res, send, setHeader } = makeRequest([
       "order_1",
