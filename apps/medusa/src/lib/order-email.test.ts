@@ -35,7 +35,7 @@ const ORDER: OrderConfirmation = {
     firstName: "Cameron",
     lastName: "Test",
     phone: null,
-    address1: "9057 Gordimer Circle",
+    address1: "123 Maple Street",
     address2: "",
     city: "Indianapolis",
     state: "IN",
