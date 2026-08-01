@@ -4,6 +4,9 @@ import {
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk";
 
+import { createReservationsWorkflow } from "@medusajs/medusa/core-flows";
+
+import { restoreReservationsStep } from "./steps/restore-reservations";
 import { transitionOrderStatusStep } from "./steps/transition-order-status";
 import { voidShipStationLabelStep } from "./steps/void-shipstation-label";
 import { voidShipmentTrackingStep } from "./steps/void-shipment-tracking";
@@ -28,6 +31,16 @@ const voidShipmentWorkflow = createWorkflow(
         message: voidResult.message,
       })),
     );
+
+    const reservations = restoreReservationsStep(
+      transform({ input }, ({ input }) => ({ orderId: input.orderId })),
+    );
+
+    createReservationsWorkflow.runAsStep({
+      input: transform({ reservations }, ({ reservations }) => ({
+        reservations,
+      })),
+    });
 
     transitionOrderStatusStep(
       transform({ input, voidResult }, ({ input, voidResult }) => ({

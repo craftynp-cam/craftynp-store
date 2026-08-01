@@ -143,6 +143,15 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
   exists — is safe to retry. An unconfirmed timeout is reconciled by reading
   `GET /v2/labels` and matching on our own `external_shipment_id`, then on
   ship-to name plus postal code plus service within the window.
+- **Voiding restores the inventory reservations.** The first fulfillment
+  consumes them, and the Medusa fulfillment survives a void because a shipped
+  one cannot be cancelled — so without this, `createOrderFulfillmentWorkflow`
+  fails the next time with "No stock reservation found" and an order that came
+  back to `packing` can never be shipped again. `restoreReservationsStep`
+  rebuilds them from the order's managed variants at the existing
+  fulfillment's location, skipping any line item that still has one so a retry
+  cannot double-reserve. A reservation must carry `line_item_id` or the
+  fulfillment workflow will not find it.
 - **Voiding calls ShipStation before writing anything, and a refusal is an
   answer.** Both a 200 carrying `approved: false` and a **4xx** are the carrier
   saying no — they record `void_approved: false` plus its message, stamp
