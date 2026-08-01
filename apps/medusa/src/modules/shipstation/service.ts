@@ -14,7 +14,7 @@ import {
   buildLabelRequest,
   buildRatesRequest,
   buildShipFromAddress,
-  extractCarrierBalances,
+  extractCarriers,
   extractLabel,
   extractRates,
   extractVoidResult,
@@ -26,6 +26,7 @@ import {
   validateShipStationOptions,
   type NormalizedRate,
   type Parcel,
+  type CarrierSummary,
   type PurchasedLabel,
   type ShipStationAddress,
   type ShipStationOptions,
@@ -250,11 +251,23 @@ class ShipStationModuleService {
   async getShipmentRates(input: GetShipmentRatesInput): Promise<LiveRate[]> {
     const options = this.options_;
 
+    const carrierIds =
+      input.carrierIds && input.carrierIds.length > 0
+        ? [...input.carrierIds]
+        : (await this.listCarriers()).map((carrier) => carrier.carrierId);
+
+    if (carrierIds.length === 0) {
+      throw new ShipStationLabelError(
+        "misconfigured",
+        "No carriers are connected to this ShipStation account, so nothing can be quoted",
+      );
+    }
+
     const body = buildRatesRequest({
       shipFrom: buildShipFromAddress(options),
       shipTo: input.destination,
       parcel: input.parcel,
-      carrierIds: input.carrierIds ?? [],
+      carrierIds,
       weightUnit: options.weightUnit,
       dimensionUnit: options.dimensionUnit,
       shipDate: new Date(),
@@ -362,30 +375,46 @@ class ShipStationModuleService {
   }
 
   async getCarrierBalances(): Promise<CarrierBalance[]> {
-    const options = this.options_;
-    const key = "shipstation:balances:v1";
-
-    const cached = await this.cache_.get<CarrierBalance[]>(key);
-    if (cached) return cached;
-
     try {
-      const parsed = await this.requestJson({
-        url: `${options.baseUrl}/carriers`,
-        method: "GET",
-        timeoutMs: options.timeoutMs,
-        retryOn429: false,
-        mapError: toLabelError,
-      });
+      const carriers = await this.listCarriers();
 
-      const balances = extractCarrierBalances(parsed);
-      await this.cache_.set(key, balances, BALANCE_CACHE_TTL_SECONDS);
-      return balances;
+      return carriers.flatMap((carrier) =>
+        carrier.balance == null
+          ? []
+          : [
+              {
+                carrierName: carrier.carrierName,
+                balance: carrier.balance,
+                currencyCode: carrier.currencyCode,
+              },
+            ],
+      );
     } catch (error) {
       this.logger_.warn(
         `${SHIPSTATION_BALANCE_LOG_TAG} reason=unavailable error=${error instanceof Error ? error.message : String(error)}`,
       );
       return [];
     }
+  }
+
+  private async listCarriers(): Promise<CarrierSummary[]> {
+    const options = this.options_;
+    const key = "shipstation:carriers:v1";
+
+    const cached = await this.cache_.get<CarrierSummary[]>(key);
+    if (cached) return cached;
+
+    const parsed = await this.requestJson({
+      url: `${options.baseUrl}/carriers`,
+      method: "GET",
+      timeoutMs: options.timeoutMs,
+      retryOn429: false,
+      mapError: toLabelError,
+    });
+
+    const carriers = extractCarriers(parsed);
+    await this.cache_.set(key, carriers, BALANCE_CACHE_TTL_SECONDS);
+    return carriers;
   }
 
   async downloadLabelPdf(pdfUrl: string): Promise<Buffer> {

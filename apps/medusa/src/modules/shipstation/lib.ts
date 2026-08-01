@@ -1,9 +1,5 @@
 import { MedusaError } from "@medusajs/framework/utils";
-import type {
-  CarrierBalance,
-  LabelFailureReason,
-  LiveRate,
-} from "@craftynp/types";
+import type { LabelFailureReason, LiveRate } from "@craftynp/types";
 
 export type ShipStationOptions = {
   apiKey: string;
@@ -484,9 +480,7 @@ export function buildRatesRequest(
     },
   };
 
-  if (input.carrierIds.length > 0) {
-    body.rate_options = { carrier_ids: [...input.carrierIds] };
-  }
+  body.rate_options = { carrier_ids: [...input.carrierIds] };
 
   return body;
 }
@@ -693,34 +687,43 @@ export function extractVoidResult(body: unknown): {
   };
 }
 
-export function extractCarrierBalances(body: unknown): CarrierBalance[] {
+export type CarrierSummary = {
+  carrierId: string;
+  carrierName: string;
+  balance: number | null;
+  currencyCode: string;
+};
+
+export function extractCarriers(body: unknown): CarrierSummary[] {
   if (body == null || typeof body !== "object") return [];
 
   const carriers = (body as Record<string, unknown>).carriers;
   if (!Array.isArray(carriers)) return [];
 
-  const balances: CarrierBalance[] = [];
+  const summaries: CarrierSummary[] = [];
 
   for (const raw of carriers) {
     if (raw == null || typeof raw !== "object") continue;
     const carrier = raw as Record<string, unknown>;
 
-    if (typeof carrier.balance !== "number") continue;
+    if (typeof carrier.carrier_id !== "string") continue;
+    if (carrier.disabled_by_billing_plan === true) continue;
 
-    balances.push({
+    summaries.push({
+      carrierId: carrier.carrier_id,
       carrierName:
         typeof carrier.friendly_name === "string"
           ? carrier.friendly_name
           : typeof carrier.nickname === "string"
             ? carrier.nickname
             : "Carrier",
-      balance: carrier.balance,
+      balance: typeof carrier.balance === "number" ? carrier.balance : null,
       currencyCode:
         typeof carrier.currency === "string" ? carrier.currency : "usd",
     });
   }
 
-  return balances;
+  return summaries;
 }
 
 export type ReconcileCriteria = {

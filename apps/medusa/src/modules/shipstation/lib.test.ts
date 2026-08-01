@@ -6,7 +6,7 @@ import {
   buildEstimateRequest,
   buildLabelRequest,
   buildRatesRequest,
-  extractCarrierBalances,
+  extractCarriers,
   extractRates,
   extractVoidResult,
   matchReconciledLabel,
@@ -490,8 +490,8 @@ describe("buildRatesRequest", () => {
     expect(from.phone).toBe("5125550123");
   });
 
-  it("omits carrier_ids so every connected carrier is quoted", () => {
-    expect(request).not.toHaveProperty("rate_options");
+  it("always sends rate_options, which ShipStation rejects the call without", () => {
+    expect(request).toHaveProperty("rate_options");
   });
 
   it("restricts to the named carriers when some are given", () => {
@@ -633,22 +633,55 @@ describe("extractVoidResult", () => {
   });
 });
 
-describe("extractCarrierBalances", () => {
-  it("keeps only carriers that reported a numeric balance", () => {
-    const balances = extractCarrierBalances({
+describe("extractCarriers", () => {
+  it("keeps the carrier id, which the rate call cannot be made without", () => {
+    const carriers = extractCarriers({
       carriers: [
-        { friendly_name: "USPS", balance: 42.5, currency: "usd" },
-        { friendly_name: "UPS", balance: null },
+        {
+          carrier_id: "se-123",
+          friendly_name: "Stamps.com",
+          balance: 42.5,
+          currency: "usd",
+        },
       ],
     });
 
-    expect(balances).toEqual([
-      { carrierName: "USPS", balance: 42.5, currencyCode: "usd" },
+    expect(carriers).toEqual([
+      {
+        carrierId: "se-123",
+        carrierName: "Stamps.com",
+        balance: 42.5,
+        currencyCode: "usd",
+      },
     ]);
   });
 
+  it("keeps a carrier that reported no balance, because it can still be quoted", () => {
+    const carriers = extractCarriers({
+      carriers: [{ carrier_id: "se-456", friendly_name: "UPS" }],
+    });
+
+    expect(carriers).toHaveLength(1);
+    expect(carriers[0]?.balance).toBeNull();
+  });
+
+  it("drops a carrier with no id and one the billing plan disabled", () => {
+    const carriers = extractCarriers({
+      carriers: [
+        { friendly_name: "No id" },
+        {
+          carrier_id: "se-789",
+          friendly_name: "Disabled",
+          disabled_by_billing_plan: true,
+        },
+      ],
+    });
+
+    expect(carriers).toEqual([]);
+  });
+
   it("returns nothing for an unreadable body", () => {
-    expect(extractCarrierBalances({ nope: true })).toEqual([]);
+    expect(extractCarriers({ nope: true })).toEqual([]);
   });
 });
 

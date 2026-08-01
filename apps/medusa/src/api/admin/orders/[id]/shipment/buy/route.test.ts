@@ -125,11 +125,12 @@ describe("POST /admin/orders/:id/shipment/buy", () => {
       expect.objectContaining({
         reason: "insufficient_funds",
         carrierMessage: "Not enough funds",
+        message: expect.stringContaining("Add funds in ShipStation"),
       }),
     );
   });
 
-  it("still answers with a message when the failure is not one of ours", async () => {
+  it("puts the operator-facing copy in message, the only field FetchError keeps", async () => {
     const { req, res, status, json } = makeRequest();
     run.mockRejectedValueOnce(new Error("socket hang up"));
 
@@ -139,7 +140,7 @@ describe("POST /admin/orders/:id/shipment/buy", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         reason: "http_error",
-        message: expect.stringContaining("socket hang up"),
+        message: expect.stringContaining("Try again in a minute"),
       }),
     );
   });

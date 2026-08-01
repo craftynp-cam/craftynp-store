@@ -301,30 +301,83 @@ describe("ShipStationModuleService.getShipmentRates", () => {
     jest.restoreAllMocks();
   });
 
-  it("never caches, because the operator is choosing what to spend", async () => {
-    const cache = createMemoryCache();
-    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(
-      jsonResponse({
-        rate_response: {
-          rates: [
-            {
-              rate_id: "r1",
-              carrier_id: "se-123",
-              carrier_code: "usps",
-              service_code: "usps_ground_advantage",
-              shipping_amount: { currency: "usd", amount: 7.42 },
-            },
-          ],
+  const ratesBody = {
+    rate_response: {
+      rates: [
+        {
+          rate_id: "r1",
+          carrier_id: "se-123",
+          carrier_code: "usps",
+          service_code: "usps_ground_advantage",
+          shipping_amount: { currency: "usd", amount: 7.42 },
         },
-      }),
-    );
+      ],
+    },
+  };
+
+  const carriersBody = {
+    carriers: [
+      {
+        carrier_id: "se-123",
+        friendly_name: "Stamps.com",
+        balance: 42.5,
+        currency: "usd",
+      },
+    ],
+  };
+
+  function mockCarriersThenRates() {
+    return jest
+      .spyOn(global, "fetch")
+      .mockImplementation(async (input: Parameters<typeof fetch>[0]) =>
+        String(input).includes("/carriers")
+          ? jsonResponse(carriersBody)
+          : jsonResponse(ratesBody),
+      );
+  }
+
+  function rateCalls(spy: jest.SpiedFunction<typeof fetch>) {
+    return spy.mock.calls.filter(([url]) => String(url).endsWith("/rates"));
+  }
+
+  it("never caches a rate, because the operator is choosing what to spend", async () => {
+    const cache = createMemoryCache();
+    const fetchSpy = mockCarriersThenRates();
 
     const { service } = makeService(cache);
     await service.getShipmentRates({ destination: labelDestination, parcel });
     await service.getShipmentRates({ destination: labelDestination, parcel });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(cache.set).not.toHaveBeenCalled();
+    expect(rateCalls(fetchSpy)).toHaveLength(2);
+    expect(cache.set).not.toHaveBeenCalledWith(
+      expect.stringContaining("rates"),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("names every connected carrier, because ShipStation rejects an empty rate_options", async () => {
+    const fetchSpy = mockCarriersThenRates();
+
+    const { service } = makeService();
+    await service.getShipmentRates({ destination: labelDestination, parcel });
+
+    const body = JSON.parse(
+      String(rateCalls(fetchSpy)[0]?.[1]?.body),
+    ) as Record<string, unknown>;
+
+    expect(body.rate_options).toEqual({ carrier_ids: ["se-123"] });
+  });
+
+  it("refuses rather than calling ShipStation when no carrier is connected", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue(jsonResponse({ carriers: [] }));
+
+    const { service } = makeService();
+    await expect(
+      service.getShipmentRates({ destination: labelDestination, parcel }),
+    ).rejects.toMatchObject({ reason: "misconfigured" });
   });
 });
 

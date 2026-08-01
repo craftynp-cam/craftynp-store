@@ -6,6 +6,8 @@ import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type { BuyLabelRequest } from "@craftynp/types";
 
+import { describeLabelFailure } from "@craftynp/types";
+
 import { describeError } from "../../../../../../lib/describe-error";
 import { loadOrderStatusDetail } from "../../../../../../lib/order-status-detail";
 import { OrderStatusTransitionError } from "../../../../../../modules/order-status/lib";
@@ -55,17 +57,20 @@ export async function POST(
 
     const reason =
       error instanceof ShipStationLabelError ? error.reason : "http_error";
+    const carrierMessage =
+      error instanceof ShipStationLabelError ? error.carrierMessage : null;
 
     logger.error(
-      `${SHIPSTATION_LABEL_LOG_TAG} reason=buy_label_failed order=${orderId} detail=${reason} error=${detail}`,
+      `${SHIPSTATION_LABEL_LOG_TAG} reason=buy_label_failed order=${orderId} detail=${reason} carrier_message=${carrierMessage ?? ""} error=${detail}`,
     );
+
+    const copy = describeLabelFailure(reason, carrierMessage);
 
     return res.status(502).json({
       error: "buy_label_failed",
       reason,
-      carrierMessage:
-        error instanceof ShipStationLabelError ? error.carrierMessage : null,
-      message: detail,
+      carrierMessage,
+      message: `${copy.title}. ${copy.body} ${copy.nextStep}`,
     });
   }
 }
