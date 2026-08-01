@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { defineWidgetConfig } from "@medusajs/admin-sdk";
 import { Spinner } from "@medusajs/icons";
@@ -7,22 +6,25 @@ import {
   Button,
   Container,
   Heading,
-  Input,
-  Label,
-  Select,
+  Hint,
   Text,
   toast,
 } from "@medusajs/ui";
 import type { DetailWidgetProps, AdminOrder } from "@medusajs/framework/types";
-import type {
-  OrderStatus,
-  OrderStatusDetail,
-  TrackingStatus,
-} from "@craftynp/types";
+import type { OrderStatus, TrackingStatus } from "@craftynp/types";
 
 import { sdk } from "../lib/client";
-
-type OrderStatusResponse = { orderStatus: OrderStatusDetail };
+import {
+  describeFailure,
+  fetchOrderStatus,
+  labelPdfPath,
+  orderStatusQueryKey,
+  queueQueryKey,
+  type OrderStatusResponse,
+} from "../lib/fulfilment-api";
+import { printPdf } from "../lib/print-pdf";
+import { RateAndBuyPanel } from "../components/fulfilment/rate-and-buy-panel";
+import { VoidLabelButton } from "../components/fulfilment/void-label-button";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   received: "Received",
@@ -54,50 +56,33 @@ const TRACKING_STATUS_LABELS: Record<TrackingStatus, string> = {
   unknown: "Awaiting the first scan",
 };
 
-const CARRIERS = [
-  { value: "usps", label: "USPS" },
-  { value: "ups", label: "UPS" },
-  { value: "fedex", label: "FedEx" },
-  { value: "dhl_express", label: "DHL Express" },
-];
-
 function formatTimestamp(value: string): string {
   if (!value) return "";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
 }
 
-function describeFailure(error: unknown): string {
-  if (error && typeof error === "object" && "message" in error) {
-    return String((error as { message: unknown }).message);
+function formatMoney(amount: number, currencyCode: string | null): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: (currencyCode ?? "usd").toUpperCase(),
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${(currencyCode ?? "usd").toUpperCase()}`;
   }
-  return "Something went wrong. Please try again.";
 }
 
 const OrderFulfilmentWidget = ({
   data: order,
 }: DetailWidgetProps<AdminOrder>) => {
   const queryClient = useQueryClient();
-  const queryKey = ["order-status", order.id];
-
-  const [trackingNumber, setTrackingNumber] = useState("");
-  const [carrierCode, setCarrierCode] = useState("usps");
+  const queryKey = orderStatusQueryKey(order.id);
 
   const { data, isLoading } = useQuery({
     queryKey,
-    queryFn: () =>
-      sdk.client.fetch<OrderStatusResponse>(`/admin/orders/${order.id}/status`),
+    queryFn: () => fetchOrderStatus(order.id),
   });
-
-  function onSettled(message: string) {
-    return {
-      onSuccess: (response: OrderStatusResponse) => {
-        queryClient.setQueryData(queryKey, response);
-        toast.success(message);
-      },
-      onError: (error: unknown) => toast.error(describeFailure(error)),
-    };
-  }
 
   const transition = useMutation({
     mutationFn: (status: OrderStatus) =>
@@ -105,25 +90,17 @@ const OrderFulfilmentWidget = ({
         `/admin/orders/${order.id}/status`,
         { method: "POST", body: { status } },
       ),
-    ...onSettled("Order status updated."),
+    onSuccess: (response: OrderStatusResponse) => {
+      queryClient.setQueryData(queryKey, response);
+      void queryClient.invalidateQueries({ queryKey: queueQueryKey });
+      toast.success("Order status updated.");
+    },
+    onError: (error: unknown) => toast.error(describeFailure(error)),
   });
 
-  const recordShipment = useMutation({
-    mutationFn: () =>
-      sdk.client.fetch<OrderStatusResponse>(
-        `/admin/orders/${order.id}/shipment`,
-        { method: "POST", body: { trackingNumber, carrierCode } },
-      ),
-    ...onSettled("Shipment recorded. The customer has been emailed."),
-  });
-
-  const voidShipment = useMutation({
-    mutationFn: () =>
-      sdk.client.fetch<OrderStatusResponse>(
-        `/admin/orders/${order.id}/shipment/void`,
-        { method: "POST", body: {} },
-      ),
-    ...onSettled("Shipment voided and the order returned to packing."),
+  const print = useMutation({
+    mutationFn: () => printPdf({ path: labelPdfPath(order.id) }),
+    onError: (error: unknown) => toast.error(describeFailure(error)),
   });
 
   if (isLoading || !data) {
@@ -134,9 +111,9 @@ const OrderFulfilmentWidget = ({
     );
   }
 
-  const { status, allowedTransitions, tracking, history } = data.orderStatus;
-  const busy =
-    transition.isPending || recordShipment.isPending || voidShipment.isPending;
+  const { status, allowedTransitions, tracking, label, history } =
+    data.orderStatus;
+  const busy = transition.isPending;
 
   const offeredTransitions = allowedTransitions.filter((next) => {
     if (next === "shipped") return false;
@@ -190,16 +167,42 @@ const OrderFulfilmentWidget = ({
             {tracking.statusDescription ??
               TRACKING_STATUS_LABELS[tracking.status]}
           </Text>
-          <div>
-            <Button
-              size="small"
-              variant="danger"
-              disabled={busy}
-              onClick={() => voidShipment.mutate()}
-            >
-              Void label
-            </Button>
+
+          {label?.shipmentCost != null && (
+            <Text size="small" className="text-ui-fg-subtle">
+              {`Paid ${formatMoney(label.shipmentCost, label.currencyCode)}${label.serviceCode ? ` · ${label.serviceCode}` : ""}`}
+            </Text>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {label?.canPrint && (
+              <Button
+                size="small"
+                variant="secondary"
+                disabled={print.isPending}
+                onClick={() => print.mutate()}
+              >
+                {print.isPending ? (
+                  <Spinner className="animate-spin" />
+                ) : (
+                  "Print label"
+                )}
+              </Button>
+            )}
+            <VoidLabelButton orderId={order.id} disabled={busy} />
           </div>
+
+          {label?.canPrint ? (
+            <Hint>Print at 4 × 6 in, Actual size (100%), Margins: None.</Hint>
+          ) : (
+            label && (
+              <Hint variant="error">
+                This label is only stored at the carrier and its link stops
+                working 90 days after purchase. Print it now.
+              </Hint>
+            )
+          )}
+
           <Text size="small" className="text-ui-fg-subtle">
             Voiding returns this order to packing and hides the tracking link
             from the customer. It does not recall the shipped email that has
@@ -209,52 +212,12 @@ const OrderFulfilmentWidget = ({
         </div>
       ) : (
         status === "packing" && (
-          <div className="flex flex-col gap-3 px-6 py-4">
-            <Text size="small" weight="plus">
-              Record a shipment
-            </Text>
-            <div className="flex flex-col gap-1">
-              <Label size="small" htmlFor="cnp-carrier">
-                Carrier
-              </Label>
-              <Select value={carrierCode} onValueChange={setCarrierCode}>
-                <Select.Trigger id="cnp-carrier">
-                  <Select.Value />
-                </Select.Trigger>
-                <Select.Content>
-                  {CARRIERS.map((carrier) => (
-                    <Select.Item key={carrier.value} value={carrier.value}>
-                      {carrier.label}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label size="small" htmlFor="cnp-tracking">
-                Tracking number
-              </Label>
-              <Input
-                id="cnp-tracking"
-                value={trackingNumber}
-                onChange={(event) => setTrackingNumber(event.target.value)}
-                placeholder="Paste the number from your label"
-              />
-            </div>
-            <div>
-              <Button
-                size="small"
-                disabled={busy || trackingNumber.trim().length === 0}
-                onClick={() => recordShipment.mutate()}
-              >
-                Mark shipped
-              </Button>
-            </div>
-            <Text size="small" className="text-ui-fg-subtle">
-              Buying a label from inside the admin arrives with the fulfilment
-              workspace. Until then, enter the tracking number from the label
-              you bought and this will email the customer.
-            </Text>
+          <div className="px-6 py-4">
+            <RateAndBuyPanel
+              orderId={order.id}
+              derivedParcel={null}
+              missingDimensions={[]}
+            />
           </div>
         )
       )}
