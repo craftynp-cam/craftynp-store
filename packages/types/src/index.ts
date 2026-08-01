@@ -59,6 +59,28 @@ export {
   transitionRejection,
   voidShipmentRequestSchema,
 } from "./order-status.js";
+export {
+  LABEL_FAILURE_REASONS,
+  MAX_PARCEL_DIMENSION_CM,
+  MAX_PARCEL_WEIGHT_GRAMS,
+  balanceResponseSchema,
+  buyLabelRequestSchema,
+  carrierBalanceSchema,
+  describeInternalFailure,
+  describeLabelFailure,
+  formatDeliveryWindow,
+  formatParcelSummary,
+  fulfilmentQueueResponseSchema,
+  liveRateSchema,
+  parcelOverrideSchema,
+  printLabelsRequestSchema,
+  queueDestinationSchema,
+  queueEntrySchema,
+  queueItemSchema,
+  rateShipmentRequestSchema,
+  rateShipmentResponseSchema,
+  shipmentLabelSchema,
+} from "./fulfilment.js";
 
 export type {
   ArtworkReference,
@@ -111,3 +133,20 @@ export type {
   TrackingStatus,
   VoidShipmentRequest,
 } from "./order-status.js";
+export type {
+  BalanceResponse,
+  BuyLabelRequest,
+  CarrierBalance,
+  FulfilmentQueueResponse,
+  LabelFailureCopy,
+  LabelFailureReason,
+  LiveRate,
+  ParcelOverride,
+  PrintLabelsRequest,
+  QueueDestination,
+  QueueEntry,
+  QueueItem,
+  RateShipmentRequest,
+  RateShipmentResponse,
+  ShipmentLabel,
+} from "./fulfilment.js";

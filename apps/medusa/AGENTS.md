@@ -117,8 +117,15 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
   place minor units exist, crossed solely by `toMinorUnits` / `fromMinorUnits`
   in its `lib.ts`. Leaking cents outside that module multiplies money by 100.
 - **Resolve weight, dimensions, and `calculated_price` server-side via
-  `query.graph`.** Request bodies carry only `{ variantId, quantity }` — never
-  accept a client-supplied weight or price anywhere in this app.
+  `query.graph`.** Store request bodies carry only `{ variantId, quantity }` —
+  never accept a client-supplied weight or price on a `/store` route. The one
+  exception is the authenticated admin parcel override on
+  `/admin/orders/:id/shipment/rates` and `/buy`: the shop owner is looking at
+  the packed box and the product defaults are only a guess, so she may correct
+  the weight and dimensions. She may never name a **price** — the label is
+  always priced by ShipStation and the amount actually charged is what gets
+  recorded. The destination is still resolved from the order server-side on
+  both routes.
 - **There is no flat-rate shipping fallback, deliberately.** A missing-dimension
   parcel or any ShipStation error returns `502 shipping_unavailable` and blocks
   checkout, because a wrong shipping charge is worse than a shopper hitting
@@ -127,7 +134,58 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
 - **ShipStation's `/v2/rates/estimate` response is not purchasable** and
   excludes surcharges, so its `rate_id` cannot be looked up again later.
   Re-verify a quote by re-estimating and comparing the fresh amount within a
-  tolerance, never by replaying the `rate_id`.
+  tolerance, never by replaying the `rate_id`. `/v2/rates` is the separate,
+  authoritative call the fulfilment workspace uses, and unlike the estimate it
+  is **deliberately uncached** — the owner is choosing what to spend.
+- **`purchaseLabel` must never retry a timeout or a network error.** ShipStation
+  documents no idempotency key on `POST /v2/labels`, so a retry can buy a second
+  label and spend real money twice. Only a 429 — refused before any label
+  exists — is safe to retry. An unconfirmed timeout is reconciled by reading
+  `GET /v2/labels` and matching on our own `external_shipment_id`, then on
+  ship-to name plus postal code plus service within the window.
+- **Voiding restores the inventory reservations.** The first fulfillment
+  consumes them, and the Medusa fulfillment survives a void because a shipped
+  one cannot be cancelled — so without this, `createOrderFulfillmentWorkflow`
+  fails the next time with "No stock reservation found" and an order that came
+  back to `packing` can never be shipped again. `restoreReservationsStep`
+  rebuilds them from the order's managed variants at the existing
+  fulfillment's location, skipping any line item that still has one so a retry
+  cannot double-reserve. A reservation must carry `line_item_id` or the
+  fulfillment workflow will not find it.
+- **Voiding calls ShipStation before writing anything, and a refusal is an
+  answer.** Both a 200 carrying `approved: false` and a **4xx** are the carrier
+  saying no — they record `void_approved: false` plus its message, stamp
+  `voided_at`, and return the order to `packing`, because we know the label was
+  not voided. Only a timeout or a 5xx is genuinely unknown, and that throws so
+  we never stamp `voided_at` on a label whose real state we cannot see.
+  Treating a 4xx as unknown strands the order as `shipped` forever — which is
+  what happens with a test label, since ShipStation rejects voiding one.
+  `void_approved` is tri-state — null means we never asked.
+- **Label PDFs do not go through the file module.** They live in their own
+  private S3 bucket — Cloudflare R2 in production, the MinIO container in
+  `docker-compose.yml` locally — written by `src/lib/label-storage.ts` and
+  served only by `GET /admin/fulfilment/labels/:orderId`. Two things force
+  this, and both were found the hard way:
+  **`file-local` cannot store anything privately.** Its own source says so:
+  "there is no way to serve private files through a static server, we simply
+  place them in `static`". A label written with `access: "private"` was
+  fetchable at `/static/labels/private-….pdf` with no auth at all.
+  **The file module has exactly one provider** (`fileProviderService_`, no
+  per-call selection), and R2 has no object-level ACLs, so a bucket is public
+  or private as a whole. One provider therefore cannot serve public
+  site-content images and private labels. Site content stays on `file-local`;
+  labels get their own bucket.
+  `label_file_id` holds the object key. `label_url` holds our own route; it
+  falls back to ShipStation's 90-day URL only when storage failed, which is
+  exactly what a null `label_file_id` marks.
+- **Never make the labels bucket public**, and never point it at the bucket
+  that serves site-content images.
+- **Storing the label PDF must never throw.** It runs after the purchase, so
+  throwing would trigger the compensating void and cancel a perfectly good label
+  because our own disk was full. That is a worse outcome than a link that
+  expires.
+- **`SHIPSTATION_TEST_LABELS` defaults to `true`**, and only the literal
+  `"false"` turns it off, so a fresh clone cannot spend money by accident.
 - **The ShipStation rate limiter is a token bucket at file module scope in
   `limiter.ts`**, with one shared "blocked" promise every waiter awaits. Do not
   move that state onto the service instance — DI lifetime would hand out one
@@ -328,8 +386,8 @@ provider in `src/modules/notification-resend`, fired by subscribers on
 None of these are caught by `tsc` or a mock-based test — they surface only
 against a real container, schema, or workflow.
 
-- **An order's totals only compute when `items.*` and `shipping_methods.*` are
-  requested as wildcards.** Narrowing either to the few columns you actually
+- **An order's totals _and its line quantities_ only come back when `items.*`
+  is requested as a wildcard.** Narrowing either to the few columns you actually
   render makes `total`, `item_subtotal`, `shipping_subtotal` and `tax_total`
   all come back as **0** — no error, no warning, just a free order on the page
   and on the receipt. `ORDER_CONFIRMATION_FIELDS` keeps both wildcards for this

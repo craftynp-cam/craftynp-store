@@ -5,11 +5,21 @@ import type OrderStatusModuleService from "../../modules/order-status/service";
 
 export const voidShipmentTrackingStep = createStep(
   "void-shipment-tracking",
-  async (input: { orderId: string }, { container }) => {
+  async (
+    input: {
+      orderId: string;
+      approved?: boolean | null;
+      message?: string | null;
+    },
+    { container },
+  ) => {
     const service =
       container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
-    const shipment = await service.voidShipment(input.orderId);
+    const shipment = await service.voidShipment(input.orderId, {
+      approved: input.approved ?? null,
+      message: input.message ?? null,
+    });
 
     return new StepResponse(shipment, { shipmentId: shipment.id });
   },
@@ -25,6 +35,8 @@ export const voidShipmentTrackingStep = createStep(
     await service.updateShipmentTrackings({
       id: compensationInput.shipmentId,
       voided_at: null,
+      void_approved: null,
+      void_message: null,
     });
   },
 );

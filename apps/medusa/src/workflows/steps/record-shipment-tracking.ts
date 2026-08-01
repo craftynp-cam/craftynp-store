@@ -7,9 +7,13 @@ export type RecordShipmentTrackingStepInput = {
   orderId: string;
   trackingNumber: string;
   carrierCode: string;
+  carrierId?: string | null;
   serviceCode?: string | null;
   labelId?: string | null;
   labelUrl?: string | null;
+  labelFileId?: string | null;
+  shipmentCost?: number | null;
+  currencyCode?: string | null;
   fulfillmentId: string;
 };
 
