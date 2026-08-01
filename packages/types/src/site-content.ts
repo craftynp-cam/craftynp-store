@@ -284,6 +284,28 @@ export const SITE_CONTENT_FIELDS = [
     defaultValue: "Shop the store",
     maxLength: 40,
   },
+  {
+    key: "order_turnaround_note",
+    type: "text",
+    group: "Order confirmation",
+    label: "Production turnaround",
+    description:
+      "How long making the order takes. Shown on the confirmation page and in the confirmation email.",
+    defaultValue:
+      "Most pieces are made to order and leave the workshop in 3–5 business days.",
+    maxLength: 160,
+  },
+  {
+    key: "order_shipping_window_note",
+    type: "text",
+    group: "Order confirmation",
+    label: "Shipping window",
+    description:
+      "How long delivery takes once the order ships. Shown beside the turnaround note.",
+    defaultValue:
+      "Once shipped, delivery usually takes another 2–5 business days.",
+    maxLength: 160,
+  },
 ] as const satisfies readonly SiteContentField[];
 
 export type SiteContentKey = (typeof SITE_CONTENT_FIELDS)[number]["key"];

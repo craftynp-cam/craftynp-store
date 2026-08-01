@@ -72,6 +72,7 @@ export type CheckoutCompleteRequest = z.infer<
 export const checkoutCompleteResponseSchema = z.object({
   orderId: z.string().min(1),
   displayId: z.number().int().nonnegative(),
+  orderToken: z.string().min(1).optional(),
 });
 export type CheckoutCompleteResponse = z.infer<
   typeof checkoutCompleteResponseSchema

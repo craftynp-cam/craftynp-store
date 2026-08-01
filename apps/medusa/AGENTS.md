@@ -6,8 +6,8 @@ the root [AGENTS.md](../../AGENTS.md).
 
 Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
 `site-content`, `shipstation` and `shipstation-fulfillment`, `stripe-tax` (which
-registers both a module and a tax provider), `auth-auth0`, and
-`auth-google-workspace`.
+registers both a module and a tax provider), `notification-resend`,
+`auth-auth0`, and `auth-google-workspace`.
 
 ## Layout and config
 
@@ -97,8 +97,12 @@ for both actors.
 
 **No in-repo representation.** These live only in external dashboards, so don't
 search the repo for them: Auth0's password policy, its "Require Email
-Verification" Post-Login Action, and Attack Protection; the Google Cloud OAuth
-Web client whose redirect URI must exactly match `GOOGLE_ADMIN_CALLBACK_URL`;
+Verification" Post-Login Action, and Attack Protection; the Auth0
+`custom-email-provider` Action that sends password-reset mail through Resend —
+never add it under `src/`, it would not run there (see
+[docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md));
+the Google Cloud OAuth Web client whose redirect URI must exactly match
+`GOOGLE_ADMIN_CALLBACK_URL`;
 the Workspace org's 2-Step Verification policy; and Stripe Tax's nexus and
 per-state registrations. Workspace 2SV is the real MFA enforcement — Medusa's
 TOTP is config-only and opt-in per identity, so do not implement enrolment.
@@ -172,9 +176,6 @@ finding `SHIPSTATION_USPS_CARRIER_ID`.
 - **Error bodies from these store routes must carry a `message` alongside
   `error`/`reason`.** `@medusajs/js-sdk`'s `FetchError` discards everything
   else, so the storefront proxy otherwise sees only a status.
-- **`Order` has no `cart_id` column** — the association is the `order_cart`
-  module link table. Query `entity: "order_cart"` filtered on `cart_id`;
-  filtering `entity: "order"` by `cart_id` makes MikroORM throw at runtime.
 - **`/checkout/complete`'s catch block must re-run the order lookup before
   reporting a failure.** Stripe's webhook can place the order mid-request,
   making `completeCartWorkflow` throw on an already-completed cart — otherwise a
@@ -186,6 +187,23 @@ finding `SHIPSTATION_USPS_CARRIER_ID`.
 - **Do not build a Stripe webhook route.** Medusa core's
   `/hooks/payment/:provider` with `@medusajs/payment-stripe` already places the
   order out-of-band; only `STRIPE_WEBHOOK_SECRET` is needed.
+- **`Order` has no `cart_id` column, and `Fulfillment` has no `order_id`
+  one.** Both associations are module link tables: query `entity: "order_cart"`
+  filtered on `cart_id`, and `entity: "order_fulfillment"` filtered on
+  `fulfillment_id`. Filtering `entity: "order"` by `cart_id` makes MikroORM
+  throw at runtime rather than returning nothing.
+- **The order confirmation route is `/store/order-confirmation/:id`, not
+  `/store/orders/:id`** — core already owns that path behind mandatory customer
+  auth, and a file there collides with ambiguous precedence. It takes either a
+  signed `?token=` (bound to that one order id, which is what stops a valid
+  token being re-pointed at somebody else's) or the session's own
+  `customer_id`, and its middleware must keep `allowUnauthenticated: true` or
+  the guest branch never runs.
+- **Every rejection from that route is a 404, never a 403.** A 403 confirms the
+  order exists, which is exactly what URL manipulation is fishing for.
+- **`ORDER_ACCESS_SECRET` is its own secret** and its tokens live 90 days,
+  unlike the 30-minute quote tokens — a link sitting in a guest's inbox has to
+  outlive production and shipping.
 - **The `order.placed` tax subscriber must keep passing the order id as the
   Stripe transaction `reference`** — that uniqueness constraint is the only
   guard against double-recording on retry. A failure logs and never rolls back
@@ -195,11 +213,86 @@ finding `SHIPSTATION_USPS_CARRIER_ID`.
   the accepted tradeoff, not a bug, and the tax provider is deliberately
   uncached unlike the sibling module service.
 
+## Email and notifications
+
+Transactional email runs through `@medusajs/notification` with a custom Resend
+provider in `src/modules/notification-resend`, fired by subscribers on
+`order.placed` and `shipment.created`.
+
+- **The email HTML is built in `order-email.ts`, not sent through a
+  Resend-hosted template — this reverses an earlier decision.** Resend's REST
+  API does not reliably apply `variables` to a `template.id` send on this
+  account: every field, not only ones inside an `href`, silently fell back to
+  its declared default in production (`#CNP-0000`, `$0.00`, empty line items —
+  a `200` throughout, nothing errored). `order-confirmation` and
+  `order-shipped` still exist as published Resend templates and render
+  correctly in Resend's own dashboard preview — that is now their only
+  purpose, as the design reference. See
+  [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md)
+  for where this was first found (in the password-reset Action) and confirmed.
+- **`createNotifications({ content: { subject, html, text } })`, not
+  `template`/`data`.** `content` is a first-class field on Medusa's own
+  `CreateNotificationDTO`, so this needed no shape of our own — the provider's
+  `send()` prefers `notification.content` when present and posts raw
+  `html`/`text`/`subject` to Resend, falling back to `template.id` +
+  `variables` only for a caller that doesn't set it. Do not trust that
+  fallback path with anything that has a variable — it is the broken one.
+- **A notification _provider_, not a bespoke service.** `INotificationProvider`
+  is already the swappable seam, and the module's `notification` table records
+  `status`, `external_id` and `idempotency_key` per send — the send log and the
+  retry ledger without a migration of our own. It talks to Resend over raw
+  `fetch`, like `shipstation`, so the mock-at-the-module-boundary testing rule
+  applies unchanged.
+- **`order-email-render.ts` still truncates a long order to a "+N more items"
+  row**, now purely to keep one email a sane size — the original reason
+  (Resend's 2,000-character template-variable cap) no longer applies, since
+  nothing here is sent as a template variable.
+- **Every interpolated value must go through `escapeHtml`** before landing in
+  the HTML body — `order-email.ts` builds the email as a literal JS template
+  string, so an unescaped value is a direct injection, not a framework quirk.
+  `ORDER_ITEMS_HTML`/`SHIPPING_ADDRESS_HTML` are pre-escaped HTML fragments
+  from `order-email-render.ts` and must not be escaped a second time; a
+  shopper-supplied field like the customer's first name must be.
+- **`shipment.created` carries a _fulfillment_ id, not an order id**, and
+  `no_notification: true` means the operator suppressed the customer email.
+  `order.fulfillment_created` is the convenient-looking wrong event: it fires
+  when a fulfillment is created, not when it ships.
+- **The in-memory event bus does not retry a failed subscriber** (Redis is not
+  wired up yet, CNP-16), so retry is the explicit
+  `retry-failed-notifications` job. It replays a failure under its original
+  `idempotency_key` — which the module reprocesses only while the row is
+  `FAILURE` — inside Resend's own 24-hour idempotency window. Retrying past
+  that window would start duplicating rather than resuming.
+- **A send failure never rolls back a paid order.** Both subscribers log and
+  swallow, like the tax subscriber.
+- **Monitoring here means stable warn-level log tags**, because nothing is
+  deployed and there is no alerting sink until CNP-16. Attach alerts to
+  `[email:send-failed]`, `[email:quota]`, `[email:quota-low]`,
+  `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]` and
+  `[email:order-failed]` rather than inventing an alerting system now.
+- **`STOREFRONT_URL` is what builds the tokenized order link.** `order-email.ts`
+  constructs `/checkout/confirmation?order=&number=&token=` independently of the
+  storefront's own `checkoutConfirmationHref()`; the two drifting is the
+  realistic bug, so that query contract is written down in both AGENTS files.
+- Password reset is **not** sent from here — Auth0 owns it. See
+  [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md).
+
 ## Medusa runtime traps
 
 None of these are caught by `tsc` or a mock-based test — they surface only
 against a real container, schema, or workflow.
 
+- **An order's totals only compute when `items.*` and `shipping_methods.*` are
+  requested as wildcards.** Narrowing either to the few columns you actually
+  render makes `total`, `item_subtotal`, `shipping_subtotal` and `tax_total`
+  all come back as **0** — no error, no warning, just a free order on the page
+  and on the receipt. `ORDER_CONFIRMATION_FIELDS` keeps both wildcards for this
+  reason.
+- **Money fields come back as `BigNumber` instances, not numbers.** They carry
+  `numeric_`/`raw_` and serialize to a plain number through `JSON.stringify`,
+  so a `typeof x === "number"` check silently reads every amount as 0 while a
+  console log of the same value looks correct. Route them through
+  `toAmount()` in `order-confirmation.ts`.
 - **A module service resolves registrations outside its own Awilix scope only if
   its `medusa-config.ts` entry lists them under `dependencies`** — other modules
   and core keys like `ContainerRegistrationKeys.QUERY` alike. An omission throws

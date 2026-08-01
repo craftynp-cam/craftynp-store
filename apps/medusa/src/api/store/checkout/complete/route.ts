@@ -5,8 +5,14 @@ import { completeCartWorkflow } from "@medusajs/medusa/core-flows";
 import type { CheckoutCompleteRequest } from "@craftynp/types";
 
 import { describeError } from "../../../../lib/describe-error";
+import {
+  orderAccessTtlMs,
+  signOrderAccessToken,
+} from "../../../../lib/order-access-token";
 
 type OrderSummary = { id: string; display_id: number };
+
+export const ORDER_TOKEN_UNAVAILABLE_LOG_TAG = "[order:token-unavailable]";
 
 export async function POST(
   req: MedusaRequest<CheckoutCompleteRequest>,
@@ -16,6 +22,28 @@ export async function POST(
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
 
   const { cartId } = req.validatedBody;
+
+  function respondWithOrder(order: OrderSummary) {
+    let orderToken: string | undefined;
+
+    try {
+      const ttlDays = Number(process.env.ORDER_ACCESS_TOKEN_TTL_DAYS);
+      orderToken = signOrderAccessToken(
+        { oid: order.id, exp: Date.now() + orderAccessTtlMs(ttlDays) },
+        process.env.ORDER_ACCESS_SECRET ?? "",
+      );
+    } catch (error) {
+      logger.error(
+        `${ORDER_TOKEN_UNAVAILABLE_LOG_TAG} order=${order.id} error=${describeError(error)}`,
+      );
+    }
+
+    return res.json({
+      orderId: order.id,
+      displayId: order.display_id,
+      ...(orderToken ? { orderToken } : {}),
+    });
+  }
 
   async function findOrderForCart(): Promise<OrderSummary | null> {
     const { data: links } = await query.graph({
@@ -30,10 +58,7 @@ export async function POST(
 
   const existingOrder = await findOrderForCart();
   if (existingOrder) {
-    return res.json({
-      orderId: existingOrder.id,
-      displayId: existingOrder.display_id,
-    });
+    return respondWithOrder(existingOrder);
   }
 
   try {
@@ -49,14 +74,11 @@ export async function POST(
     });
     const order = orders[0] as OrderSummary;
 
-    return res.json({ orderId: order.id, displayId: order.display_id });
+    return respondWithOrder(order);
   } catch (error) {
     const racedOrder = await findOrderForCart();
     if (racedOrder) {
-      return res.json({
-        orderId: racedOrder.id,
-        displayId: racedOrder.display_id,
-      });
+      return respondWithOrder(racedOrder);
     }
 
     const detail = describeError(error);

@@ -182,6 +182,7 @@ describe("checkoutCompleteResponseSchema", () => {
     const result = checkoutCompleteResponseSchema.safeParse({
       orderId: "order_123",
       displayId: 42,
+      orderToken: "payload.signature",
     });
     expect(result.success).toBe(true);
   });
@@ -190,6 +191,7 @@ describe("checkoutCompleteResponseSchema", () => {
     const result = checkoutCompleteResponseSchema.safeParse({
       orderId: "order_123",
       displayId: -1,
+      orderToken: "payload.signature",
     });
     expect(result.success).toBe(false);
   });

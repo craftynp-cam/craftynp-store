@@ -24,11 +24,13 @@ export function checkoutHref(): string {
 export function checkoutConfirmationHref(
   orderId: string,
   displayId: number,
+  token?: string,
 ): string {
   const params = new URLSearchParams({
     order: orderId,
     number: String(displayId),
   });
+  if (token) params.set("token", token);
   return `/checkout/confirmation?${params.toString()}`;
 }
 

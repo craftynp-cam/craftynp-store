@@ -81,6 +81,9 @@ importers:
       '@medusajs/medusa':
         specifier: 2.18.0
         version: 2.18.0(8a2da735ff005c2cdc8ce32d6127cd4e)
+      '@medusajs/notification':
+        specifier: 2.18.0
+        version: 2.18.0(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.43))(@types/node@20.19.43)(ioredis@5.11.1)(vite@6.4.3(@types/node@20.19.43)(jiti@1.21.7)(lightningcss@1.32.0)(yaml@2.9.0))(zod@4.4.3))
       '@medusajs/payment-stripe':
         specifier: 2.18.0
         version: 2.18.0(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.43))(@types/node@20.19.43)(ioredis@5.11.1)(vite@6.4.3(@types/node@20.19.43)(jiti@1.21.7)(lightningcss@1.32.0)(yaml@2.9.0))(zod@4.4.3))
