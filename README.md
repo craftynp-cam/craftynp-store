@@ -209,6 +209,33 @@ shipping rates come back in — the seed's original EUR `Europe` region is not
 a sensible pairing with USPS rates. Do not point automated tests at the
 ShipStation sandbox: its 20 requests/minute ceiling causes sporadic failures.
 
+#### Shipment tracking webhook (ShipStation)
+
+Delivery progress (CNP-65) arrives on ShipStation's `track` webhook rather than
+by polling — polling on a timer is the usual way to exhaust the rate limit.
+Set `SHIPSTATION_JWKS_URL` from ShipStation's webhook documentation for your
+environment; the receiver **fails closed without it**, since an unverified
+tracking endpoint would let anyone mark an order delivered. Then point
+`SHIPSTATION_WEBHOOK_URL` at this backend's `/hooks/shipstation/track` and
+register it:
+
+```bash
+pnpm run register-webhook
+```
+
+ShipStation allows one URL per event and answers `409` if one is already
+registered, which the script reports rather than treating as a failure. It will
+not deliver to `localhost`, so use a tunnel while developing:
+
+```bash
+cloudflared tunnel --url http://localhost:9000
+```
+
+Until a label is actually bought — the fulfilment workspace is CNP-76 — record
+a shipment by hand from the Fulfilment panel on the order in `/app`. That marks
+the order shipped, emails the customer, and gives the webhook a tracking number
+to match against.
+
 #### Stripe payments
 
 Checkout (CNP-53) needs a Stripe account in test mode. Set `STRIPE_SECRET_KEY`

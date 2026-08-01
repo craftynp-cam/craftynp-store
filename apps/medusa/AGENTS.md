@@ -5,9 +5,9 @@ come from `@craftynp/types`. Repo-wide setup, commands, and conventions are in
 the root [AGENTS.md](../../AGENTS.md).
 
 Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
-`site-content`, `shipstation` and `shipstation-fulfillment`, `stripe-tax` (which
-registers both a module and a tax provider), `notification-resend`,
-`auth-auth0`, and `auth-google-workspace`.
+`site-content`, `order-status`, `shipstation` and `shipstation-fulfillment`,
+`stripe-tax` (which registers both a module and a tax provider),
+`notification-resend`, `auth-auth0`, and `auth-google-workspace`.
 
 ## Layout and config
 
@@ -212,6 +212,52 @@ finding `SHIPSTATION_USPS_CARRIER_ID`.
   cart's tax can drift up to ~1¢ per line from the Stripe calculation. That is
   the accepted tradeoff, not a bug, and the tax provider is deliberately
   uncached unlike the sibling module service.
+
+## Order status and shipment tracking
+
+`order-status` owns the owner-facing lifecycle — received → packing →
+(in_production, unused until custom orders) → shipped → delivered, plus
+cancelled — with an append-only history, the tracking record, and the webhook
+idempotency ledger. The transition table itself lives in `@craftynp/types` so
+the storefront types against the same contract.
+
+- **A shipped fulfillment can never be cancelled.**
+  `canCancelFulfillmentOrThrow` rejects anything with `shipped_at` or
+  `delivered_at` set, at both the workflow and the module-service level. So
+  `voidShipmentWorkflow` does not un-ship anything: it stamps `voided_at` on our
+  tracking row and returns the order to `packing`. **Medusa's own
+  `order.fulfillment_status` stays `shipped` and deliberately disagrees with our
+  status.** Ours is the one the admin and storefront render. Do not "fix" the
+  divergence by nulling `shipped_at` — that would also erase the history the
+  status model exists to keep.
+- **Customer-facing tracking reads our `ShipmentTracking` row filtered on
+  `voided_at`, never the Medusa fulfillment labels.** Labels cannot be removed
+  from a shipped fulfillment, so reading them directly would keep showing a dead
+  tracking link after a void.
+- **`recordShipmentWorkflow` must keep ending in `createOrderShipmentWorkflow`
+  with `labels`.** That native shipment is what emits
+  `FulfillmentWorkflowEvents.SHIPMENT_CREATED`, which is what sends the shipped
+  email. Writing fulfilment state directly would silently stop the email.
+- **The order is associated by an indexed unique `order_id` column, not a module
+  link.** The tracking webhook arrives knowing only a tracking number, so it
+  reaches the order in one in-module query. This repo still has no `defineLink`.
+- **Never poll ShipStation for delivery progress.** It arrives on the `track`
+  webhook. Polling on a timer is the usual way to exhaust the rate limit, and
+  CNP-65 rules it out explicitly.
+- **`/hooks/shipstation/track` needs `bodyParser: { preserveRawBody: true }`**
+  in its `middlewares.ts` — the RSA-SHA256 signature covers
+  `` `${timestamp}.${rawBody}` ``, so a reserialised body never verifies. Core's
+  own `/hooks/payment/:provider` sets the same option; copy it rather than
+  inventing one.
+- **Once the signature verifies, the receiver answers 200 for everything it
+  cannot act on** — unreadable payload, unknown tracking number, voided label,
+  cancelled order. A 4xx to a webhook provider buys a retry storm, and each
+  retry that got through would spend one of the 100 daily Resend sends. A
+  genuine internal failure is the one case that returns 500, and it releases its
+  idempotency claim first so the retry can actually reprocess.
+- **`medusa db:generate` takes the module's registration name, not its folder
+  name** — `orderStatus`, not `order-status`. The wrong one fails with an
+  unhelpful "unknown module" and a list you have to read carefully.
 
 ## Email and notifications
 

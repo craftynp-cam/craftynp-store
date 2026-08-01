@@ -203,6 +203,21 @@ category handle for nothing.
 - `fetchOrderConfirmation` passes the guest `?token=` _or_ the session bearer,
   never both, and degrades to `null` like every other fetch helper — the page
   still renders a thank-you when the backend is down.
+- **This page is where a customer sees order status and tracking**, because it
+  is the permanent order link. `/account/orders` is CNP-60 and does not exist;
+  when it does, it reuses `OrderStatusBadge` and `OrderTrackingCard` rather than
+  growing its own.
+- **`order.status` and `order.fulfilmentStatus` are different things.** The
+  first is Medusa's own order status, the second is the owner-facing lifecycle
+  the shop actually works to. Only the second is rendered.
+- **Customer-facing status wording lives in `src/lib/order-status.ts`**, which
+  stays medusa-free so client components can value-import it. Its maps are
+  `satisfies Record<OrderStatus, …>`, so a new status is a compile error rather
+  than a blank label — that is why they carry no test of their own.
+- **`OrderTrackingCard` must never build a tracking URL itself.**
+  `carrierTrackingUrl` in `@craftynp/types` returns `null` for a carrier it has
+  no template for, and the card falls back to the bare number. Guessing a URL is
+  how a dead link reaches a customer.
 
 ## Auth
 
