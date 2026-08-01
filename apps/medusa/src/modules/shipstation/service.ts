@@ -76,6 +76,37 @@ class ShipStationModuleService {
     return rates;
   }
 
+  async registerTrackingWebhook(
+    url: string,
+  ): Promise<{ created: boolean; status: number }> {
+    const options = this.options_;
+
+    await limiter.acquire();
+
+    const response = await fetch(`${options.baseUrl}/environment/webhooks`, {
+      method: "POST",
+      headers: {
+        "API-Key": options.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url, event: "track" }),
+      signal: AbortSignal.timeout(options.timeoutMs),
+    });
+
+    if (response.status === 409) {
+      return { created: false, status: 409 };
+    }
+
+    if (!response.ok) {
+      throw new ShipStationRateError(
+        "http_error",
+        `ShipStation responded ${response.status} registering the track webhook`,
+      );
+    }
+
+    return { created: true, status: response.status };
+  }
+
   private async fetchRatesWithRetry(
     input: GetUspsRatesInput,
   ): Promise<NormalizedRate[]> {
