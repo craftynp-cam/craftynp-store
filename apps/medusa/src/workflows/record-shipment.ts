@@ -34,9 +34,9 @@ const recordShipmentWorkflow = createWorkflow(
     });
 
     const items = transform({ order }, ({ order }) =>
-      ((order as { items?: { id: string; quantity: number }[] }).items ?? []).map(
-        (item) => ({ id: item.id, quantity: item.quantity }),
-      ),
+      (
+        (order as { items?: { id: string; quantity: number }[] }).items ?? []
+      ).map((item) => ({ id: item.id, quantity: item.quantity })),
     );
 
     const fulfillment = createOrderFulfillmentWorkflow.runAsStep({

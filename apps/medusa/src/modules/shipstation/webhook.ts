@@ -83,10 +83,7 @@ function toKeyMap(payload: unknown): Map<string, KeyObject> {
     if (typeof kid !== "string" || !kid) continue;
 
     try {
-      map.set(
-        kid,
-        createPublicKey({ key: jwk as never, format: "jwk" }),
-      );
+      map.set(kid, createPublicKey({ key: jwk as never, format: "jwk" }));
     } catch {
       continue;
     }

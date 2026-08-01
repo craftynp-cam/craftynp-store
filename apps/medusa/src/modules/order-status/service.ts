@@ -1,6 +1,13 @@
 import { MedusaService } from "@medusajs/framework/utils";
-import { allowedTransitions, trackingStatusFromShipStation } from "@craftynp/types";
-import type { OrderStatus, OrderStatusActor, TrackingStatus } from "@craftynp/types";
+import {
+  allowedTransitions,
+  trackingStatusFromShipStation,
+} from "@craftynp/types";
+import type {
+  OrderStatus,
+  OrderStatusActor,
+  TrackingStatus,
+} from "@craftynp/types";
 
 import { assertTransition, OrderStatusTransitionError } from "./lib";
 import OrderStatusHistoryEntry from "./models/order-status-history-entry";

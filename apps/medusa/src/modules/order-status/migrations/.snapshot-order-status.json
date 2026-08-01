@@ -1,7 +1,5 @@
 {
-  "namespaces": [
-    "public"
-  ],
+  "namespaces": ["public"],
   "name": "public",
   "tables": [
     {
@@ -142,9 +140,7 @@
         },
         {
           "keyName": "order_status_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -341,9 +337,7 @@
         },
         {
           "keyName": "order_status_history_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -354,13 +348,9 @@
       "foreignKeys": {
         "order_status_history_order_status_id_foreign": {
           "constraintName": "order_status_history_order_status_id_foreign",
-          "columnNames": [
-            "order_status_id"
-          ],
+          "columnNames": ["order_status_id"],
           "localTableName": "public.order_status_history",
-          "referencedColumnNames": [
-            "id"
-          ],
+          "referencedColumnNames": ["id"],
           "referencedTableName": "public.order_status",
           "updateRule": "cascade"
         }
@@ -658,9 +648,7 @@
         },
         {
           "keyName": "shipment_tracking_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -671,13 +659,9 @@
       "foreignKeys": {
         "shipment_tracking_order_status_id_foreign": {
           "constraintName": "shipment_tracking_order_status_id_foreign",
-          "columnNames": [
-            "order_status_id"
-          ],
+          "columnNames": ["order_status_id"],
           "localTableName": "public.shipment_tracking",
-          "referencedColumnNames": [
-            "id"
-          ],
+          "referencedColumnNames": ["id"],
           "referencedTableName": "public.order_status",
           "updateRule": "cascade"
         }
@@ -838,9 +822,7 @@
         },
         {
           "keyName": "tracking_webhook_event_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,

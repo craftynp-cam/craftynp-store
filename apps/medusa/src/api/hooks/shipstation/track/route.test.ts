@@ -45,7 +45,11 @@ function buildHarness(overrides: ServiceOverrides = {}, body: unknown = BODY) {
       if (overrides.shipmentContextThrows) throw new Error("database down");
       return overrides.context === undefined
         ? {
-            shipment: { id: "ship_1", fulfillment_id: "ful_1", voided_at: null },
+            shipment: {
+              id: "ship_1",
+              fulfillment_id: "ful_1",
+              voided_at: null,
+            },
             orderId: "order_1",
             status: "shipped",
           }

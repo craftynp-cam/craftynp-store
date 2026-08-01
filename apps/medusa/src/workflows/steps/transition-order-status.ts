@@ -21,9 +21,8 @@ type CompensationInput = {
 export const transitionOrderStatusStep = createStep(
   "transition-order-status",
   async (input: TransitionOrderStatusStepInput, { container }) => {
-    const service = container.resolve<OrderStatusModuleService>(
-      ORDER_STATUS_MODULE,
-    );
+    const service =
+      container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
     const result = await service.transition(input);
 
@@ -36,9 +35,8 @@ export const transitionOrderStatusStep = createStep(
   async (compensationInput: CompensationInput | undefined, { container }) => {
     if (!compensationInput) return;
 
-    const service = container.resolve<OrderStatusModuleService>(
-      ORDER_STATUS_MODULE,
-    );
+    const service =
+      container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
     await service.revertTransition({
       orderId: compensationInput.orderId,

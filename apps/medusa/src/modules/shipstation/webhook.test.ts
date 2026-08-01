@@ -40,7 +40,9 @@ function headers(timestamp: string, signature: string, keyId = "key-1") {
   return { keyId, signature, timestamp };
 }
 
-function verify(overrides: Partial<Parameters<typeof verifyShipStationWebhook>[0]> = {}) {
+function verify(
+  overrides: Partial<Parameters<typeof verifyShipStationWebhook>[0]> = {},
+) {
   const timestamp = String(Math.floor(NOW / 1000));
 
   return verifyShipStationWebhook({
@@ -60,17 +62,13 @@ beforeEach(() => {
 
 describe("verifyShipStationWebhook", () => {
   it("accepts a request signed by the advertised key", async () => {
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValue(jwksResponse(jwks("key-1")));
+    jest.spyOn(global, "fetch").mockResolvedValue(jwksResponse(jwks("key-1")));
 
     await expect(verify()).resolves.toBeUndefined();
   });
 
   it("rejects a body that was altered after signing", async () => {
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValue(jwksResponse(jwks("key-1")));
+    jest.spyOn(global, "fetch").mockResolvedValue(jwksResponse(jwks("key-1")));
 
     await expect(
       verify({ rawBody: '{"resource_type":"API_TRACK","data":{}}' }),
@@ -78,9 +76,7 @@ describe("verifyShipStationWebhook", () => {
   });
 
   it("rejects a signature made with a different key", async () => {
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValue(jwksResponse(jwks("key-1")));
+    jest.spyOn(global, "fetch").mockResolvedValue(jwksResponse(jwks("key-1")));
 
     const timestamp = String(Math.floor(NOW / 1000));
 
@@ -95,9 +91,7 @@ describe("verifyShipStationWebhook", () => {
   });
 
   it("rejects a replayed request whose timestamp has gone stale", async () => {
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValue(jwksResponse(jwks("key-1")));
+    jest.spyOn(global, "fetch").mockResolvedValue(jwksResponse(jwks("key-1")));
 
     const stale = String(Math.floor(NOW / 1000) - 3600);
 

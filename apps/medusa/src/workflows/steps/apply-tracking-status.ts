@@ -33,9 +33,8 @@ function toDate(value: Date | string | null | undefined): Date | null {
 export const applyTrackingStatusStep = createStep(
   "apply-tracking-status",
   async (input: ApplyTrackingStatusStepInput, { container }) => {
-    const service = container.resolve<OrderStatusModuleService>(
-      ORDER_STATUS_MODULE,
-    );
+    const service =
+      container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
     const [previous] = (await service.listShipmentTrackings({
       id: input.shipmentId,
@@ -51,16 +50,16 @@ export const applyTrackingStatusStep = createStep(
     return new StepResponse({ status } as { status: TrackingStatus }, {
       shipmentId: input.shipmentId,
       tracking_status: previous?.tracking_status ?? "unknown",
-      tracking_status_description: previous?.tracking_status_description ?? null,
+      tracking_status_description:
+        previous?.tracking_status_description ?? null,
       delivered_at: toDate(previous?.delivered_at),
     } satisfies CompensationInput);
   },
   async (compensationInput: CompensationInput | undefined, { container }) => {
     if (!compensationInput) return;
 
-    const service = container.resolve<OrderStatusModuleService>(
-      ORDER_STATUS_MODULE,
-    );
+    const service =
+      container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
     await service.updateShipmentTrackings({
       id: compensationInput.shipmentId,

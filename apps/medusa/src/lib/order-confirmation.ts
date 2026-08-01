@@ -5,7 +5,13 @@ import type {
   OrderAddress,
   OrderConfirmation,
   OrderConfirmationLine,
+  OrderStatus,
+  OrderTracking,
 } from "@craftynp/types";
+
+import { ORDER_STATUS_MODULE } from "../modules/order-status";
+import type OrderStatusModuleService from "../modules/order-status/service";
+import { loadOrderTracking } from "./order-status-detail";
 
 export const ORDER_CONFIRMATION_FIELDS = [
   "id",
@@ -152,7 +158,18 @@ function toAddress(
   };
 }
 
-export function toOrderConfirmation(row: OrderRow): OrderConfirmation {
+export type OrderFulfilmentSnapshot = {
+  fulfilmentStatus: OrderStatus;
+  tracking: OrderTracking | null;
+};
+
+export function toOrderConfirmation(
+  row: OrderRow,
+  fulfilment: OrderFulfilmentSnapshot = {
+    fulfilmentStatus: "received",
+    tracking: null,
+  },
+): OrderConfirmation {
   const createdAt = row.created_at ? new Date(row.created_at) : null;
 
   return {
@@ -164,6 +181,8 @@ export function toOrderConfirmation(row: OrderRow): OrderConfirmation {
         ? createdAt.toISOString()
         : "",
     status: row.status ?? "",
+    fulfilmentStatus: fulfilment.fulfilmentStatus,
+    tracking: fulfilment.tracking,
     shippingMethodName: row.shipping_methods?.[0]?.name ?? null,
     lines: (row.items ?? []).map(toLine),
     totals: {
@@ -198,5 +217,16 @@ export async function loadOrderConfirmation(
   const row = orders[0] as OrderRow | undefined;
   if (!row) return null;
 
-  return { order: toOrderConfirmation(row), customerId: row.customer_id };
+  const orderStatus =
+    scope.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
+
+  const [fulfilmentStatus, tracking] = await Promise.all([
+    orderStatus.currentStatus(row.id),
+    loadOrderTracking(scope, row.id),
+  ]);
+
+  return {
+    order: toOrderConfirmation(row, { fulfilmentStatus, tracking }),
+    customerId: row.customer_id,
+  };
 }

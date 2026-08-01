@@ -16,9 +16,8 @@ export type RecordShipmentTrackingStepInput = {
 export const recordShipmentTrackingStep = createStep(
   "record-shipment-tracking",
   async (input: RecordShipmentTrackingStepInput, { container }) => {
-    const service = container.resolve<OrderStatusModuleService>(
-      ORDER_STATUS_MODULE,
-    );
+    const service =
+      container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
     const shipment = await service.recordShipment({
       ...input,
@@ -27,12 +26,14 @@ export const recordShipmentTrackingStep = createStep(
 
     return new StepResponse(shipment, { shipmentId: shipment.id });
   },
-  async (compensationInput: { shipmentId: string } | undefined, { container }) => {
+  async (
+    compensationInput: { shipmentId: string } | undefined,
+    { container },
+  ) => {
     if (!compensationInput) return;
 
-    const service = container.resolve<OrderStatusModuleService>(
-      ORDER_STATUS_MODULE,
-    );
+    const service =
+      container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
     await service.deleteShipmentTrackings(compensationInput.shipmentId);
   },

@@ -7,9 +7,7 @@ export const ORDER_STATUS_LOG_TAG = "[order-status]";
 export const TRACKING_WEBHOOK_LOG_TAG = "[shipstation:track]";
 
 export type OrderStatusErrorReason =
-  | "invalid_transition"
-  | "unknown_order"
-  | "no_shipment";
+  "invalid_transition" | "unknown_order" | "no_shipment";
 
 export class OrderStatusTransitionError extends Error {
   reason: OrderStatusErrorReason;

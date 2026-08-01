@@ -111,7 +111,9 @@ describe("carrierTrackingUrl", () => {
   });
 
   it("encodes the tracking number into the query string", () => {
-    expect(carrierTrackingUrl("usps", "94 001/118")).toContain("94%20001%2F118");
+    expect(carrierTrackingUrl("usps", "94 001/118")).toContain(
+      "94%20001%2F118",
+    );
   });
 });
 

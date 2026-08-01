@@ -40,7 +40,9 @@ export function allowedTransitions(from: OrderStatus): readonly OrderStatus[] {
 }
 
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
-  return (ORDER_STATUS_TRANSITIONS[from] as readonly OrderStatus[]).includes(to);
+  return (ORDER_STATUS_TRANSITIONS[from] as readonly OrderStatus[]).includes(
+    to,
+  );
 }
 
 export function transitionRejection(
@@ -93,7 +95,9 @@ export function trackingStatusFromShipStation(
 
   if (
     status === "in_transit" &&
-    /out for delivery|with delivery courier/i.test(carrierStatusDescription ?? "")
+    /out for delivery|with delivery courier/i.test(
+      carrierStatusDescription ?? "",
+    )
   ) {
     return "out_for_delivery";
   }
@@ -103,7 +107,8 @@ export function trackingStatusFromShipStation(
 
 const CARRIER_TRACKING_URLS: Record<string, (tracking: string) => string> = {
   usps: (t) => `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`,
-  stamps_com: (t) => `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`,
+  stamps_com: (t) =>
+    `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`,
   ups: (t) => `https://www.ups.com/track?tracknum=${t}`,
   fedex: (t) => `https://www.fedex.com/fedextrack/?trknbr=${t}`,
   dhl_express: (t) => `https://www.dhl.com/en/express/tracking.html?AWB=${t}`,
