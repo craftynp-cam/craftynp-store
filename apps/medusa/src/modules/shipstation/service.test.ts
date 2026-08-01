@@ -402,6 +402,29 @@ describe("ShipStationModuleService.voidLabel", () => {
     });
   });
 
+  it("treats a carrier refusal as an answer, not an unknown state", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue(
+      jsonResponse(
+        {
+          errors: [
+            {
+              error_code: "invalid_input",
+              message: "Cannot void a test label",
+            },
+          ],
+        },
+        { status: 400 },
+      ),
+    );
+
+    const { service } = makeService();
+
+    await expect(service.voidLabel("se-test-1")).resolves.toEqual({
+      approved: false,
+      message: "Cannot void a test label",
+    });
+  });
+
   it("throws when the call itself fails, so we never stamp a void we did not confirm", async () => {
     jest
       .spyOn(global, "fetch")

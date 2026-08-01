@@ -143,10 +143,14 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
   exists — is safe to retry. An unconfirmed timeout is reconciled by reading
   `GET /v2/labels` and matching on our own `external_shipment_id`, then on
   ship-to name plus postal code plus service within the window.
-- **Voiding calls ShipStation before writing anything.** A 200 carrying
-  `approved: false` is the carrier's answer, not an error, and is recorded in
-  `void_approved`/`void_message` and shown verbatim; a failed _call_ throws, so
-  we never stamp `voided_at` on a label whose real state we do not know.
+- **Voiding calls ShipStation before writing anything, and a refusal is an
+  answer.** Both a 200 carrying `approved: false` and a **4xx** are the carrier
+  saying no — they record `void_approved: false` plus its message, stamp
+  `voided_at`, and return the order to `packing`, because we know the label was
+  not voided. Only a timeout or a 5xx is genuinely unknown, and that throws so
+  we never stamp `voided_at` on a label whose real state we cannot see.
+  Treating a 4xx as unknown strands the order as `shipped` forever — which is
+  what happens with a test label, since ShipStation rejects voiding one.
   `void_approved` is tri-state — null means we never asked.
 - **Label PDFs do not go through the file module.** They live in their own
   private S3 bucket — Cloudflare R2 in production, the MinIO container in

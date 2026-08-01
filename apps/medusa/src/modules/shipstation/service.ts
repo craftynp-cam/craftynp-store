@@ -363,15 +363,29 @@ class ShipStationModuleService {
   ): Promise<{ approved: boolean; message: string }> {
     const options = this.options_;
 
-    const parsed = await this.requestJson({
-      url: `${options.baseUrl}/labels/${encodeURIComponent(labelId)}/void`,
-      method: "PUT",
-      timeoutMs: options.labelTimeoutMs,
-      retryOn429: true,
-      mapError: toLabelError,
-    });
+    try {
+      const parsed = await this.requestJson({
+        url: `${options.baseUrl}/labels/${encodeURIComponent(labelId)}/void`,
+        method: "PUT",
+        timeoutMs: options.labelTimeoutMs,
+        retryOn429: true,
+        mapError: toLabelError,
+      });
 
-    return extractVoidResult(parsed);
+      return extractVoidResult(parsed);
+    } catch (error) {
+      if (
+        error instanceof ShipStationLabelError &&
+        (error.reason === "rejected" || error.reason === "insufficient_funds")
+      ) {
+        return {
+          approved: false,
+          message: error.carrierMessage ?? "The carrier would not void it.",
+        };
+      }
+
+      throw error;
+    }
   }
 
   async getCarrierBalances(): Promise<CarrierBalance[]> {
