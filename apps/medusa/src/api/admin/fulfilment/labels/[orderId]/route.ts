@@ -2,10 +2,11 @@ import type {
   AuthenticatedMedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http";
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
-import type { IFileModuleService, Logger } from "@medusajs/framework/types";
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import type { Logger } from "@medusajs/framework/types";
 
 import { describeError } from "../../../../../lib/describe-error";
+import { getLabel } from "../../../../../lib/label-storage";
 import { ORDER_STATUS_MODULE } from "../../../../../modules/order-status";
 import type OrderStatusModuleService from "../../../../../modules/order-status/service";
 import { SHIPSTATION_LABEL_LOG_TAG } from "../../../../../modules/shipstation/lib";
@@ -31,8 +32,7 @@ export async function GET(
   }
 
   try {
-    const fileService = req.scope.resolve<IFileModuleService>(Modules.FILE);
-    const buffer = await fileService.getAsBuffer(shipment.label_file_id);
+    const buffer = await getLabel(shipment.label_file_id);
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'inline; filename="label.pdf"');

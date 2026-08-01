@@ -148,14 +148,25 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
   `void_approved`/`void_message` and shown verbatim; a failed _call_ throws, so
   we never stamp `voided_at` on a label whose real state we do not know.
   `void_approved` is tri-state — null means we never asked.
-- **Label PDFs are stored `access: "private"` and served by
-  `GET /admin/fulfilment/labels/:orderId`**, never from `/static`. A label
-  carries the customer's name and full address, and `file-local` serves public
-  files with no auth at all. `label_file_id` is the file-module id, and
-  `getAsBuffer(id)` is the only supported read path — the URL alone is not
-  enough. `label_url` holds our own route; it falls back to ShipStation's
-  90-day URL only when storage failed, which is exactly what a null
-  `label_file_id` marks.
+- **Label PDFs do not go through the file module.** They live in their own
+  private S3 bucket — Cloudflare R2 in production, the MinIO container in
+  `docker-compose.yml` locally — written by `src/lib/label-storage.ts` and
+  served only by `GET /admin/fulfilment/labels/:orderId`. Two things force
+  this, and both were found the hard way:
+  **`file-local` cannot store anything privately.** Its own source says so:
+  "there is no way to serve private files through a static server, we simply
+  place them in `static`". A label written with `access: "private"` was
+  fetchable at `/static/labels/private-….pdf` with no auth at all.
+  **The file module has exactly one provider** (`fileProviderService_`, no
+  per-call selection), and R2 has no object-level ACLs, so a bucket is public
+  or private as a whole. One provider therefore cannot serve public
+  site-content images and private labels. Site content stays on `file-local`;
+  labels get their own bucket.
+  `label_file_id` holds the object key. `label_url` holds our own route; it
+  falls back to ShipStation's 90-day URL only when storage failed, which is
+  exactly what a null `label_file_id` marks.
+- **Never make the labels bucket public**, and never point it at the bucket
+  that serves site-content images.
 - **Storing the label PDF must never throw.** It runs after the purchase, so
   throwing would trigger the compensating void and cancel a perfectly good label
   because our own disk was full. That is a worse outcome than a link that

@@ -552,7 +552,9 @@ function readPackage(rate: Record<string, unknown>): {
 
   const name = code
     .split("_")
-    .map((word) => (word.length > 0 ? word[0]!.toUpperCase() + word.slice(1) : word))
+    .map((word) =>
+      word.length > 0 ? word[0]!.toUpperCase() + word.slice(1) : word,
+    )
     .join(" ");
 
   return { code, name };

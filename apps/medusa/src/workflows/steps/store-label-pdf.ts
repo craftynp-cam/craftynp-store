@@ -1,7 +1,9 @@
 import { createStep, StepResponse } from "@medusajs/framework/workflows-sdk";
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
-import type { IFileModuleService, Logger } from "@medusajs/framework/types";
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import type { Logger } from "@medusajs/framework/types";
 import { randomUUID } from "node:crypto";
+
+import { deleteLabel, labelObjectKey, putLabel } from "../../lib/label-storage";
 
 import { SHIPSTATION_MODULE } from "../../modules/shipstation";
 import { SHIPSTATION_LABEL_LOG_TAG } from "../../modules/shipstation/lib";
@@ -44,16 +46,11 @@ export const storeLabelPdfStep = createStep(
     try {
       const shipstation =
         container.resolve<ShipStationModuleService>(SHIPSTATION_MODULE);
-      const fileService = container.resolve<IFileModuleService>(Modules.FILE);
 
       const bytes = await shipstation.downloadLabelPdf(input.pdfUrl);
+      const key = labelObjectKey(input.orderId, randomUUID());
 
-      const file = await fileService.createFiles({
-        filename: `labels/${randomUUID()}-${input.displayId}.pdf`,
-        mimeType: "application/pdf",
-        content: bytes.toString("base64"),
-        access: "private",
-      });
+      await putLabel(key, bytes);
 
       return new StepResponse<
         StoreLabelPdfStepOutput,
@@ -61,10 +58,10 @@ export const storeLabelPdfStep = createStep(
       >(
         {
           labelUrl: labelDownloadPath(input.orderId),
-          labelFileId: file.id,
+          labelFileId: key,
           stored: true,
         },
-        { fileId: file.id },
+        { fileId: key },
       );
     } catch (error) {
       logger.error(
@@ -77,13 +74,9 @@ export const storeLabelPdfStep = createStep(
       >({ labelUrl: input.pdfUrl, labelFileId: null, stored: false });
     }
   },
-  async (
-    compensationInput: StoreLabelPdfCompensation | undefined,
-    { container },
-  ) => {
+  async (compensationInput: StoreLabelPdfCompensation | undefined) => {
     if (!compensationInput) return;
 
-    const fileService = container.resolve<IFileModuleService>(Modules.FILE);
-    await fileService.deleteFiles(compensationInput.fileId);
+    await deleteLabel(compensationInput.fileId);
   },
 );

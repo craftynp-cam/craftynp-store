@@ -25,6 +25,7 @@
     "typecheck": "tsc --noEmit && tsc -p src/admin --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1101.0",
     "@craftynp/types": "workspace:*",
     "@medusajs/admin-sdk": "2.18.0",
     "@medusajs/admin-shared": "2.18.0",
