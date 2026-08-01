@@ -4,6 +4,7 @@ import {
   checkoutLineItemDetailSchema,
   checkoutTotalsSchema,
 } from "./checkout.js";
+import { orderStatusSchema, orderTrackingSchema } from "./order-status.js";
 
 export const orderAddressSchema = z.object({
   firstName: z.string(),
@@ -37,6 +38,8 @@ export const orderConfirmationSchema = z.object({
   email: z.string(),
   placedAt: z.string(),
   status: z.string(),
+  fulfilmentStatus: orderStatusSchema,
+  tracking: orderTrackingSchema.nullable(),
   shippingMethodName: z.string().nullable(),
   lines: z.array(orderConfirmationLineSchema),
   totals: checkoutTotalsSchema,
