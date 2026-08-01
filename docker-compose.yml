@@ -61,8 +61,12 @@ services:
   # here makes the bucket public — a shipping label carries the customer's
   # name and full address and is only ever served through the authenticated
   # admin route.
+  # Behind a profile so it stays out of `docker compose up --wait`, which
+  # treats any container that exits — even successfully — as a failed start.
+  # `pnpm run services:up` runs it explicitly once MinIO is healthy.
   minio-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    profiles: ["init"]
     depends_on:
       minio:
         condition: service_healthy
