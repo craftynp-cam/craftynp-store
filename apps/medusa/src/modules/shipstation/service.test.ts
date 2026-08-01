@@ -267,18 +267,14 @@ describe("ShipStationModuleService.purchaseLabel", () => {
   });
 
   it("treats any other 4xx as a rejection and keeps the carrier's words", async () => {
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce(
-        jsonResponse(
-          {
-            errors: [
-              { error_code: "invalid_address", message: "Bad postcode" },
-            ],
-          },
-          { status: 400 },
-        ),
-      );
+    jest.spyOn(global, "fetch").mockResolvedValueOnce(
+      jsonResponse(
+        {
+          errors: [{ error_code: "invalid_address", message: "Bad postcode" }],
+        },
+        { status: 400 },
+      ),
+    );
 
     const { service } = makeService();
     await expect(service.purchaseLabel(buyInput())).rejects.toMatchObject({

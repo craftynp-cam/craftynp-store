@@ -11,6 +11,7 @@ import type {
 
 import { ORDER_STATUS_MODULE } from "../modules/order-status";
 import type OrderStatusModuleService from "../modules/order-status/service";
+import { toAmount } from "./money";
 import { loadOrderTracking } from "./order-status-detail";
 
 export const ORDER_CONFIRMATION_FIELDS = [
@@ -79,36 +80,6 @@ type OrderAddressRow = {
   postal_code: string | null;
   country_code: string | null;
 };
-
-function toPrimitiveAmount(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function toAmount(value: unknown): number {
-  const direct = toPrimitiveAmount(value);
-  if (direct != null) return direct;
-
-  if (value == null || typeof value !== "object") return 0;
-
-  const record = value as Record<string, unknown> & { toJSON?: () => unknown };
-
-  for (const candidate of [
-    record.numeric_,
-    record.numeric,
-    record.value,
-    typeof record.toJSON === "function" ? record.toJSON() : undefined,
-  ]) {
-    const parsed = toPrimitiveAmount(candidate);
-    if (parsed != null) return parsed;
-  }
-
-  return 0;
-}
 
 function toDetails(value: unknown): CheckoutLineItemDetail[] {
   if (!Array.isArray(value)) return [];

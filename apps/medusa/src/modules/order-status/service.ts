@@ -29,9 +29,15 @@ type ShipmentRow = {
   tracking_number: string;
   fulfillment_id: string | null;
   carrier_code: string | null;
+  carrier_id: string | null;
   service_code: string | null;
   label_id: string | null;
   label_url: string | null;
+  label_file_id: string | null;
+  shipment_cost: unknown;
+  shipment_cost_currency: string | null;
+  void_approved: boolean | null;
+  void_message: string | null;
   tracking_status: string;
   tracking_status_description: string | null;
   shipped_at: Date | string | null;
@@ -61,11 +67,20 @@ export type RecordShipmentInput = {
   orderId: string;
   trackingNumber: string;
   carrierCode: string;
+  carrierId?: string | null;
   serviceCode?: string | null;
   labelId?: string | null;
   labelUrl?: string | null;
+  labelFileId?: string | null;
+  shipmentCost?: number | null;
+  currencyCode?: string | null;
   fulfillmentId: string;
   shippedAt: Date;
+};
+
+export type VoidShipmentResult = {
+  approved: boolean | null;
+  message: string | null;
 };
 
 export type TrackingEventInput = {
@@ -196,9 +211,15 @@ class OrderStatusModuleService extends MedusaService({
       order_status_id: record.id,
       tracking_number: input.trackingNumber,
       carrier_code: input.carrierCode,
+      carrier_id: input.carrierId ?? null,
       service_code: input.serviceCode ?? null,
       label_id: input.labelId ?? null,
       label_url: input.labelUrl ?? null,
+      label_file_id: input.labelFileId ?? null,
+      shipment_cost: input.shipmentCost ?? null,
+      shipment_cost_currency: input.currencyCode ?? null,
+      void_approved: null,
+      void_message: null,
       fulfillment_id: input.fulfillmentId,
       tracking_status: "accepted" satisfies TrackingStatus,
       tracking_status_description: null,
@@ -210,7 +231,10 @@ class OrderStatusModuleService extends MedusaService({
     return Array.isArray(created) ? (created[0] as ShipmentRow) : created;
   }
 
-  async voidShipment(orderId: string): Promise<ShipmentRow> {
+  async voidShipment(
+    orderId: string,
+    result: VoidShipmentResult = { approved: null, message: null },
+  ): Promise<ShipmentRow> {
     const shipment = await this.activeShipment(orderId);
     if (!shipment) {
       throw new OrderStatusTransitionError(
@@ -222,9 +246,19 @@ class OrderStatusModuleService extends MedusaService({
     await this.updateShipmentTrackings({
       id: shipment.id,
       voided_at: new Date(),
+      void_approved: result.approved,
+      void_message: result.message,
     });
 
     return shipment;
+  }
+
+  async shipmentByLabelId(labelId: string): Promise<ShipmentRow | null> {
+    const rows = (await this.listShipmentTrackings({
+      label_id: labelId,
+    })) as ShipmentRow[];
+
+    return rows[0] ?? null;
   }
 
   async applyTrackingStatus(
