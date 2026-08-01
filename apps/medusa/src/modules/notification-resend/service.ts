@@ -21,7 +21,13 @@ import {
 
 // The module service hands the whole notification row to send(), so the
 // idempotency key is there at runtime even though the published DTO omits it.
-type NotificationWithIdempotency = ProviderSendNotificationDTO & {
+// `template` is typed as required on ProviderSendNotificationDTO, but a
+// content-based send (the path every real caller here uses) never sets it.
+type NotificationWithIdempotency = Omit<
+  ProviderSendNotificationDTO,
+  "template"
+> & {
+  template?: string;
   idempotency_key?: string | null;
 };
 
@@ -68,13 +74,38 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
       headers["Idempotency-Key"] = notification.idempotency_key;
     }
 
-    const body = JSON.stringify({
-      from: notification.from?.trim() || this.options_.from,
-      to: [notification.to],
-      ...(this.options_.replyTo ? { reply_to: this.options_.replyTo } : {}),
-      template: { id: notification.template },
-      variables: notification.data ?? {},
-    });
+    const from = notification.from?.trim() || this.options_.from;
+    const to = [notification.to];
+    const replyTo = this.options_.replyTo
+      ? { reply_to: this.options_.replyTo }
+      : {};
+
+    // Resend's REST API does not reliably apply `variables` to a template.id
+    // send — every field, not only ones used inside an href, silently fell
+    // back to its declared default in testing against this account (see
+    // apps/medusa/docs/auth0-custom-email-provider.md for where this was
+    // first found). notification.content carries fully-rendered html/text
+    // built server-side instead, which every caller in this repo now uses;
+    // the template.id path stays only as a fallback for a caller that hasn't
+    // been migrated, and is not to be trusted for anything with a variable.
+    const body = JSON.stringify(
+      notification.content?.html
+        ? {
+            from,
+            to,
+            ...replyTo,
+            subject: notification.content.subject,
+            html: notification.content.html,
+            text: notification.content.text,
+          }
+        : {
+            from,
+            to,
+            ...replyTo,
+            template: { id: notification.template },
+            variables: notification.data ?? {},
+          },
+    );
 
     const response = await this.fetchWithRetry_(headers, body);
     const payload = (await response.json().catch(() => ({}))) as {

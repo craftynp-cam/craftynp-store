@@ -2,9 +2,8 @@ import type { OrderAddress, OrderConfirmationLine } from "@craftynp/types";
 
 import { formatMoney } from "./format-money";
 
-// Resend caps a single template variable at 2,000 characters and rejects the
-// whole send past it. Budget under that so a long order degrades to a
-// "+N more" row instead of no email at all.
+// Keeps one order email a sane size regardless of how many lines it has,
+// degrading to a "+N more" row instead of growing without bound.
 export const MAX_VARIABLE_CHARS = 1900;
 
 const CELL = "font-family:Arial,Helvetica,sans-serif;";

@@ -13,7 +13,7 @@ import { loadOrderConfirmation } from "../lib/order-confirmation";
 import {
   formatOrderDate,
   ORDER_EMAIL_FAILED_LOG_TAG,
-  orderShippedVariables,
+  orderShippedContent,
 } from "../lib/order-email";
 
 type ShipmentEvent = { id: string; no_notification?: boolean };
@@ -77,14 +77,13 @@ export default async function sendOrderShippedEmail({
     await notification.createNotifications({
       to: loaded.order.email,
       channel: "email",
-      template: process.env.RESEND_TEMPLATE_ORDER_SHIPPED ?? "order-shipped",
       trigger_type: FulfillmentWorkflowEvents.SHIPMENT_CREATED,
       resource_id: loaded.order.orderId,
       resource_type: "order",
       // Keyed on the fulfillment, not the order: a split shipment is two
       // genuinely different emails.
       idempotency_key: `order-shipped:${fulfillmentId}`,
-      data: orderShippedVariables(loaded.order, {
+      content: orderShippedContent(loaded.order, {
         carrierName:
           fulfillment?.shipping_option?.name ??
           loaded.order.shippingMethodName ??

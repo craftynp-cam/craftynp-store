@@ -9,7 +9,7 @@ import { resolveSiteContent } from "@craftynp/types";
 import { loadOrderConfirmation } from "../lib/order-confirmation";
 import {
   ORDER_EMAIL_FAILED_LOG_TAG,
-  orderConfirmationVariables,
+  orderConfirmationContent,
 } from "../lib/order-email";
 import { SITE_CONTENT_MODULE } from "../modules/site-content";
 import type SiteContentModuleService from "../modules/site-content/service";
@@ -37,14 +37,12 @@ export default async function sendOrderConfirmationEmail({
     await notification.createNotifications({
       to: loaded.order.email,
       channel: "email",
-      template:
-        process.env.RESEND_TEMPLATE_ORDER_CONFIRMATION ?? "order-confirmation",
       trigger_type: "order.placed",
       resource_id: loaded.order.orderId,
       resource_type: "order",
       // Stops a duplicate receipt if order.placed is redelivered.
       idempotency_key: `order-confirmation:${loaded.order.orderId}`,
-      data: orderConfirmationVariables(loaded.order, {
+      content: orderConfirmationContent(loaded.order, {
         turnaroundNote: content.order_turnaround_note,
         shippingWindowNote: content.order_shipping_window_note,
       }),

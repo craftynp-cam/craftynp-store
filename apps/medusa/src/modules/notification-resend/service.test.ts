@@ -21,6 +21,17 @@ const NOTIFICATION = {
   idempotency_key: "order-confirmation:order_01",
 };
 
+const CONTENT_NOTIFICATION = {
+  to: "jamie@example.com",
+  channel: "email",
+  content: {
+    subject: "Your Crafty NP order #CNP-2853 is confirmed",
+    html: "<p>#CNP-2853</p>",
+    text: "#CNP-2853",
+  },
+  idempotency_key: "order-confirmation:order_01",
+};
+
 type MockLogger = {
   info: jest.Mock;
   warn: jest.Mock;
@@ -62,7 +73,34 @@ afterEach(() => {
 });
 
 describe("ResendNotificationProviderService.send", () => {
-  it("sends the template alias and its variables, keyed for idempotency", async () => {
+  it("sends notification.content as raw html/text/subject, not template.id + variables", async () => {
+    // Resend's REST API does not reliably apply `variables` to a template.id
+    // send on this account — every field, not just ones inside an href,
+    // silently fell back to its declared default. Every real caller in this
+    // repo builds the HTML itself and sends it via content instead.
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse({ id: "re_1" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { service } = buildService();
+    const result = await service.send(CONTENT_NOTIFICATION);
+
+    expect(result).toEqual({ id: "re_1" });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init.headers["Idempotency-Key"]).toBe("order-confirmation:order_01");
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({
+      to: ["jamie@example.com"],
+      subject: "Your Crafty NP order #CNP-2853 is confirmed",
+      html: "<p>#CNP-2853</p>",
+      text: "#CNP-2853",
+      reply_to: "hello@thecraftynp.org",
+    });
+    expect(body).not.toHaveProperty("template");
+    expect(body).not.toHaveProperty("variables");
+  });
+
+  it("falls back to template.id + variables when no content is provided", async () => {
     const fetchMock = jest.fn().mockResolvedValue(jsonResponse({ id: "re_1" }));
     global.fetch = fetchMock as unknown as typeof fetch;
 

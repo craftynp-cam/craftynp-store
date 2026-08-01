@@ -68,7 +68,7 @@ describe("renderOrderItemsHtml", () => {
     expect(html.length).toBeLessThanOrEqual(MAX_VARIABLE_CHARS);
   });
 
-  it("truncates to an overflow row rather than exceeding Resend's variable cap", () => {
+  it("truncates to an overflow row rather than growing the email without bound", () => {
     const lines = Array.from({ length: 40 }, (_, index) =>
       buildLine({ id: `item_${index}`, title: `Sticker pack ${index}` }),
     );

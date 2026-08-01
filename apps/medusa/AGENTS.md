@@ -219,23 +219,40 @@ Transactional email runs through `@medusajs/notification` with a custom Resend
 provider in `src/modules/notification-resend`, fired by subscribers on
 `order.placed` and `shipment.created`.
 
-- **The email bodies live in Resend, not in this repo**, by decision. Templates
-  are bound by **alias** (`order-confirmation`, `order-shipped`,
-  `password-reset`) rather than UUID, so the binding survives a template being
-  recreated. Do not add HTML email files here.
+- **The email HTML is built in `order-email.ts`, not sent through a
+  Resend-hosted template — this reverses an earlier decision.** Resend's REST
+  API does not reliably apply `variables` to a `template.id` send on this
+  account: every field, not only ones inside an `href`, silently fell back to
+  its declared default in production (`#CNP-0000`, `$0.00`, empty line items —
+  a `200` throughout, nothing errored). `order-confirmation` and
+  `order-shipped` still exist as published Resend templates and render
+  correctly in Resend's own dashboard preview — that is now their only
+  purpose, as the design reference. See
+  [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md)
+  for where this was first found (in the password-reset Action) and confirmed.
+- **`createNotifications({ content: { subject, html, text } })`, not
+  `template`/`data`.** `content` is a first-class field on Medusa's own
+  `CreateNotificationDTO`, so this needed no shape of our own — the provider's
+  `send()` prefers `notification.content` when present and posts raw
+  `html`/`text`/`subject` to Resend, falling back to `template.id` +
+  `variables` only for a caller that doesn't set it. Do not trust that
+  fallback path with anything that has a variable — it is the broken one.
 - **A notification _provider_, not a bespoke service.** `INotificationProvider`
   is already the swappable seam, and the module's `notification` table records
   `status`, `external_id` and `idempotency_key` per send — the send log and the
   retry ledger without a migration of our own. It talks to Resend over raw
   `fetch`, like `shipstation`, so the mock-at-the-module-boundary testing rule
   applies unchanged.
-- **A Resend template variable is capped at 2,000 characters** and the whole
-  send is rejected past it, so `order-email-render.ts` budgets under that and
-  degrades a long order to a "+N more items" row. A `template` send also cannot
-  carry `html`/`text`, which is why the plain-text body is the template's own.
-- **`ORDER_ITEMS_HTML` is injected unescaped** (triple-brace), so every
-  interpolated title and customization value must go through `escapeHtml`.
-  Customization text is shopper-supplied — this is a stored-XSS boundary.
+- **`order-email-render.ts` still truncates a long order to a "+N more items"
+  row**, now purely to keep one email a sane size — the original reason
+  (Resend's 2,000-character template-variable cap) no longer applies, since
+  nothing here is sent as a template variable.
+- **Every interpolated value must go through `escapeHtml`** before landing in
+  the HTML body — `order-email.ts` builds the email as a literal JS template
+  string, so an unescaped value is a direct injection, not a framework quirk.
+  `ORDER_ITEMS_HTML`/`SHIPPING_ADDRESS_HTML` are pre-escaped HTML fragments
+  from `order-email-render.ts` and must not be escaped a second time; a
+  shopper-supplied field like the customer's first name must be.
 - **`shipment.created` carries a _fulfillment_ id, not an order id**, and
   `no_notification: true` means the operator suppressed the customer email.
   `order.fulfillment_created` is the convenient-looking wrong event: it fires
