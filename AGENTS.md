@@ -49,7 +49,6 @@ clone that has never been built.
 | Typecheck        | `pnpm run typecheck`                              |
 | Format           | `pnpm run format` / `pnpm run format:check`       |
 | DB migrate       | `pnpm run db:migrate`                             |
-| DB seed          | `pnpm run db:seed`                                |
 | Services up/down | `pnpm run services:up` / `pnpm run services:down` |
 
 Run lint, typecheck, tests, and the build before opening a pull request. On a
@@ -62,8 +61,10 @@ apps/storefront/.env.local` first. It needs no backend, database, or Redis —
 the storefront's fetch helpers degrade and Medusa's build falls back to a fake
 Redis.
 
-`db:migrate` and `db:seed` are not interchangeable — read
-[apps/medusa/AGENTS.md](apps/medusa/AGENTS.md) before running either.
+`db:migrate` runs the seed scripts as well as the migrations, and it needs a
+fully filled `apps/medusa/.env` — read
+[apps/medusa/AGENTS.md](apps/medusa/AGENTS.md) before running it. There is no
+`db:seed`; it seeded Medusa starter demo data and was removed in CNP-79.
 
 ## Environment
 

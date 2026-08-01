@@ -19,7 +19,6 @@
     "services:up": "docker compose up -d --wait && docker compose run --rm minio-init",
     "services:down": "docker compose down",
     "db:migrate": "pnpm --filter apps-medusa run db:migrate",
-    "db:seed": "pnpm --filter apps-medusa run seed",
     "reset-auth0-account": "pnpm --filter apps-medusa run reset-auth0-account",
     "list-carriers": "pnpm --filter apps-medusa run list-carriers",
     "register-webhook": "pnpm --filter apps-medusa run register-webhook"

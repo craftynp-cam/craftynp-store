@@ -15,6 +15,14 @@ Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
   `@craftynp/types`, not by the `siteContent` module.** Adding a field —
   including an `image` field, whose stored value is just the URL string — is a
   registry change, never a migration.
+- **Category imagery is not site content.** The storefront's homepage carousel
+  renders one slide per product category and reads each slide's photo from that
+  category's own `metadata.image_url` / `metadata.image_alt`, written by the
+  `product_category.details.side.after` widget in
+  `src/admin/widgets/category-image.tsx`. Fixed site-content slots cannot track
+  a category list the client edits freely. **The widget must spread the existing
+  metadata into its update** — Medusa replaces the jsonb column wholesale, so an
+  unspread write silently destroys every other key on the category.
 - **`src/admin` typechecks separately.** It is the only `.tsx` here and needs
   DOM lib types the Node-only backend doesn't carry, so `tsconfig.json` excludes
   it and `typecheck` runs a second `tsc -p src/admin --noEmit`. Put a file that
@@ -427,18 +435,37 @@ a real `pnpm run dev` checkout, not `tsc`/`jest` alone.
 ## Migrations and seeds
 
 `pnpm run db:migrate` runs every script in `src/migration-scripts/` and prints
-the `pk_…` publishable key the storefront needs.
+the `pk_…` publishable key the storefront needs (from `seed-defaults.ts`). There
+is no `db:seed` — the Medusa starter seed and its demo data were deleted in
+CNP-79.
 
 - **Add a new seed as a new file, never an edit to an existing one.** The ledger
   tracks each script independently, so a new file still runs against an
   already-migrated database while an edit to an already-run script does nothing.
+- **The `script_migrations` ledger keys on the script's basename, not its
+  path.** Renaming a script re-runs it, and deleting one leaves its ledger row
+  behind, so a database migrated before a deletion keeps whatever that script
+  created. That is why dev databases seeded before CNP-79 still carry the
+  Europe region and the four demo products; see the cleanup section in
+  [README.md](../../README.md).
 - **Scripts run in filename order** — name a new one so it sorts after any seed
   whose data it depends on.
+- **`createDefaultsWorkflow` runs at application start, not during
+  `db:migrate`.** `medusa db:migrate` forks `db:migrate:scripts`, which loads
+  the modules but never calls it, so the default sales channel, store, and
+  publishable key do not exist while the seeds run. `seed-defaults.ts` runs it
+  itself, which is why that script must keep sorting first: `seed-us-region.ts`
+  hard-fails on a missing "Default Sales Channel". It also corrects the store's
+  `supported_currencies` to USD-default, because core's `createDefaultStoreStep`
+  hardcodes EUR-only.
+- **Every environment gets exactly one region, United States.** A second region
+  is not a harmless addition — it changes the currency the storefront quotes in
+  and which shipping options a cart is offered, both silently.
+- **`db:migrate` needs a fully populated `.env`.** `seed-us-region.ts` throws on
+  a missing `SHIP_FROM_*` or `SHIPPING_OPTION_DEFAULT_*`, so a partly-filled
+  environment fails the migration rather than half-configuring the store.
 - **The ship-from address comes from `SHIP_FROM_*` env**, never hard-coded into
   a migration script, so the client's real address stays out of git.
-- **`pnpm run db:seed` is only for a database you have deliberately reset.**
-  `db:migrate` already seeds through the ledger; `db:seed` runs outside it,
-  minting a second publishable key and duplicating products.
 - **Shipping-dimension validation for publishable products is a workflow hook**
   on `createProductsWorkflow` / `updateProductsWorkflow`, not route middleware —
   a status-only publish, `/admin/products/batch`, CSV import, and custom
