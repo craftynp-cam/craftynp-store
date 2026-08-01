@@ -130,18 +130,17 @@ describe("POST /admin/orders/:id/shipment/buy", () => {
     );
   });
 
-  it("puts the operator-facing copy in message, the only field FetchError keeps", async () => {
+  it("does not blame ShipStation for a failure of our own", async () => {
     const { req, res, status, json } = makeRequest();
-    run.mockRejectedValueOnce(new Error("socket hang up"));
+    run.mockRejectedValueOnce(new Error("tracking_number already exists"));
 
     await POST(req, res);
 
-    expect(status).toHaveBeenCalledWith(502);
-    expect(json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reason: "http_error",
-        message: expect.stringContaining("Try again in a minute"),
-      }),
-    );
+    expect(status).toHaveBeenCalledWith(500);
+
+    const body = json.mock.calls[0]?.[0] as { message: string; reason: string };
+    expect(body.reason).toBe("internal_error");
+    expect(body.message).not.toContain("ShipStation");
+    expect(body.message).toContain("tracking_number already exists");
   });
 });

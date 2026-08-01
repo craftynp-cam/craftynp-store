@@ -6,7 +6,7 @@ import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type { BuyLabelRequest } from "@craftynp/types";
 
-import { describeLabelFailure } from "@craftynp/types";
+import { describeInternalFailure, describeLabelFailure } from "@craftynp/types";
 
 import { describeError } from "../../../../../../lib/describe-error";
 import { loadOrderStatusDetail } from "../../../../../../lib/order-status-detail";
@@ -55,10 +55,18 @@ export async function POST(
       });
     }
 
-    const reason =
-      error instanceof ShipStationLabelError ? error.reason : "http_error";
-    const carrierMessage =
-      error instanceof ShipStationLabelError ? error.carrierMessage : null;
+    if (!(error instanceof ShipStationLabelError)) {
+      const copy = describeInternalFailure(detail);
+
+      return res.status(500).json({
+        error: "buy_label_failed",
+        reason: "internal_error",
+        message: `${copy.title}. ${copy.body} ${copy.nextStep}`,
+      });
+    }
+
+    const reason = error.reason;
+    const carrierMessage = error.carrierMessage;
 
     logger.error(
       `${SHIPSTATION_LABEL_LOG_TAG} reason=buy_label_failed order=${orderId} detail=${reason} carrier_message=${carrierMessage ?? ""} error=${detail}`,

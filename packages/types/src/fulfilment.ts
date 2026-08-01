@@ -185,6 +185,18 @@ export function describeLabelFailure(
   return { ...copy, body: `${copy.body} The carrier said: ${carrierMessage}` };
 }
 
+export function describeInternalFailure(
+  detail?: string | null,
+): LabelFailureCopy {
+  return {
+    title: "Something went wrong on our side",
+    body: "No label was recorded, so this order is still ready to ship.",
+    nextStep: detail
+      ? `Try again. If it keeps happening, send a developer this: ${detail}`
+      : "Try again. If it keeps happening, send a developer this message.",
+  };
+}
+
 export function formatDeliveryWindow(
   deliveryDays: number | null,
   estimatedDeliveryDate: string | null,

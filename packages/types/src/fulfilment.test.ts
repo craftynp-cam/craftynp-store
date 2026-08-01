@@ -2,6 +2,7 @@ import {
   LABEL_FAILURE_REASONS,
   MAX_PARCEL_DIMENSION_CM,
   MAX_PARCEL_WEIGHT_GRAMS,
+  describeInternalFailure,
   describeLabelFailure,
   formatDeliveryWindow,
   formatParcelSummary,
@@ -33,6 +34,20 @@ describe("parcelOverrideSchema", () => {
     ["a missing dimension", { weight: 640, length: 30, width: 20 }],
   ])("rejects %s", (_label, input) => {
     expect(parcelOverrideSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+describe("describeInternalFailure", () => {
+  it("keeps the operator's next step free of carrier blame", () => {
+    const copy = describeInternalFailure("tracking_number already exists");
+    expect(`${copy.title} ${copy.body} ${copy.nextStep}`).not.toContain(
+      "ShipStation",
+    );
+    expect(copy.nextStep).toContain("tracking_number already exists");
+  });
+
+  it("still gives a next step when there is no detail to pass on", () => {
+    expect(describeInternalFailure().nextStep.length).toBeGreaterThan(0);
   });
 });
 

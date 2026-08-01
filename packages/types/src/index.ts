@@ -66,6 +66,7 @@ export {
   balanceResponseSchema,
   buyLabelRequestSchema,
   carrierBalanceSchema,
+  describeInternalFailure,
   describeLabelFailure,
   formatDeliveryWindow,
   formatParcelSummary,

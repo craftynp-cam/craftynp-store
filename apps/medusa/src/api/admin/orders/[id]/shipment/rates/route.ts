@@ -6,7 +6,7 @@ import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type { RateShipmentRequest } from "@craftynp/types";
 
-import { describeLabelFailure } from "@craftynp/types";
+import { describeInternalFailure, describeLabelFailure } from "@craftynp/types";
 
 import { describeError } from "../../../../../../lib/describe-error";
 import {
@@ -123,10 +123,18 @@ export async function POST(
     return res.json({ rates, parcel, derivedParcel });
   } catch (error) {
     const detail = describeError(error);
-    const reason =
-      error instanceof ShipStationLabelError ? error.reason : "http_error";
-    const carrierMessage =
-      error instanceof ShipStationLabelError ? error.carrierMessage : null;
+    if (!(error instanceof ShipStationLabelError)) {
+      const copy = describeInternalFailure(detail);
+
+      return res.status(500).json({
+        error: "rates_unavailable",
+        reason: "internal_error",
+        message: `${copy.title}. ${copy.body} ${copy.nextStep}`,
+      });
+    }
+
+    const reason = error.reason;
+    const carrierMessage = error.carrierMessage;
 
     logger.warn(
       `${SHIPSTATION_LABEL_LOG_TAG} reason=rates_failed order=${orderId} detail=${reason} carrier_message=${carrierMessage ?? ""} error=${detail}`,
