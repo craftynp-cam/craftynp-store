@@ -180,7 +180,6 @@ export const recordShipmentRequestSchema = z.object({
   serviceCode: z.string().min(1).max(60).optional(),
   labelId: z.string().min(1).max(60).optional(),
   labelUrl: z.string().min(1).max(2048).optional(),
-  shipmentCost: z.number().nonnegative().optional(),
 });
 export type RecordShipmentRequest = z.infer<typeof recordShipmentRequestSchema>;
 
