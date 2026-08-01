@@ -3,7 +3,7 @@
 - Read the relevant app's `AGENTS.md` before changing anything under `apps/*`.
 - Do not commit, push, or open pull requests unless asked.
 - Never commit secrets, `.env` files, API keys, or customer data.
-- Do not delete or force-push `dev`, `qa`, or `main` — and do not attempt to
+- Do not delete or force-push `dev` or `main` — and do not attempt to
   work around the rulesets that prevent it.
 - Match the surrounding code's style rather than importing conventions from
   elsewhere.
