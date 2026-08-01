@@ -81,18 +81,17 @@ Postgres listens on host port **5433**, not 5432. Redis is on 6379.
 
 ## Branching
 
-`feature/* → dev → qa → main`, one direction only. Branch from an up-to-date
-`dev`; pull requests target `dev`. Prefixes: `feature/`, `fix/`, `chore/`.
+`feature/* → dev → main`, one direction only. Branch from an up-to-date `dev`;
+pull requests target `dev`. Prefixes: `feature/`, `fix/`, `chore/`.
 
 - **Feature PRs into `dev` must be squash-merged.**
-- **Promotion PRs (`dev → qa`, `qa → main`) must use a merge commit.** Squashing
-  rewrites the commit SHAs and permanently diverges the branches, producing
-  phantom conflicts on every later promotion.
-- Never merge a feature branch straight into `qa` or `main`, and never merge
-  backwards — except a `main` hotfix, which is merged down into `qa`, then
-  `dev`.
-- `dev`, `qa`, and `main` are never deleted or force-pushed. GitHub rulesets
-  enforce this with no bypass actors, repository admins included.
+- **Promotion PRs (`dev → main`) must use a merge commit.** Squashing rewrites
+  the commit SHAs and permanently diverges the branches, producing phantom
+  conflicts on every later promotion.
+- Never merge a feature branch straight into `main`, and never merge backwards —
+  except a `main` hotfix, which is merged down into `dev`.
+- `dev` and `main` are never deleted or force-pushed. GitHub rulesets enforce
+  this with no bypass actors, repository admins included.
 
 Nothing is deployed yet.
 
