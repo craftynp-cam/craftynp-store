@@ -1,4 +1,5 @@
 import type {
+  BalanceResponse,
   BuyLabelRequest,
   FulfilmentQueueResponse,
   OrderStatusDetail,
@@ -35,6 +36,10 @@ export function orderStatusQueryKey(orderId: string): string[] {
 
 export function fetchQueue(): Promise<FulfilmentQueueResponse> {
   return sdk.client.fetch<FulfilmentQueueResponse>("/admin/fulfilment/queue");
+}
+
+export function fetchBalance(): Promise<BalanceResponse> {
+  return sdk.client.fetch<BalanceResponse>("/admin/fulfilment/balance");
 }
 
 export function fetchOrderStatus(

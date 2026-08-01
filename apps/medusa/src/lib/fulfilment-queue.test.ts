@@ -1,4 +1,5 @@
 import {
+  buildPrintableLabels,
   buildQueueEntries,
   deriveParcel,
   toShipStationAddress,
@@ -191,5 +192,47 @@ describe("buildQueueEntries", () => {
 
     expect(entry?.customerName).toBe("ada@example.com");
     expect(entry?.destination).toBeNull();
+  });
+});
+
+describe("buildPrintableLabels", () => {
+  const order: OrderRow = {
+    id: "order_1",
+    display_id: 1042,
+    email: "ada@example.com",
+    shipping_address: address,
+  };
+
+  const row = {
+    orderId: "order_1",
+    trackingNumber: "9400100000000000000000",
+    carrierCode: "usps",
+    shippedAt: new Date("2026-08-01T10:00:00.000Z"),
+  };
+
+  it("names the customer from the delivery address", () => {
+    const [label] = buildPrintableLabels([row], [order]);
+    expect(label?.customerName).toBe("Ada Lovelace");
+    expect(label?.displayId).toBe(1042);
+  });
+
+  it("puts the most recently bought label first", () => {
+    const labels = buildPrintableLabels(
+      [
+        { ...row, shippedAt: new Date("2026-07-30T10:00:00.000Z") },
+        {
+          ...row,
+          orderId: "order_2",
+          shippedAt: new Date("2026-08-01T10:00:00.000Z"),
+        },
+      ],
+      [order, { ...order, id: "order_2", display_id: 1043 }],
+    );
+
+    expect(labels.map((label) => label.displayId)).toEqual([1043, 1042]);
+  });
+
+  it("skips a shipment whose order the graph did not return", () => {
+    expect(buildPrintableLabels([row], [])).toEqual([]);
   });
 });

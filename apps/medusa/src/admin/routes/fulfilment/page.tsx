@@ -2,14 +2,25 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { defineRouteConfig } from "@medusajs/admin-sdk";
 import { Spinner, TruckFast } from "@medusajs/icons";
-import { Container, Heading, Text } from "@medusajs/ui";
+import { Checkbox, Container, Heading, Table, Text } from "@medusajs/ui";
 
 import { fetchQueue, queueQueryKey } from "../../lib/fulfilment-api";
+import { BalanceBadge } from "../../components/fulfilment/balance-badge";
+import { BatchPrintBar } from "../../components/fulfilment/batch-print-bar";
 import { QueueTable } from "../../components/fulfilment/queue-table";
 import { RateAndBuyPanel } from "../../components/fulfilment/rate-and-buy-panel";
 
 const FulfilmentPage = () => {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [checked, setChecked] = useState<string[]>([]);
+
+  function toggleChecked(orderId: string) {
+    setChecked((current) =>
+      current.includes(orderId)
+        ? current.filter((id) => id !== orderId)
+        : [...current, orderId],
+    );
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: queueQueryKey,
@@ -25,8 +36,12 @@ const FulfilmentPage = () => {
   }
 
   const orders = data.orders;
+  const printable = data.printable;
   const selected =
     orders.find((entry) => entry.orderId === selectedOrderId) ?? null;
+  const displayIdByOrderId = new Map(
+    printable.map((label) => [label.orderId, label.displayId]),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -38,6 +53,7 @@ const FulfilmentPage = () => {
               Orders that are packed and ready for a shipping label.
             </Text>
           </div>
+          <BalanceBadge />
         </div>
 
         {orders.length === 0 ? (
@@ -55,6 +71,66 @@ const FulfilmentPage = () => {
           />
         )}
       </Container>
+
+      {printable.length > 0 && (
+        <Container className="divide-y p-0">
+          <div className="px-6 py-4">
+            <Heading level="h2">Labels ready to print</Heading>
+            <Text size="small" className="text-ui-fg-subtle">
+              Bought in the last two weeks. Tick several and print them as one
+              job.
+            </Text>
+          </div>
+
+          <Table>
+            <Table.Header>
+              <Table.Row>
+                <Table.HeaderCell />
+                <Table.HeaderCell>Order</Table.HeaderCell>
+                <Table.HeaderCell>Tracking</Table.HeaderCell>
+                <Table.HeaderCell>Bought</Table.HeaderCell>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {printable.map((label) => (
+                <Table.Row key={label.orderId}>
+                  <Table.Cell>
+                    <Checkbox
+                      checked={checked.includes(label.orderId)}
+                      onCheckedChange={() => toggleChecked(label.orderId)}
+                    />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Text size="small" weight="plus">
+                      {`#${label.displayId}`}
+                    </Text>
+                    <Text size="xsmall" className="text-ui-fg-subtle">
+                      {label.customerName}
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell>{label.trackingNumber}</Table.Cell>
+                  <Table.Cell>
+                    {label.shippedAt
+                      ? new Date(label.shippedAt).toLocaleDateString()
+                      : ""}
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table>
+
+          <div className="px-6 py-4">
+            <BatchPrintBar
+              orderIds={checked}
+              displayIdByOrderId={displayIdByOrderId}
+              onClear={() => setChecked([])}
+            />
+            <Text size="xsmall" className="text-ui-fg-subtle">
+              Print at 4 × 6 in, Actual size (100%), Margins: None.
+            </Text>
+          </div>
+        </Container>
+      )}
 
       {selected && (
         <Container className="divide-y p-0">
