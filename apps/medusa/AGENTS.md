@@ -386,8 +386,8 @@ provider in `src/modules/notification-resend`, fired by subscribers on
 None of these are caught by `tsc` or a mock-based test — they surface only
 against a real container, schema, or workflow.
 
-- **An order's totals only compute when `items.*` and `shipping_methods.*` are
-  requested as wildcards.** Narrowing either to the few columns you actually
+- **An order's totals _and its line quantities_ only come back when `items.*`
+  is requested as a wildcard.** Narrowing either to the few columns you actually
   render makes `total`, `item_subtotal`, `shipping_subtotal` and `tax_total`
   all come back as **0** — no error, no warning, just a free order on the page
   and on the receipt. `ORDER_CONFIRMATION_FIELDS` keeps both wildcards for this

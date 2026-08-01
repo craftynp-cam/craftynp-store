@@ -2,6 +2,7 @@ import { createStep, StepResponse } from "@medusajs/framework/workflows-sdk";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 
+import { toAmount } from "../../lib/money";
 import { ORDER_STATUS_LOG_TAG } from "../../modules/order-status/lib";
 
 export type ReservationToCreate = {
@@ -12,7 +13,10 @@ export type ReservationToCreate = {
 };
 
 type InventoryItemRow = {
-  inventory?: { id?: string | null } | null;
+  inventory?: {
+    id?: string | null;
+    location_levels?: { location_id?: string | null }[] | null;
+  } | null;
   required_quantity?: number | null;
 };
 
@@ -20,7 +24,7 @@ type OrderRow = {
   items?:
     | {
         id: string;
-        quantity: number;
+        quantity: unknown;
         variant?: {
           manage_inventory?: boolean | null;
           inventory_items?: InventoryItemRow[] | null;
@@ -34,24 +38,43 @@ type OrderRow = {
 
 const ORDER_FIELDS = [
   "id",
-  "items.id",
-  "items.quantity",
+  "items.*",
   "items.variant.manage_inventory",
   "items.variant.inventory_items.required_quantity",
   "items.variant.inventory_items.inventory.id",
+  "items.variant.inventory_items.inventory.location_levels.location_id",
   "fulfillments.location_id",
   "fulfillments.canceled_at",
 ];
+
+function pickStockedLocation(
+  inventoryItem: InventoryItemRow,
+  preferred: string | null,
+): string | null {
+  const stocked = (inventoryItem.inventory?.location_levels ?? [])
+    .map((level) => level.location_id)
+    .filter((id): id is string => typeof id === "string" && id !== "");
+
+  if (stocked.length === 0) return null;
+  if (preferred && stocked.includes(preferred)) return preferred;
+
+  return stocked[0] ?? null;
+}
 
 export function buildReservationsToCreate(
   order: OrderRow,
   reservedLineItemIds: ReadonlySet<string>,
 ): ReservationToCreate[] {
-  const locationId = (order.fulfillments ?? []).find(
-    (fulfillment) => !fulfillment.canceled_at && fulfillment.location_id,
-  )?.location_id;
+  const fulfilled = (order.fulfillments ?? []).some(
+    (fulfillment) => !fulfillment.canceled_at,
+  );
 
-  if (!locationId) return [];
+  if (!fulfilled) return [];
+
+  const preferred =
+    (order.fulfillments ?? []).find(
+      (fulfillment) => !fulfillment.canceled_at && fulfillment.location_id,
+    )?.location_id ?? null;
 
   const reservations: ReservationToCreate[] = [];
 
@@ -63,11 +86,18 @@ export function buildReservationsToCreate(
       const inventoryItemId = inventoryItem.inventory?.id;
       if (!inventoryItemId) continue;
 
+      const locationId = pickStockedLocation(inventoryItem, preferred);
+      if (!locationId) continue;
+
+      const quantity =
+        toAmount(item.quantity) * (inventoryItem.required_quantity ?? 1);
+      if (!Number.isFinite(quantity) || quantity <= 0) continue;
+
       reservations.push({
         line_item_id: item.id,
         inventory_item_id: inventoryItemId,
         location_id: locationId,
-        quantity: item.quantity * (inventoryItem.required_quantity ?? 1),
+        quantity,
       });
     }
   }

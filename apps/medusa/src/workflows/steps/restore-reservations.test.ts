@@ -8,7 +8,13 @@ const ORDER = {
       variant: {
         manage_inventory: true,
         inventory_items: [
-          { inventory: { id: "iitem_1" }, required_quantity: 1 },
+          {
+            inventory: {
+              id: "iitem_1",
+              location_levels: [{ location_id: "sloc_1" }],
+            },
+            required_quantity: 1,
+          },
         ],
       },
     },
@@ -37,7 +43,13 @@ describe("buildReservationsToCreate", () => {
           variant: {
             manage_inventory: true,
             inventory_items: [
-              { inventory: { id: "iitem_1" }, required_quantity: 3 },
+              {
+                inventory: {
+                  id: "iitem_1",
+                  location_levels: [{ location_id: "sloc_1" }],
+                },
+                required_quantity: 3,
+              },
             ],
           },
         },
@@ -45,6 +57,26 @@ describe("buildReservationsToCreate", () => {
     };
 
     expect(buildReservationsToCreate(order, new Set())[0]?.quantity).toBe(6);
+  });
+
+  it("reads a BigNumber quantity, which is how the graph returns it", () => {
+    const bigNumber = {
+      ...ORDER,
+      items: [{ ...ORDER.items[0]!, quantity: { value: "2", precision: 20 } }],
+    };
+
+    expect(buildReservationsToCreate(bigNumber, new Set())[0]?.quantity).toBe(
+      2,
+    );
+  });
+
+  it("skips a line item whose quantity cannot be read rather than reserving NaN", () => {
+    const unreadable = {
+      ...ORDER,
+      items: [{ ...ORDER.items[0]!, quantity: {} }],
+    };
+
+    expect(buildReservationsToCreate(unreadable, new Set())).toEqual([]);
   });
 
   it("skips a line item that is already reserved, so a retry cannot double-reserve", () => {
@@ -63,6 +95,70 @@ describe("buildReservationsToCreate", () => {
     };
 
     expect(buildReservationsToCreate(order, new Set())).toEqual([]);
+  });
+
+  it("reserves where the item is stocked, not where the fulfillment says", () => {
+    const elsewhere = {
+      ...ORDER,
+      fulfillments: [{ location_id: "sloc_us", canceled_at: null }],
+    };
+
+    expect(
+      buildReservationsToCreate(elsewhere, new Set())[0]?.location_id,
+    ).toBe("sloc_1");
+  });
+
+  it("prefers the fulfillment's location when the item is stocked there too", () => {
+    const both = {
+      ...ORDER,
+      items: [
+        {
+          ...ORDER.items[0]!,
+          variant: {
+            manage_inventory: true,
+            inventory_items: [
+              {
+                inventory: {
+                  id: "iitem_1",
+                  location_levels: [
+                    { location_id: "sloc_1" },
+                    { location_id: "sloc_us" },
+                  ],
+                },
+                required_quantity: 1,
+              },
+            ],
+          },
+        },
+      ],
+      fulfillments: [{ location_id: "sloc_us", canceled_at: null }],
+    };
+
+    expect(buildReservationsToCreate(both, new Set())[0]?.location_id).toBe(
+      "sloc_us",
+    );
+  });
+
+  it("skips an inventory item stocked nowhere rather than reserving into thin air", () => {
+    const nowhere = {
+      ...ORDER,
+      items: [
+        {
+          ...ORDER.items[0]!,
+          variant: {
+            manage_inventory: true,
+            inventory_items: [
+              {
+                inventory: { id: "iitem_1", location_levels: [] },
+                required_quantity: 1,
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(buildReservationsToCreate(nowhere, new Set())).toEqual([]);
   });
 
   it("reserves nothing when there is no live fulfillment to take a location from", () => {
