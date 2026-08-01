@@ -8,8 +8,11 @@ import type {
   TrackingStatus,
 } from "@craftynp/types";
 
+import type { ShipmentLabel } from "@craftynp/types";
+
 import { ORDER_STATUS_MODULE } from "../modules/order-status";
 import type OrderStatusModuleService from "../modules/order-status/service";
+import { toNullableAmount } from "./money";
 
 function toIso(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -40,6 +43,24 @@ export async function loadOrderTracking(
   };
 }
 
+export async function loadShipmentLabel(
+  scope: MedusaContainer,
+  orderId: string,
+): Promise<ShipmentLabel | null> {
+  const service = scope.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
+  const shipment = await service.activeShipment(orderId);
+  if (!shipment) return null;
+
+  return {
+    labelId: shipment.label_id,
+    serviceCode: shipment.service_code,
+    shipmentCost: toNullableAmount(shipment.shipment_cost),
+    currencyCode: shipment.shipment_cost_currency,
+    labelUrl: shipment.label_url,
+    canPrint: shipment.label_file_id != null,
+  };
+}
+
 export async function loadOrderStatusDetail(
   scope: MedusaContainer,
   orderId: string,
@@ -49,6 +70,7 @@ export async function loadOrderStatusDetail(
   const status = await service.currentStatus(orderId);
   const rows = await service.listHistory(orderId);
   const tracking = await loadOrderTracking(scope, orderId);
+  const label = await loadShipmentLabel(scope, orderId);
 
   const history: OrderStatusHistoryEntry[] = rows.map((row) => ({
     id: row.id,
@@ -65,6 +87,7 @@ export async function loadOrderStatusDetail(
     status,
     allowedTransitions: [...allowedTransitions(status)],
     tracking,
+    label,
     history,
   };
 }

@@ -105,6 +105,16 @@ export const balanceResponseSchema = z.object({
 });
 export type BalanceResponse = z.infer<typeof balanceResponseSchema>;
 
+export const shipmentLabelSchema = z.object({
+  labelId: z.string().nullable(),
+  serviceCode: z.string().nullable(),
+  shipmentCost: z.number().nullable(),
+  currencyCode: z.string().nullable(),
+  labelUrl: z.string().nullable(),
+  canPrint: z.boolean(),
+});
+export type ShipmentLabel = z.infer<typeof shipmentLabelSchema>;
+
 export const LABEL_FAILURE_REASONS = [
   "timeout",
   "timeout_unconfirmed",

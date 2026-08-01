@@ -117,8 +117,15 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
   place minor units exist, crossed solely by `toMinorUnits` / `fromMinorUnits`
   in its `lib.ts`. Leaking cents outside that module multiplies money by 100.
 - **Resolve weight, dimensions, and `calculated_price` server-side via
-  `query.graph`.** Request bodies carry only `{ variantId, quantity }` — never
-  accept a client-supplied weight or price anywhere in this app.
+  `query.graph`.** Store request bodies carry only `{ variantId, quantity }` —
+  never accept a client-supplied weight or price on a `/store` route. The one
+  exception is the authenticated admin parcel override on
+  `/admin/orders/:id/shipment/rates` and `/buy`: the shop owner is looking at
+  the packed box and the product defaults are only a guess, so she may correct
+  the weight and dimensions. She may never name a **price** — the label is
+  always priced by ShipStation and the amount actually charged is what gets
+  recorded. The destination is still resolved from the order server-side on
+  both routes.
 - **There is no flat-rate shipping fallback, deliberately.** A missing-dimension
   parcel or any ShipStation error returns `502 shipping_unavailable` and blocks
   checkout, because a wrong shipping charge is worse than a shopper hitting
@@ -127,7 +134,34 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
 - **ShipStation's `/v2/rates/estimate` response is not purchasable** and
   excludes surcharges, so its `rate_id` cannot be looked up again later.
   Re-verify a quote by re-estimating and comparing the fresh amount within a
-  tolerance, never by replaying the `rate_id`.
+  tolerance, never by replaying the `rate_id`. `/v2/rates` is the separate,
+  authoritative call the fulfilment workspace uses, and unlike the estimate it
+  is **deliberately uncached** — the owner is choosing what to spend.
+- **`purchaseLabel` must never retry a timeout or a network error.** ShipStation
+  documents no idempotency key on `POST /v2/labels`, so a retry can buy a second
+  label and spend real money twice. Only a 429 — refused before any label
+  exists — is safe to retry. An unconfirmed timeout is reconciled by reading
+  `GET /v2/labels` and matching on our own `external_shipment_id`, then on
+  ship-to name plus postal code plus service within the window.
+- **Voiding calls ShipStation before writing anything.** A 200 carrying
+  `approved: false` is the carrier's answer, not an error, and is recorded in
+  `void_approved`/`void_message` and shown verbatim; a failed _call_ throws, so
+  we never stamp `voided_at` on a label whose real state we do not know.
+  `void_approved` is tri-state — null means we never asked.
+- **Label PDFs are stored `access: "private"` and served by
+  `GET /admin/fulfilment/labels/:orderId`**, never from `/static`. A label
+  carries the customer's name and full address, and `file-local` serves public
+  files with no auth at all. `label_file_id` is the file-module id, and
+  `getAsBuffer(id)` is the only supported read path — the URL alone is not
+  enough. `label_url` holds our own route; it falls back to ShipStation's
+  90-day URL only when storage failed, which is exactly what a null
+  `label_file_id` marks.
+- **Storing the label PDF must never throw.** It runs after the purchase, so
+  throwing would trigger the compensating void and cancel a perfectly good label
+  because our own disk was full. That is a worse outcome than a link that
+  expires.
+- **`SHIPSTATION_TEST_LABELS` defaults to `true`**, and only the literal
+  `"false"` turns it off, so a fresh clone cannot spend money by accident.
 - **The ShipStation rate limiter is a token bucket at file module scope in
   `limiter.ts`**, with one shared "blocked" promise every waiter awaits. Do not
   move that state onto the service instance — DI lifetime would hand out one

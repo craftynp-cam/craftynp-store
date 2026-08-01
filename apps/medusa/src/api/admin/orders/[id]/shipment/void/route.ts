@@ -18,14 +18,20 @@ export async function POST(
   const logger = req.scope.resolve<Logger>(ContainerRegistrationKeys.LOGGER);
   const orderId = req.params.id ?? "";
 
+  let voidApproved: boolean | null;
+  let voidMessage: string | null;
+
   try {
-    await voidShipmentWorkflow(req.scope).run({
+    const { result } = await voidShipmentWorkflow(req.scope).run({
       input: {
         orderId,
         reason: req.validatedBody?.reason ?? null,
         actorId: req.auth_context?.actor_id ?? null,
       },
     });
+
+    voidApproved = result.voidApproved;
+    voidMessage = result.voidMessage;
   } catch (error) {
     const detail = describeError(error);
     logger.warn(
@@ -41,5 +47,7 @@ export async function POST(
 
   return res.json({
     orderStatus: await loadOrderStatusDetail(req.scope, orderId),
+    voidApproved,
+    voidMessage,
   });
 }

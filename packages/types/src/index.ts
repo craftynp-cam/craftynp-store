@@ -78,6 +78,7 @@ export {
   queueItemSchema,
   rateShipmentRequestSchema,
   rateShipmentResponseSchema,
+  shipmentLabelSchema,
 } from "./fulfilment.js";
 
 export type {
@@ -146,4 +147,5 @@ export type {
   QueueItem,
   RateShipmentRequest,
   RateShipmentResponse,
+  ShipmentLabel,
 } from "./fulfilment.js";

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { shipmentLabelSchema } from "./fulfilment.js";
+
 export const ORDER_STATUSES = [
   "received",
   "packing",
@@ -160,6 +162,7 @@ export const orderStatusDetailSchema = z.object({
   status: orderStatusSchema,
   allowedTransitions: z.array(orderStatusSchema),
   tracking: orderTrackingSchema.nullable(),
+  label: shipmentLabelSchema.nullable(),
   history: z.array(orderStatusHistoryEntrySchema),
 });
 export type OrderStatusDetail = z.infer<typeof orderStatusDetailSchema>;
