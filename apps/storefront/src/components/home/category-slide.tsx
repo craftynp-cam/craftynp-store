@@ -56,11 +56,12 @@ export function CategorySlide({
             sizes="100vw"
             className="object-cover"
           />
-          {/* Without this scrim an arbitrary client photo can drop the
-              off-white headline and CTA below 4.5:1. */}
+          {/* Sized so the weakest text here — the off-white/80 count link —
+              still clears 4.5:1 over a pure-white photo, which the solid
+              bg-ink panel used to guarantee for free. */}
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/45 to-ink/10"
+            className="absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/65 to-ink/15"
           />
         </>
       ) : (
