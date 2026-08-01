@@ -11,10 +11,20 @@ copy under `src/`, which would never run.
 
 ## Why not Auth0's built-in Resend provider
 
-Auth0 offers Resend natively under Branding → Email Provider. It fixes
-deliverability but **Auth0's own Liquid template still renders the body**, so
-the Resend-hosted template is never invoked and the reset mail looks nothing
-like the order emails. Hence the Action.
+**Branding → Email Provider lists `Resend` as its own tile, right next to
+`Custom Provider`.** Picking it is the easy mistake — it is a real, working
+Auth0 feature, just the wrong one. It relays over SMTP whatever Auth0's own
+template renders (with the Change Password body set to `{{ url }}` per below,
+that is a bare, unstyled link — Gmail flags exactly this shape as suspicious),
+and never touches the `password-reset` Resend template at all. The
+Resend-hosted template is only ever invoked by the `custom-email-provider`
+**Action**, configured from the `Custom Provider` tile.
+
+The send log makes the two unmistakable: the native `Resend` tile's requests
+show `"User-Agent": "SMTP v1.0.0"` and no `template`/`variables` field, only
+raw `html`/`text`. The Action's requests show `"template": { "id":
+"password-reset" }` and no `SMTP` user-agent, because it POSTs to
+`https://api.resend.com/emails` directly.
 
 ## Dashboard prerequisites
 
@@ -22,16 +32,19 @@ like the order emails. Hence the Action.
 email provider exists — the template editor shows a warning banner saying so,
 and saving the body first simply has no effect.
 
-1. **Branding → Email Provider → toggle "Use my own email provider" → Custom
-   Provider.** The `custom-email-provider` trigger has no entry in the generic
-   Actions → Library → Create Action dropdown — it gets its own built-in code
-   editor right on this page. Set **From** to
-   `The Crafty NP <hello@thecraftynp.org>`, paste in the Action below, add the
-   secret `RESEND_API_KEY` (key icon, left rail — a tenant secret, separate
-   from this repo's env var), then **Save**, which deploys it. Until this step,
-   Auth0 uses its own built-in provider, which is trial-grade and generally
-   only delivers to tenant members — customer-facing reset mail does not work
-   at all before this, branding aside.
+1. **Branding → Email Provider → toggle "Use my own email provider" → the
+   `Custom Provider` tile**, not the `Resend` tile beside it (see above). The
+   `custom-email-provider` trigger has no entry in the generic Actions →
+   Library → Create Action dropdown — it gets its own built-in code editor
+   right on this page. Set **From** to
+   `The Crafty NP <hello@thecraftynp.org>` — this is the field
+   `event.notification.from` reads in the Action below, so it is the one place
+   the sender address is set, not a second hardcoded copy in the code. Paste in
+   the Action, add the secret `RESEND_API_KEY` (key icon, left rail — a tenant
+   secret, separate from this repo's env var), then **Save**, which deploys it.
+   Until this step, Auth0 uses its own built-in provider, which is trial-grade
+   and generally only delivers to tenant members — customer-facing reset mail
+   does not work at all before this, branding aside.
 2. **Branding → Email Templates → Change Password**: set the message body to
    **exactly** `{{ url }}` and nothing else. The Action recovers a clean reset
    URL by stripping tags from the rendered HTML, which only works because the
@@ -44,10 +57,11 @@ still Auth0's default, so a reset would reach the Resend template with
 ## The Action
 
 ```js
-const FROM = "The Crafty NP <hello@thecraftynp.org>";
-
 exports.onExecuteCustomEmailProvider = async (event, api) => {
-  const { to, subject, html, message_type } = event.notification;
+  // `from` comes from the Custom Provider tile's own From field, not a
+  // hardcoded value here — one place to change the sender, not two that can
+  // drift out of sync.
+  const { to, from, subject, html, message_type } = event.notification;
 
   // Only password reset is redirected to the Resend template. Every other
   // message_type Auth0 can send — verify_email, blocked_account,
@@ -59,7 +73,7 @@ exports.onExecuteCustomEmailProvider = async (event, api) => {
 
   const payload = isReset
     ? {
-        from: FROM,
+        from,
         to: [to],
         template: { id: "password-reset" },
         variables: {
@@ -70,7 +84,7 @@ exports.onExecuteCustomEmailProvider = async (event, api) => {
           SHOP_ADDRESS: "The Crafty NP",
         },
       }
-    : { from: FROM, to: [to], subject, html };
+    : { from, to: [to], subject, html };
 
   let response;
   try {
@@ -118,12 +132,15 @@ Two stages, in this order:
 2. **A real reset** from Universal Login. That is the only thing that
    exercises the `password-reset` template and the `{{ url }}` extraction.
 
-Then check Resend's logs for the send.
+Then check Resend's logs for the send — every request there has a
+**Request body**. Read that before anything else:
 
-| Symptom                                   | Cause                                                                                   |
-| ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| Mail arrives looking like Auth0's default | Action not bound to the trigger, or `message_type` did not match                        |
-| `RESET_URL` contains markup or extra text | Change Password body is not `{{ url }}` alone                                           |
-| Nothing arrives, Auth0 shows retries      | Resend rejected it — check the key's permissions and that the sender domain is verified |
+| Symptom                                                        | Cause                                                                                   |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Request body has `"User-Agent": "SMTP v1.0.0"`, no `template`  | The `Resend` tile is selected instead of `Custom Provider` — see above, switch tiles    |
+| Mail is a bare, unstyled link and Gmail flags it as suspicious | Same cause as above — the native tile relays Auth0's raw template output, not ours      |
+| Mail arrives looking like Auth0's default                      | Action not bound to the trigger, or `message_type` did not match                        |
+| `RESET_URL` contains markup or extra text                      | Change Password body is not `{{ url }}` alone                                           |
+| Nothing arrives, Auth0 shows retries                           | Resend rejected it — check the key's permissions and that the sender domain is verified |
 
 These sends draw on the **same 100-a-day Resend allowance** as order mail.
