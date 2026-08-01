@@ -17,9 +17,13 @@ export type RecordShipmentWorkflowInput = {
   orderId: string;
   trackingNumber: string;
   carrierCode: string;
+  carrierId?: string | null;
   serviceCode?: string | null;
   labelId?: string | null;
   labelUrl?: string | null;
+  labelFileId?: string | null;
+  shipmentCost?: number | null;
+  currencyCode?: string | null;
   actorId?: string | null;
 };
 
@@ -71,9 +75,13 @@ const recordShipmentWorkflow = createWorkflow(
         orderId: input.orderId,
         trackingNumber: input.trackingNumber,
         carrierCode: input.carrierCode,
+        carrierId: input.carrierId ?? null,
         serviceCode: input.serviceCode ?? null,
         labelId: input.labelId ?? null,
         labelUrl: input.labelUrl ?? null,
+        labelFileId: input.labelFileId ?? null,
+        shipmentCost: input.shipmentCost ?? null,
+        currencyCode: input.currencyCode ?? null,
         fulfillmentId: fulfillment.id,
       })),
     );

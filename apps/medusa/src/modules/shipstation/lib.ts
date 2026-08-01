@@ -419,7 +419,6 @@ export function buildAddressPayload(
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     name: address.name,
-    phone: address.phone,
     address_line1: address.addressLine1,
     city_locality: address.cityLocality,
     state_province: address.stateProvince,
@@ -433,6 +432,7 @@ export function buildAddressPayload(
           : "no",
   };
 
+  if (address.phone) payload.phone = address.phone;
   if (address.companyName) payload.company_name = address.companyName;
   if (address.addressLine2) payload.address_line2 = address.addressLine2;
 
