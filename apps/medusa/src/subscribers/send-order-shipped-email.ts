@@ -33,7 +33,6 @@ export default async function sendOrderShippedEmail({
 }: SubscriberArgs<ShipmentEvent>) {
   const logger = container.resolve<Logger>(ContainerRegistrationKeys.LOGGER);
 
-  // The operator explicitly suppressed the customer email for this shipment.
   if (event.data.no_notification) return;
 
   const fulfillmentId = event.data.id;
@@ -41,9 +40,6 @@ export default async function sendOrderShippedEmail({
   try {
     const query = container.resolve(ContainerRegistrationKeys.QUERY);
 
-    // The event carries the fulfillment id, not the order id, and Fulfillment
-    // has no order_id column — the association is the order_fulfillment link
-    // table, the same shape order_cart needs.
     const { data: links } = await query.graph({
       entity: "order_fulfillment",
       fields: ["order_id"],
@@ -80,8 +76,6 @@ export default async function sendOrderShippedEmail({
       trigger_type: FulfillmentWorkflowEvents.SHIPMENT_CREATED,
       resource_id: loaded.order.orderId,
       resource_type: "order",
-      // Keyed on the fulfillment, not the order: a split shipment is two
-      // genuinely different emails.
       idempotency_key: `order-shipped:${fulfillmentId}`,
       content: orderShippedContent(loaded.order, {
         carrierName:

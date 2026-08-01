@@ -33,7 +33,6 @@ export async function POST(
         process.env.ORDER_ACCESS_SECRET ?? "",
       );
     } catch (error) {
-      // A missing secret costs the guest their order link, not their order.
       logger.error(
         `${ORDER_TOKEN_UNAVAILABLE_LOG_TAG} order=${order.id} error=${describeError(error)}`,
       );

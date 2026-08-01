@@ -71,13 +71,6 @@ export type ResendQuota = {
   usedToday: number | null;
 };
 
-// `x-resend-daily-quota` is the number of emails *already sent* today, sent
-// only to free-plan accounts — Resend has no header for the remaining count,
-// so that has to be derived against our own known cap. Do not fall back to
-// the `ratelimit-*` headers here: those govern API request throttling
-// (requests per second), a genuinely different thing from the daily email
-// cap, and pairing one's "remaining" with the other's "limit" produces two
-// unrelated numbers that only look like a matched pair.
 export function readQuotaHeaders(headers: Headers): ResendQuota {
   const raw = headers.get("x-resend-daily-quota");
   if (raw == null) return { usedToday: null };

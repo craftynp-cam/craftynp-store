@@ -28,9 +28,6 @@ export default async function reportEmailQuota(container: MedusaContainer) {
   const remaining = RESEND_FREE_TIER_DAILY_CAP - sent.length;
   const line = `${EMAIL_QUOTA_DAILY_LOG_TAG} sent=${sent.length} cap=${RESEND_FREE_TIER_DAILY_CAP} remaining=${remaining}`;
 
-  // Warn rather than info once the day's allowance is nearly gone. There is no
-  // alerting sink in this project yet, so a stable log tag is what a log-based
-  // alert will be attached to.
   if (remaining <= threshold) {
     logger.warn(line);
     return;

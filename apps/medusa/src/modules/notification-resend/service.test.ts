@@ -136,12 +136,14 @@ describe("ResendNotificationProviderService.send", () => {
   it("warns when the remaining daily allowance drops to the threshold", async () => {
     // x-resend-daily-quota is the *used* count, not remaining — 85 used
     // against the 100 cap leaves 15, under the threshold of 20.
-    global.fetch = jest.fn().mockResolvedValue(
-      jsonResponse(
-        { id: "re_2" },
-        { headers: { "x-resend-daily-quota": "85" } },
-      ),
-    ) as unknown as typeof fetch;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { id: "re_2" },
+          { headers: { "x-resend-daily-quota": "85" } },
+        ),
+      ) as unknown as typeof fetch;
 
     const { service, logger } = buildService();
     await service.send(NOTIFICATION);
@@ -153,12 +155,14 @@ describe("ResendNotificationProviderService.send", () => {
   });
 
   it("logs at info, not warn, while comfortably under the threshold", async () => {
-    global.fetch = jest.fn().mockResolvedValue(
-      jsonResponse(
-        { id: "re_2" },
-        { headers: { "x-resend-daily-quota": "10" } },
-      ),
-    ) as unknown as typeof fetch;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { id: "re_2" },
+          { headers: { "x-resend-daily-quota": "10" } },
+        ),
+      ) as unknown as typeof fetch;
 
     const { service, logger } = buildService();
     await service.send(NOTIFICATION);
@@ -172,12 +176,14 @@ describe("ResendNotificationProviderService.send", () => {
   it("does not confuse the per-request ratelimit-* headers for the daily email quota", async () => {
     // ratelimit-remaining/limit govern API request throttling, a different
     // concept entirely — a low value here must never trip the quota warning.
-    global.fetch = jest.fn().mockResolvedValue(
-      jsonResponse(
-        { id: "re_2" },
-        { headers: { "ratelimit-remaining": "1", "ratelimit-limit": "2" } },
-      ),
-    ) as unknown as typeof fetch;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { id: "re_2" },
+          { headers: { "ratelimit-remaining": "1", "ratelimit-limit": "2" } },
+        ),
+      ) as unknown as typeof fetch;
 
     const { service, logger } = buildService();
     await service.send(NOTIFICATION);
@@ -187,9 +193,7 @@ describe("ResendNotificationProviderService.send", () => {
   });
 
   it("says nothing on a paid plan, which never sends the quota header", async () => {
-    global.fetch = jest
-      .fn()
-      .mockResolvedValue(jsonResponse({ id: "re_2" }));
+    global.fetch = jest.fn().mockResolvedValue(jsonResponse({ id: "re_2" }));
 
     const { service, logger } = buildService();
     await service.send(NOTIFICATION);

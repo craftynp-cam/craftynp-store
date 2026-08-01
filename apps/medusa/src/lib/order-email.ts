@@ -42,9 +42,6 @@ function storefrontUrl(): string {
   );
 }
 
-// Mirrors the storefront's checkoutConfirmationHref(). The two builders are
-// deliberately independent, so the order/number/token contract is written down
-// in both apps' AGENTS.md.
 export function orderConfirmationUrl(order: OrderConfirmation): string {
   const params = new URLSearchParams({
     order: order.orderId,
@@ -64,11 +61,7 @@ export function orderConfirmationUrl(order: OrderConfirmation): string {
         process.env.ORDER_ACCESS_SECRET ?? "",
       ),
     );
-  } catch {
-    // Send the receipt anyway. Without the token the link only opens for a
-    // signed-in customer, which beats no receipt at all; the missing secret is
-    // already logged loudly where the token is minted at checkout.
-  }
+  } catch {}
 
   return `${storefrontUrl()}/checkout/confirmation?${params.toString()}`;
 }
@@ -82,15 +75,6 @@ export type OrderEmailNotes = {
   shippingWindowNote: string;
 };
 
-// Resend's REST API does not reliably apply `variables` to a template.id send
-// on this account — every field, not only ones used inside an href, silently
-// fell back to its declared default in testing (see
-// docs/auth0-custom-email-provider.md, where the same class of bug first
-// surfaced). These functions build the branded HTML/text directly instead of
-// leaning on a Resend-hosted template at send time. The `order-confirmation`
-// / `order-shipped` Resend templates still exist as the design reference and
-// render correctly in Resend's own dashboard preview — that path just never
-// runs a real send.
 export function orderConfirmationContent(
   order: OrderConfirmation,
   notes: OrderEmailNotes,

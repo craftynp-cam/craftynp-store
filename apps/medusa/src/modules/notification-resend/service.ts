@@ -19,10 +19,6 @@ import {
   type ResendOptions,
 } from "./lib";
 
-// The module service hands the whole notification row to send(), so the
-// idempotency key is there at runtime even though the published DTO omits it.
-// `template` is typed as required on ProviderSendNotificationDTO, but a
-// content-based send (the path every real caller here uses) never sets it.
 type NotificationWithIdempotency = Omit<
   ProviderSendNotificationDTO,
   "template"
@@ -43,10 +39,6 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
     this.rawOptions_ = options;
     this.logger_ = logger;
 
-    // Deliberately not validated here. Medusa builds every provider at boot, so
-    // throwing on a missing key would stop the whole backend starting over
-    // email — which is explicitly not on the critical path anywhere else.
-    // Fail on the first send instead, where it lands in the notification row.
     try {
       validateResendOptions(options);
     } catch (error) {
@@ -80,14 +72,6 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
       ? { reply_to: this.options_.replyTo }
       : {};
 
-    // Resend's REST API does not reliably apply `variables` to a template.id
-    // send — every field, not only ones used inside an href, silently fell
-    // back to its declared default in testing against this account (see
-    // apps/medusa/docs/auth0-custom-email-provider.md for where this was
-    // first found). notification.content carries fully-rendered html/text
-    // built server-side instead, which every caller in this repo now uses;
-    // the template.id path stays only as a fallback for a caller that hasn't
-    // been migrated, and is not to be trusted for anything with a variable.
     const body = JSON.stringify(
       notification.content?.html
         ? {
@@ -137,8 +121,6 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
         const text = await response.text();
 
         if (isQuotaExceeded(response.status, text)) {
-          // Thrown, not swallowed: the module records the row as FAILURE so the
-          // retry job picks it up instead of the mail vanishing.
           throw new ResendQuotaExceededError(
             `Resend daily quota exhausted: ${text}`,
           );
@@ -149,7 +131,6 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
           response.status,
         );
 
-        // 4xx other than 429 will fail identically on every retry.
         if (response.status < 500 && response.status !== 429) throw error;
         lastError = error;
       } catch (error) {
@@ -167,7 +148,6 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
 
   private reportQuota_(response: Response): void {
     const { usedToday } = readQuotaHeaders(response.headers);
-    // Not present on a paid plan, per Resend's own docs — nothing to report.
     if (usedToday == null) return;
 
     const remaining = RESEND_FREE_TIER_DAILY_CAP - usedToday;

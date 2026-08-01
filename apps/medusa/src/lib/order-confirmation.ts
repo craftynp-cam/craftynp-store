@@ -7,10 +7,6 @@ import type {
   OrderConfirmationLine,
 } from "@craftynp/types";
 
-// `items.*` and `shipping_methods.*` must stay wildcards. Medusa computes the
-// order totals from those relations, and narrowing either one to the handful of
-// columns actually rendered makes every total silently come back as 0 — no
-// error, just a free order on the receipt.
 export const ORDER_CONFIRMATION_FIELDS = [
   "id",
   "display_id",
@@ -78,9 +74,6 @@ type OrderAddressRow = {
   country_code: string | null;
 };
 
-// Medusa's money fields are BigNumberValue — a number, a numeric string, or a
-// { value } wrapper depending on how the row was loaded. Reading one straight
-// into a number field puts "15.000000000000000000" on the page.
 function toPrimitiveAmount(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string") {
@@ -98,9 +91,6 @@ function toAmount(value: unknown): number {
 
   const record = value as Record<string, unknown> & { toJSON?: () => unknown };
 
-  // `numeric_` is the BigNumber instance query.graph actually returns; `value`
-  // is the serialized { value, precision } wrapper the same field arrives as
-  // over HTTP. Both have to work or the totals read as a free order.
   for (const candidate of [
     record.numeric_,
     record.numeric,

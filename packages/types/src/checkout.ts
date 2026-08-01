@@ -72,8 +72,6 @@ export type CheckoutCompleteRequest = z.infer<
 export const checkoutCompleteResponseSchema = z.object({
   orderId: z.string().min(1),
   displayId: z.number().int().nonnegative(),
-  // Best-effort: the guest order link is not worth failing a paid order over,
-  // so it is absent when ORDER_ACCESS_SECRET is unset.
   orderToken: z.string().min(1).optional(),
 });
 export type CheckoutCompleteResponse = z.infer<

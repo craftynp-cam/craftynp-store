@@ -20,8 +20,6 @@ export async function GET(
   const rawToken = req.query.token;
   const token = typeof rawToken === "string" ? rawToken : null;
 
-  // 404 rather than 403 throughout: a 403 confirms the order exists, which is
-  // the very thing URL manipulation is fishing for.
   function deny(reason: string) {
     logger.warn(
       `${ORDER_ACCESS_DENIED_LOG_TAG} order=${orderId} reason=${reason}`,

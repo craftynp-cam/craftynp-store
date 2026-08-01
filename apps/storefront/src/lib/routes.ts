@@ -21,8 +21,6 @@ export function checkoutHref(): string {
   return "/checkout";
 }
 
-// Medusa builds this same URL independently for the confirmation email, so the
-// order/number/token contract is documented in both apps' AGENTS.md.
 export function checkoutConfirmationHref(
   orderId: string,
   displayId: number,

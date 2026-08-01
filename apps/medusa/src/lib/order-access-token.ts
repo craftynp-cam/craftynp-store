@@ -46,8 +46,6 @@ export function signOrderAccessToken(
   payload: Omit<OrderAccessPayload, "v">,
   secret: string,
 ): string {
-  // An empty HMAC key still produces a signature that verifies, so an unset
-  // secret would silently let anyone forge a token for any order.
   if (!secret) throw new OrderAccessSecretMissingError();
 
   const fullPayload: OrderAccessPayload = { v: 1, ...payload };
@@ -85,8 +83,6 @@ export function verifyOrderAccessToken(
   secret: string,
   expected: { orderId: string; nowMs?: number },
 ): VerifyOrderAccessResult {
-  // Fail closed. Verifying against an empty key would accept a token any
-  // caller could have computed themselves.
   if (!secret) return { valid: false, reason: "not_configured" };
 
   const parts = token.split(".");

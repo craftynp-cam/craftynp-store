@@ -184,26 +184,14 @@ You're getting this because a password reset was requested for this address.`;
 }
 
 exports.onExecuteCustomEmailProvider = async (event, api) => {
-  // `from` comes from the Custom Provider tile's own From field, not a
-  // hardcoded value here — one place to change the sender, not two that can
-  // drift out of sync.
   const { to, from, subject, html, message_type } = event.notification;
 
-  // Only password reset is redirected to the branded email. Every other
-  // message_type Auth0 can send — verify_email, blocked_account,
-  // organization_invitation, and the dashboard's own
-  // try_provider_configuration_email test — falls through to Auth0's rendered
-  // body, so enabling this provider never silently stops those being sent.
   const isReset =
     message_type === "reset_email" || message_type === "reset_email_by_code";
 
   let payload;
   if (isReset) {
-    // The Change Password template body is exactly `{{ url }}`, so stripping
-    // tags leaves the reset URL and nothing else.
     const resetUrl = html.replace(/<[^>]*>/g, "").trim();
-    // event.user.given_name is shopper-controlled (set at signup), so it goes
-    // through escapeHtml before landing in the HTML body.
     const customerName = escapeHtml(event.user.given_name || "there");
     const shopAddress = "The Crafty NP";
 
@@ -212,8 +200,6 @@ exports.onExecuteCustomEmailProvider = async (event, api) => {
       to: [to],
       subject: "Reset your Crafty NP password",
       replyTo: "hello@thecraftynp.org",
-      // Built in code, not sent via Resend's template.id + variables — see
-      // "Why the Action builds the HTML itself" above.
       html: passwordResetHtml(resetUrl, customerName, shopAddress),
       text: passwordResetText(resetUrl, customerName, shopAddress),
     };
@@ -232,16 +218,11 @@ exports.onExecuteCustomEmailProvider = async (event, api) => {
       body: JSON.stringify(payload),
     });
   } catch {
-    // Network-level failure. Auth0 retries up to 5 times over the next few
-    // minutes — this is the whole retry story for password-reset mail, since
-    // it never touches our notification table.
     return api.notification.retry();
   }
 
   if (response.ok) return;
 
-  // 4xx fails identically on every attempt (bad key, unverified sender), so
-  // retrying just burns the quota. 5xx and 429 are worth another go.
   if (response.status >= 500 || response.status === 429) {
     return api.notification.retry();
   }

@@ -40,7 +40,6 @@ export default async function sendOrderConfirmationEmail({
       trigger_type: "order.placed",
       resource_id: loaded.order.orderId,
       resource_type: "order",
-      // Stops a duplicate receipt if order.placed is redelivered.
       idempotency_key: `order-confirmation:${loaded.order.orderId}`,
       content: orderConfirmationContent(loaded.order, {
         turnaroundNote: content.order_turnaround_note,
@@ -48,9 +47,6 @@ export default async function sendOrderConfirmationEmail({
       }),
     });
   } catch (error) {
-    // Never rethrow: the order is paid and placed, and a failed receipt must
-    // not roll it back. The notification row is already marked FAILURE, which
-    // is what the retry job reads.
     logger.error(
       `${ORDER_EMAIL_FAILED_LOG_TAG} kind=confirmation order=${event.data.id} error=${
         error instanceof Error ? error.message : String(error)

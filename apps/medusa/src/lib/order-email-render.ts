@@ -2,8 +2,6 @@ import type { OrderAddress, OrderConfirmationLine } from "@craftynp/types";
 
 import { formatMoney } from "./format-money";
 
-// Keeps one order email a sane size regardless of how many lines it has,
-// degrading to a "+N more" row instead of growing without bound.
 export const MAX_VARIABLE_CHARS = 1900;
 
 const CELL = "font-family:Arial,Helvetica,sans-serif;";
@@ -61,9 +59,6 @@ export function renderOrderItemsHtml(
     const remaining = lines.length - index;
     const overflow = overflowRow(remaining, orderUrl);
 
-    // Only commit this row if the overflow row that might have to follow it
-    // still fits, otherwise the budget is blown by the very thing meant to
-    // rescue it.
     if (used + row.length + overflow.length > MAX_VARIABLE_CHARS) {
       rows.push(overflow);
       return rows.join("");
