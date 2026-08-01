@@ -247,6 +247,7 @@ export const RateAndBuyPanel = ({
                 <label htmlFor={rate.rateId} className="flex-1 cursor-pointer">
                   <Text size="small" weight="plus">
                     {`${rate.carrierName} · ${rate.serviceName}`}
+                    {rate.packageName ? ` · ${rate.packageName}` : ""}
                   </Text>
                   <Text size="small">
                     {formatMoney(rate.amount, rate.currencyCode)}
