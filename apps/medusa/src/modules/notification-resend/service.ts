@@ -166,21 +166,19 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
   }
 
   private reportQuota_(response: Response): void {
-    const { remaining, limit } = readQuotaHeaders(response.headers);
-    if (remaining == null) return;
+    const { usedToday } = readQuotaHeaders(response.headers);
+    // Not present on a paid plan, per Resend's own docs — nothing to report.
+    if (usedToday == null) return;
 
-    const cap = limit ?? RESEND_FREE_TIER_DAILY_CAP;
+    const remaining = RESEND_FREE_TIER_DAILY_CAP - usedToday;
+    const line = `remaining=${remaining} used=${usedToday} cap=${RESEND_FREE_TIER_DAILY_CAP}`;
 
     if (remaining <= this.options_.dailyQuotaAlertThreshold) {
-      this.logger_.warn(
-        `${RESEND_QUOTA_LOW_LOG_TAG} remaining=${remaining} cap=${cap}`,
-      );
+      this.logger_.warn(`${RESEND_QUOTA_LOW_LOG_TAG} ${line}`);
       return;
     }
 
-    this.logger_.info(
-      `${RESEND_QUOTA_LOG_TAG} remaining=${remaining} cap=${cap}`,
-    );
+    this.logger_.info(`${RESEND_QUOTA_LOG_TAG} ${line}`);
   }
 }
 
