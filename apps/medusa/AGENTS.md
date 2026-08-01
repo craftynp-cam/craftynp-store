@@ -148,9 +148,19 @@ this is a denial-of-checkout vector, not only a cost one.
 
 **Cloudflare is the first line and has no in-repo representation** — like the
 Auth0 and Stripe Tax dashboard state above, don't search for it here. The
-origin sits behind Cloudflare; Bot Fight Mode and rate-limiting rules on
-`/store/tax-quote`, `/store/shipping-rates` and `/store/checkout/*` belong
-there, and they catch volume long before it reaches this limiter.
+rate-limiting rule on `/store/tax-quote`, `/store/shipping-rates` and
+`/store/checkout/*` lives there and sheds volume long before it reaches this
+limiter.
+
+- **Medusa is served from `api.thecraftynp.com`, a different zone from the
+  storefront's `thecraftynp.org`, and Bot Fight Mode is deliberately off on
+  that zone.** On the Free plan Bot Fight Mode is zone-wide and cannot be
+  skipped — Cloudflare documents that Skip, Bypass and Allow "have no effect"
+  on it — so in front of this app it would challenge the Stripe and ShipStation
+  webhooks and the storefront's server-side fetches. Every one of those fails
+  silently: payment succeeds at Stripe and no order appears, tracking never
+  updates. The split zone is what keeps the API challenge-free while the
+  storefront keeps the protection. See [README.md](../../README.md).
 
 ## Money, units, and external APIs
 

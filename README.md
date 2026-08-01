@@ -498,23 +498,58 @@ exhausted. The app carries per-IP limits on all four (see
 `RATE_LIMIT_*` in `apps/medusa/.env.example`), but those are a second line of
 defence and the counters are per-process until Redis lands with CNP-16.
 
-**Do these in the Cloudflare dashboard — none of it lives in this repo:**
+**None of the following lives in this repo — it is Cloudflare dashboard state.**
 
-1. **Put the Medusa origin behind Cloudflare and stop it accepting traffic any
-   other way.** The app's limiter keys on `cf-connecting-ip`, which Cloudflare
-   strips from inbound requests; reachable directly, that header can be forged
-   and the limiter is defeated.
-2. **Security → Bots → Bot Fight Mode on.** This is the single highest-value
-   setting and takes one click.
-3. **Rate-limiting rules** on `/store/tax-quote`, `/store/shipping-rates` and
-   `/store/checkout/*`. Set them above the app's own per-minute ceilings so
-   Cloudflare sheds the volume and the app limit only catches what slips past.
-4. Confirm the storefront is served at the exact hostname hardcoded in the
-   order and password-reset emails, or the logo will 404 in every one.
+### The two zones are split on purpose
 
-Turnstile was considered and deliberately left out: it is the only measure of
-these that adds friction to the conversion path, and it protects the same
-surface as 2 and 3. Revisit it if abuse gets through anyway.
+| Hostname                 | Zone   | Serves         | Bot Fight Mode  |
+| ------------------------ | ------ | -------------- | --------------- |
+| `thecraftynp.org`        | `.org` | the storefront | **on**          |
+| `api.thecraftynp.com`    | `.com` | Medusa         | **off**         |
+| `thecraftynp.com`, `www` | `.com` | 301 to `.org`  | n/a, no content |
+
+**Do not turn Bot Fight Mode on for the `.com` zone.** It looks like an
+oversight and is not. On the Free plan it is zone-wide and cannot be skipped —
+Cloudflare's own documentation says Skip, Bypass and Allow "have no effect" on
+it and that it "may challenge API or mobile app traffic". Enabled in front of
+Medusa it would challenge the Stripe and ShipStation webhooks and every
+server-side fetch the storefront makes, and all of those fail silently: payment
+succeeds at Stripe but no order appears, tracking never updates, pages render
+empty. Splitting the API onto its own zone is what buys a bot-challenge-free
+API while the storefront still gets the protection.
+
+If the plan is ever upgraded to Pro, Super Bot Fight Mode does run on the
+Ruleset Engine and accepts Skip rules, and both could then live on one domain.
+
+### Checklist
+
+1. **Both zones: Always Use HTTPS on.** It is off by default here.
+2. **`api.thecraftynp.com` proxied (orange), and the origin must refuse traffic
+   that did not come through Cloudflare.** The app limiter keys on
+   `cf-connecting-ip`, which Cloudflare strips from inbound requests; reachable
+   directly — including on a `*.up.railway.app` hostname — that header can be
+   forged and the limiter is defeated.
+3. **Rate-limiting rule** on the API hostname, above the app's own per-minute
+   ceilings so Cloudflare sheds volume and the app limit only catches leakage:
+
+   ```
+   (http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates"})
+   or (starts_with(http.request.uri.path, "/store/checkout/"))
+   ```
+
+   Characteristic IP, 60 requests per minute, Block for 1 minute.
+
+4. **`.com` redirects rather than aliases.** A CNAME to `.org` would serve the
+   same content on both hostnames and split the SEO; use a Redirect Rule to
+   `https://thecraftynp.org` + path, 301, preserving the query string, against
+   a proxied placeholder record. Drop the `*.thecraftynp.com` wildcard.
+5. **The storefront must answer on exactly `thecraftynp.org`.** That string is
+   hardcoded in both order emails, all three Resend templates and the Auth0
+   password-reset Action; a redirect does not save an `<img>` in Outlook.
+
+Turnstile was considered and deliberately left out: it is the only measure here
+that adds friction to the conversion path, and it covers the same surface as 3.
+Revisit it if abuse gets through anyway.
 
 ## Contributing
 
