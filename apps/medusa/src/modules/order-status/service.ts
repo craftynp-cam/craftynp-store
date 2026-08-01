@@ -241,6 +241,37 @@ class OrderStatusModuleService extends MedusaService({
     return status;
   }
 
+  async shipmentContext(trackingNumber: string): Promise<{
+    shipment: ShipmentRow;
+    orderId: string;
+    status: OrderStatus;
+  } | null> {
+    const shipment = await this.findShipmentByTrackingNumber(trackingNumber);
+    if (!shipment) return null;
+
+    const [record] = (await this.listOrderStatusRecords({
+      id: shipment.order_status_id,
+    })) as StatusRow[];
+
+    if (!record) return null;
+
+    return {
+      shipment,
+      orderId: record.order_id,
+      status: record.status as OrderStatus,
+    };
+  }
+
+  async releaseWebhookEvent(eventKey: string): Promise<void> {
+    const existing = (await this.listTrackingWebhookEvents({
+      event_key: eventKey,
+    })) as { id: string }[];
+
+    if (existing[0]) {
+      await this.deleteTrackingWebhookEvents(existing[0].id);
+    }
+  }
+
   async recordWebhookEvent(input: TrackingEventInput): Promise<boolean> {
     try {
       await this.createTrackingWebhookEvents({
