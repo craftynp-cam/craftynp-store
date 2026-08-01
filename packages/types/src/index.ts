@@ -38,6 +38,27 @@ export {
   orderConfirmationResponseSchema,
   orderConfirmationSchema,
 } from "./order.js";
+export {
+  ORDER_STATUSES,
+  ORDER_STATUS_TRANSITIONS,
+  TERMINAL_ORDER_STATUSES,
+  TRACKING_STATUSES,
+  allowedTransitions,
+  canTransition,
+  carrierTrackingUrl,
+  orderStatusActorSchema,
+  orderStatusDetailResponseSchema,
+  orderStatusDetailSchema,
+  orderStatusHistoryEntrySchema,
+  orderStatusSchema,
+  orderStatusUpdateRequestSchema,
+  orderTrackingSchema,
+  recordShipmentRequestSchema,
+  trackingStatusFromShipStation,
+  trackingStatusSchema,
+  transitionRejection,
+  voidShipmentRequestSchema,
+} from "./order-status.js";
 
 export type {
   ArtworkReference,
@@ -78,3 +99,15 @@ export type {
   OrderConfirmationLine,
   OrderConfirmationResponse,
 } from "./order.js";
+export type {
+  OrderStatus,
+  OrderStatusActor,
+  OrderStatusDetail,
+  OrderStatusDetailResponse,
+  OrderStatusHistoryEntry,
+  OrderStatusUpdateRequest,
+  OrderTracking,
+  RecordShipmentRequest,
+  TrackingStatus,
+  VoidShipmentRequest,
+} from "./order-status.js";

@@ -10,6 +10,8 @@ const ORDER: OrderConfirmation = {
   email: "jamie.rivera@email.com",
   placedAt: "2026-07-30T12:00:00.000Z",
   status: "pending",
+  fulfilmentStatus: "received",
+  tracking: null,
   shippingMethodName: "Standard shipping",
   lines: [
     {

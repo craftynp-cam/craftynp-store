@@ -8,7 +8,9 @@ import { GuestAccountPrompt } from "./guest-account-prompt";
 import { OrderAddressCard } from "./order-address-card";
 import { OrderConfirmationHero } from "./order-confirmation-hero";
 import { OrderDeliveryCard } from "./order-delivery-card";
+import { OrderStatusBadge } from "./order-status-badge";
 import { OrderSummaryCard } from "./order-summary-card";
+import { OrderTrackingCard } from "./order-tracking-card";
 
 const keepShoppingClassName =
   "inline-flex items-center justify-center rounded-lg border border-border-strong px-6 py-3 text-base font-semibold text-foreground transition-colors hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -43,6 +45,10 @@ export function OrderConfirmationView({
       <div className="mx-auto max-w-2xl space-y-6 px-4 py-12 sm:py-16">
         {order ? (
           <>
+            <div className="flex justify-center">
+              <OrderStatusBadge status={order.fulfilmentStatus} />
+            </div>
+
             <OrderSummaryCard order={order} />
 
             <div className="grid gap-6 sm:grid-cols-2">
@@ -53,6 +59,10 @@ export function OrderConfirmationView({
                 shippingMethodName={order.shippingMethodName}
                 turnaroundNote={turnaroundNote}
                 shippingWindowNote={shippingWindowNote}
+              />
+              <OrderTrackingCard
+                status={order.fulfilmentStatus}
+                tracking={order.tracking}
               />
             </div>
 

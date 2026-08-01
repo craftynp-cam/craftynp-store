@@ -8,6 +8,8 @@ const ORDER: OrderConfirmation = {
   email: "jamie@example.com",
   placedAt: "2026-07-31T04:01:16.235Z",
   status: "pending",
+  fulfilmentStatus: "received",
+  tracking: null,
   shippingMethodName: "Live USPS Rate",
   lines: [
     {

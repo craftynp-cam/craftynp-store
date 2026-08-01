@@ -54,6 +54,10 @@ function buildHarness(options: {
   const json = jest.fn();
   const status = jest.fn(() => ({ json }));
   const logger = { warn: jest.fn(), error: jest.fn() };
+  const orderStatus = {
+    currentStatus: jest.fn(async () => "received"),
+    activeShipment: jest.fn(async () => null),
+  };
 
   return {
     req: {
@@ -61,8 +65,11 @@ function buildHarness(options: {
       query: options.token ? { token: options.token } : {},
       auth_context: options.actorId ? { actor_id: options.actorId } : undefined,
       scope: {
-        resolve: (key: string) =>
-          key === ContainerRegistrationKeys.QUERY ? { graph } : logger,
+        resolve: (key: string) => {
+          if (key === ContainerRegistrationKeys.QUERY) return { graph };
+          if (key === "orderStatus") return orderStatus;
+          return logger;
+        },
       },
     } as unknown as AuthenticatedMedusaRequest,
     res: { json, status } as unknown as MedusaResponse,

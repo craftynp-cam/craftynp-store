@@ -27,6 +27,13 @@ module.exports = defineConfig({
   modules: [
     { resolve: "./src/modules/site-content" },
     {
+      resolve: "./src/modules/order-status",
+      dependencies: [
+        ContainerRegistrationKeys.QUERY,
+        ContainerRegistrationKeys.LOGGER,
+      ],
+    },
+    {
       resolve: "./src/modules/shipstation",
       dependencies: [Modules.CACHE],
       options: {
