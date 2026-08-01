@@ -101,7 +101,7 @@ class OrderStatusModuleService extends MedusaService({
 
   async transition(
     input: TransitionInput,
-  ): Promise<{ from: OrderStatus; to: OrderStatus }> {
+  ): Promise<{ from: OrderStatus; to: OrderStatus; historyEntryId: string }> {
     const record = await this.ensureRecord(input.orderId);
     const from = record.status as OrderStatus;
 
@@ -113,16 +113,39 @@ class OrderStatusModuleService extends MedusaService({
       changed_at: new Date(),
     });
 
-    await this.createOrderStatusHistoryEntries({
+    const entry = (await this.createOrderStatusHistoryEntries({
       order_status_id: record.id,
       from_status: from,
       to_status: input.to,
       reason: input.reason ?? null,
       actor_type: input.actorType,
       actor_id: input.actorId ?? null,
+    })) as { id: string } | { id: string }[];
+
+    return {
+      from,
+      to: input.to,
+      historyEntryId: Array.isArray(entry) ? entry[0]!.id : entry.id,
+    };
+  }
+
+  async revertTransition(input: {
+    orderId: string;
+    status: OrderStatus;
+    historyEntryId?: string | null;
+  }): Promise<void> {
+    const record = await this.findRecord(input.orderId);
+    if (!record) return;
+
+    await this.updateOrderStatusRecords({
+      id: record.id,
+      status: input.status,
+      changed_at: new Date(),
     });
 
-    return { from, to: input.to };
+    if (input.historyEntryId) {
+      await this.deleteOrderStatusHistoryEntries(input.historyEntryId);
+    }
   }
 
   async listHistory(orderId: string): Promise<HistoryRow[]> {
