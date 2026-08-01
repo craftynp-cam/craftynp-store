@@ -6,6 +6,7 @@ import type { Logger } from "@medusajs/framework/types";
 import type {
   CalculateShippingOptionPriceContext,
   CalculatedShippingOptionPrice,
+  CreateFulfillmentResult,
   CreateShippingOptionDTO,
   FulfillmentOption,
 } from "@medusajs/framework/types";
@@ -232,6 +233,22 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
       calculated_amount: freshRate.amount,
       is_calculated_price_tax_inclusive: false,
     };
+  }
+
+  override async createFulfillment(
+    data: Record<string, unknown>,
+  ): Promise<CreateFulfillmentResult> {
+    return { data, labels: [] };
+  }
+
+  override async cancelFulfillment(
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return data;
+  }
+
+  override async getFulfillmentDocuments(): Promise<never[]> {
+    return [];
   }
 }
 

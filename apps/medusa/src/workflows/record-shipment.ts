@@ -28,7 +28,7 @@ const recordShipmentWorkflow = createWorkflow(
   function (input: RecordShipmentWorkflowInput) {
     const { data: order } = useQueryGraphStep({
       entity: "order",
-      fields: ["id", "items.id", "items.quantity"],
+      fields: ["id", "items.*"],
       filters: { id: input.orderId },
       options: { throwIfKeyNotFound: true, isList: false },
     });
