@@ -480,12 +480,15 @@ All are run from the repo root.
 ## Deployment
 
 Nothing is deployed yet. The intended mapping, once CNP-16 and CNP-17 provision
-the environments:
+production:
 
 | Branch | Environment | Target                                 |
 | ------ | ----------- | -------------------------------------- |
 | `main` | Production  | Vercel (storefront) + Railway (Medusa) |
-| `dev`  | Preview     | Vercel + Railway                       |
+| `dev`  | Preview     | Vercel preview deployments             |
+
+Production is the only environment provisioned. Preview deployments have no
+Medusa of their own and call the production API.
 
 ### Before the first public deploy
 
