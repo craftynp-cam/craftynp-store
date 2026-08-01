@@ -160,7 +160,11 @@ limiter.
   webhooks and the storefront's server-side fetches. Every one of those fails
   silently: payment succeeds at Stripe and no order appears, tracking never
   updates. The split zone is what keeps the API challenge-free while the
-  storefront keeps the protection. See [README.md](../../README.md).
+  storefront keeps the protection. The alternative — grey-clouding the API so
+  Cloudflare never sees it — was rejected because it leaves the limiter with
+  only the forgeable `x-forwarded-for` to key on. See
+  [README.md](../../README.md), which also records that the `.com` zone still
+  carries the live mail records and is not safe to delete.
 
 ## Money, units, and external APIs
 

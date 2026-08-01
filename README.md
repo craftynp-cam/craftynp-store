@@ -504,11 +504,11 @@ defence and the counters are per-process until Redis lands with CNP-16.
 
 ### The two zones are split on purpose
 
-| Hostname                 | Zone   | Serves         | Bot Fight Mode  |
-| ------------------------ | ------ | -------------- | --------------- |
-| `thecraftynp.org`        | `.org` | the storefront | **on**          |
-| `api.thecraftynp.com`    | `.com` | Medusa         | **off**         |
-| `thecraftynp.com`, `www` | `.com` | 301 to `.org`  | n/a, no content |
+| Hostname                 | Zone   | Serves             | Bot Fight Mode  |
+| ------------------------ | ------ | ------------------ | --------------- |
+| `thecraftynp.org`        | `.org` | the storefront     | **on**          |
+| `api.thecraftynp.com`    | `.com` | Medusa             | **off**         |
+| `thecraftynp.com`, `www` | `.com` | redirect to `.org` | n/a, no content |
 
 **Do not turn Bot Fight Mode on for the `.com` zone.** It looks like an
 oversight and is not. On the Free plan it is zone-wide and cannot be skipped —
@@ -522,6 +522,26 @@ API while the storefront still gets the protection.
 
 If the plan is ever upgraded to Pro, Super Bot Fight Mode does run on the
 Ruleset Engine and accepts Skip rules, and both could then live on one domain.
+
+**`.org` is the storefront because it was already the brand's address** — it is
+what the order emails, the Resend templates, the Auth0 Action and the contact
+addresses all point at. `.com` was serving a dead origin (`66.223.49.89`,
+returning 520) when this was set up, which is what made it free to become the
+API zone. Do not swap them round without changing all four of those first.
+
+**`.com` is not a throwaway zone: it still carries the live mail records** — the
+`MX`, SPF `TXT` and `_dmarc` entries pointing at businessidentity.llc, plus the
+`_acme-challenge` records. The apex and `www` `A` records are placeholders that
+exist only to give the redirect rule a proxied hostname, but everything else in
+that zone is load-bearing. Deleting the zone, or moving its nameservers,
+takes email with it.
+
+Two other arrangements were considered and rejected. Putting the API on
+`api.thecraftynp.org` **grey-clouded** keeps the webhooks safe, but Cloudflare
+then sees none of the API traffic: no rate-limiting rules, and the app limiter
+falls back to `x-forwarded-for`, whose client-facing entry is forgeable, so it
+could be bypassed with one header. Putting the API behind the storefront's own
+orange-clouded zone hits the Bot Fight Mode problem above.
 
 ### Checklist
 
@@ -542,9 +562,18 @@ Ruleset Engine and accepts Skip rules, and both could then live on one domain.
    Characteristic IP, 60 requests per minute, Block for 1 minute.
 
 4. **`.com` redirects rather than aliases.** A CNAME to `.org` would serve the
-   same content on both hostnames and split the SEO; use a Redirect Rule to
-   `https://thecraftynp.org` + path, 301, preserving the query string, against
-   a proxied placeholder record. Drop the `*.thecraftynp.com` wildcard.
+   same content on both hostnames and split the SEO, so it is a Redirect Rule
+   to `concat("https://thecraftynp.org", http.request.uri.path)` with preserve
+   query string on, matched on
+   `(http.host eq "thecraftynp.com") or (http.host eq "www.thecraftynp.com")`.
+   A wildcard DNS record cannot do this job either: wildcards do not match the
+   zone apex, so `thecraftynp.com` itself would not resolve.
+
+   **It is deployed as a `302` on purpose and needs flipping to `301`** once
+   `thecraftynp.org` actually serves the storefront. A `301` is cached hard by
+   browsers, so shipping one while the target is still dead would durably teach
+   visitors and crawlers that `.com` points at a broken host.
+
 5. **The storefront must answer on exactly `thecraftynp.org`.** That string is
    hardcoded in both order emails, all three Resend templates and the Auth0
    password-reset Action; a redirect does not save an `<img>` in Outlook.

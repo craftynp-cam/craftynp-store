@@ -28,6 +28,16 @@
     "cloudflare-api": {
       "type": "http",
       "url": "https://mcp.cloudflare.com/mcp"
+    },
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    },
+    "railway": {
+      "type": "stdio",
+      "command": "railway",
+      "args": ["mcp"],
+      "env": {}
     }
   }
 }
