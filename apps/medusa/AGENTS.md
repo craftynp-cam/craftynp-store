@@ -115,6 +115,43 @@ the Workspace org's 2-Step Verification policy; and Stripe Tax's nexus and
 per-state registrations. Workspace 2SV is the real MFA enforcement — Medusa's
 TOTP is config-only and opt-in per identity, so do not implement enrolment.
 
+## Abuse and rate limiting
+
+Four store routes are reachable with no session at all, and two of them spend
+money on every call: `/store/tax-quote` bills a Stripe Tax calculation and
+`/store/shipping-rates` burns the ShipStation limit. Because there is
+deliberately no flat-rate fallback, exhausting ShipStation returns
+`502 shipping_unavailable` and **blocks checkout for genuine customers** — so
+this is a denial-of-checkout vector, not only a cost one.
+
+- **`rateLimit()` from `src/lib/rate-limit.ts` goes on every new anonymous store
+  route that costs money or sends mail.** It is wired in the route's
+  `middlewares.ts`, **before** `validateAndTransformBody`, so a flood of
+  malformed bodies is rejected without parsing them.
+- **It fails open.** A missing or throwing cache calls `next()` rather than
+  refusing the request — a broken cache must never take checkout down with it.
+  That is the right trade here and the reason this is a second line of defence
+  behind Cloudflare, not the only one.
+- **It keys on `cf-connecting-ip` first.** Cloudflare strips any client-supplied
+  copy of that header, so it is the one value a caller cannot forge;
+  `x-forwarded-for` is the fallback for a non-Cloudflare proxy and **is**
+  spoofable. **If Medusa is ever reachable directly, bypassing Cloudflare, the
+  limiter is trivially defeated by forging that header** — the origin must only
+  accept traffic through the proxy.
+- **The window counter lives in `Modules.CACHE`, which is in-memory until Redis
+  is wired up (CNP-16).** So the counters are per-process and reset on deploy.
+  That still stops a single-source flood; it is not a distributed limiter, and
+  it should be revisited when the cache moves to Redis.
+- Limits are per-IP per-minute and come from `RATE_LIMIT_*` env vars, documented
+  in `.env.example`. A non-positive-integer value is ignored rather than
+  applied, so a typo cannot lock every caller out.
+
+**Cloudflare is the first line and has no in-repo representation** — like the
+Auth0 and Stripe Tax dashboard state above, don't search for it here. The
+origin sits behind Cloudflare; Bot Fight Mode and rate-limiting rules on
+`/store/tax-quote`, `/store/shipping-rates` and `/store/checkout/*` belong
+there, and they catch volume long before it reaches this limiter.
+
 ## Money, units, and external APIs
 
 - **Weights are grams and dimensions centimetres everywhere.** Medusa enforces

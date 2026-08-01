@@ -488,6 +488,34 @@ the environments:
 | `qa`   | Staging     | Vercel + Railway                       |
 | `dev`  | Preview     | Vercel + Railway                       |
 
+### Before the first public deploy
+
+Four store routes take no session at all, and two of them spend money on every
+call — `/store/tax-quote` bills a Stripe Tax calculation, and
+`/store/shipping-rates` burns the ShipStation rate limit, which returns
+`502 shipping_unavailable` and blocks checkout for real customers once
+exhausted. The app carries per-IP limits on all four (see
+`RATE_LIMIT_*` in `apps/medusa/.env.example`), but those are a second line of
+defence and the counters are per-process until Redis lands with CNP-16.
+
+**Do these in the Cloudflare dashboard — none of it lives in this repo:**
+
+1. **Put the Medusa origin behind Cloudflare and stop it accepting traffic any
+   other way.** The app's limiter keys on `cf-connecting-ip`, which Cloudflare
+   strips from inbound requests; reachable directly, that header can be forged
+   and the limiter is defeated.
+2. **Security → Bots → Bot Fight Mode on.** This is the single highest-value
+   setting and takes one click.
+3. **Rate-limiting rules** on `/store/tax-quote`, `/store/shipping-rates` and
+   `/store/checkout/*`. Set them above the app's own per-minute ceilings so
+   Cloudflare sheds the volume and the app limit only catches what slips past.
+4. Confirm the storefront is served at the exact hostname hardcoded in the
+   order and password-reset emails, or the logo will 404 in every one.
+
+Turnstile was considered and deliberately left out: it is the only measure of
+these that adds friction to the conversion path, and it protects the same
+surface as 2 and 3. Revisit it if abuse gets through anyway.
+
 ## Contributing
 
 Work flows in one direction: `feature/*` → `dev` → `qa` → `main`.
