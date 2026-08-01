@@ -1,14 +1,19 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowRight } from "../icons";
+import { Container } from "../ui";
 
 export type CategorySlideProps = {
   name: string;
   href: string;
   productCount: number;
+  imageUrl: string;
+  imageAlt: string;
   isActive: boolean;
   position: number;
   total: number;
+  isFirst?: boolean;
 };
 
 const ctaClassName =
@@ -21,12 +26,16 @@ export function CategorySlide({
   name,
   href,
   productCount,
+  imageUrl,
+  imageAlt,
   isActive,
   position,
   total,
+  isFirst,
 }: CategorySlideProps) {
   const NameTag = isActive ? "h1" : "p";
-  const nameClassName = "font-display text-4xl text-off-white sm:text-5xl";
+  const nameClassName =
+    "font-display text-4xl text-off-white sm:text-5xl 2xl:text-6xl";
 
   return (
     <div
@@ -37,26 +46,47 @@ export function CategorySlide({
       aria-hidden={isActive ? undefined : true}
       className="relative flex size-full shrink-0 flex-col justify-end overflow-hidden bg-ink"
     >
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[repeating-linear-gradient(45deg,color-mix(in_srgb,var(--color-off-white)_8%,transparent)_0,color-mix(in_srgb,var(--color-off-white)_8%,transparent)_1px,transparent_1px,transparent_12px)]"
-      />
+      {imageUrl ? (
+        <>
+          <Image
+            src={imageUrl}
+            alt={imageAlt}
+            fill
+            priority={isFirst}
+            sizes="100vw"
+            className="object-cover"
+          />
+          {/* Without this scrim an arbitrary client photo can drop the
+              off-white headline and CTA below 4.5:1. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/45 to-ink/10"
+          />
+        </>
+      ) : (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-[repeating-linear-gradient(45deg,color-mix(in_srgb,var(--color-off-white)_8%,transparent)_0,color-mix(in_srgb,var(--color-off-white)_8%,transparent)_1px,transparent_1px,transparent_12px)]"
+        />
+      )}
 
-      <div className="relative flex flex-col items-start gap-4 p-8 sm:p-12 lg:p-16">
-        <NameTag className={nameClassName}>{name}</NameTag>
-        <div className="flex flex-wrap items-center gap-4">
-          <Link href={href} className={ctaClassName}>
-            Shop {name}
-            <ArrowRight aria-hidden="true" size={20} />
-          </Link>
-          {productCount > 0 ? (
-            <Link href={href} className={countLinkClassName}>
-              {productCount} {productCount === 1 ? "product" : "products"}
-              <ArrowRight aria-hidden="true" size={16} />
+      <Container className="relative py-8 sm:py-12 lg:py-16">
+        <div className="flex flex-col items-start gap-4">
+          <NameTag className={nameClassName}>{name}</NameTag>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link href={href} className={ctaClassName}>
+              Shop {name}
+              <ArrowRight aria-hidden="true" size={20} />
             </Link>
-          ) : null}
+            {productCount > 0 ? (
+              <Link href={href} className={countLinkClassName}>
+                {productCount} {productCount === 1 ? "product" : "products"}
+                <ArrowRight aria-hidden="true" size={16} />
+              </Link>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </Container>
     </div>
   );
 }

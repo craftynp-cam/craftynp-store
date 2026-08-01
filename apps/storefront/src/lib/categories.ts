@@ -7,6 +7,7 @@ export type NavCategorySource = {
   name: string;
   handle: string;
   parent_category_id?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type NavCategory = { name: string; href: string };
@@ -45,16 +46,38 @@ export type ShowcaseCategory = {
   name: string;
   href: string;
   productCount: number;
+  imageUrl: string;
+  imageAlt: string;
 };
+
+export type CategoryImage = { imageUrl: string; imageAlt: string };
+
+export function toCategoryImage(
+  metadata: Record<string, unknown> | null | undefined,
+): CategoryImage {
+  const rawUrl = metadata?.["image_url"];
+  const imageUrl = typeof rawUrl === "string" ? rawUrl.trim() : "";
+  if (!imageUrl) return { imageUrl: "", imageAlt: "" };
+
+  const rawAlt = metadata?.["image_alt"];
+  return {
+    imageUrl,
+    imageAlt: typeof rawAlt === "string" ? rawAlt.trim() : "",
+  };
+}
 
 export function toShowcaseSources(
   sources: readonly ShowcaseCategorySource[],
-): Array<{ id: string; name: string; href: string }> {
+): Array<{ id: string; name: string; href: string } & CategoryImage> {
   return toNavCategories(sources).map((category) => {
     const source = sources.find(
       (candidate) => categoryHref(candidate.handle) === category.href,
     );
-    return { id: source?.id ?? "", ...category };
+    return {
+      id: source?.id ?? "",
+      ...category,
+      ...toCategoryImage(source?.metadata),
+    };
   });
 }
 
@@ -125,7 +148,7 @@ export const fetchShowcaseCategories = cache(
   async (): Promise<ShowcaseCategory[]> => {
     try {
       const { product_categories } = await sdk.store.category.list({
-        fields: "id,name,handle,parent_category_id",
+        fields: "id,name,handle,parent_category_id,metadata",
         limit: 100,
       });
       const categories = toShowcaseSources(product_categories);
@@ -153,6 +176,8 @@ export const fetchShowcaseCategories = cache(
         name: category.name,
         href: category.href,
         productCount: counts[index] ?? 0,
+        imageUrl: category.imageUrl,
+        imageAlt: category.imageAlt,
       }));
     } catch (error) {
       console.error("Could not load showcase categories", error);

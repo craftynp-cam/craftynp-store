@@ -1,5 +1,7 @@
 import Image from "next/image";
 
+import { Container } from "../ui";
+
 const HEADING_ID = "workshop-gallery-heading";
 
 export type WorkshopTile = {
@@ -28,7 +30,7 @@ export function WorkshopGallery({
       aria-labelledby={HEADING_ID}
       className="bg-surface-soft py-16 sm:py-20"
     >
-      <div className="mx-auto max-w-6xl px-4">
+      <Container>
         <h2 id={HEADING_ID} className="font-display text-3xl sm:text-4xl">
           {heading}
         </h2>
@@ -46,7 +48,7 @@ export function WorkshopGallery({
                   src={tile.imageUrl}
                   alt={tile.caption}
                   fill
-                  sizes="(min-width: 1024px) 25vw, 50vw"
+                  sizes="(min-width: 1536px) 400px, (min-width: 1280px) 346px, (min-width: 1024px) 290px, 47vw"
                   className="object-cover"
                 />
               </div>
@@ -58,7 +60,7 @@ export function WorkshopGallery({
             </li>
           ))}
         </ul>
-      </div>
+      </Container>
     </section>
   );
 }

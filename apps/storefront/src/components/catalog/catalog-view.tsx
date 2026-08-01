@@ -41,7 +41,7 @@ export function CatalogView({
         </p>
       </div>
 
-      <div className="mt-8 lg:flex lg:items-start lg:gap-10">
+      <div className="mt-8 lg:flex lg:items-start lg:gap-10 xl:gap-14">
         <CatalogSidebar
           categories={sidebarCategories}
           totalCount={totalCount}

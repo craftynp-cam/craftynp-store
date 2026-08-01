@@ -9,6 +9,8 @@ describe("CategorySlide", () => {
         name="Shirts"
         href="/categories/shirts"
         productCount={2}
+        imageUrl=""
+        imageAlt=""
         isActive
         position={1}
         total={3}
@@ -26,6 +28,8 @@ describe("CategorySlide", () => {
         name="Shirts"
         href="/categories/shirts"
         productCount={2}
+        imageUrl=""
+        imageAlt=""
         isActive={false}
         position={1}
         total={3}
@@ -42,6 +46,8 @@ describe("CategorySlide", () => {
         name="Shirts"
         href="/categories/shirts"
         productCount={2}
+        imageUrl=""
+        imageAlt=""
         isActive={false}
         position={1}
         total={3}
@@ -59,6 +65,8 @@ describe("CategorySlide", () => {
         name="Shirts"
         href="/categories/shirts"
         productCount={2}
+        imageUrl=""
+        imageAlt=""
         isActive
         position={1}
         total={3}
@@ -76,6 +84,8 @@ describe("CategorySlide", () => {
         name="Shirts"
         href="/categories/shirts"
         productCount={2}
+        imageUrl=""
+        imageAlt=""
         isActive
         position={2}
         total={4}
@@ -94,6 +104,8 @@ describe("CategorySlide", () => {
         name="Shirts"
         href="/categories/shirts"
         productCount={2}
+        imageUrl=""
+        imageAlt=""
         isActive
         position={1}
         total={3}
@@ -112,6 +124,8 @@ describe("CategorySlide", () => {
         name="Shirts"
         href="/categories/shirts"
         productCount={1}
+        imageUrl=""
+        imageAlt=""
         isActive
         position={1}
         total={3}
@@ -123,12 +137,46 @@ describe("CategorySlide", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the category image with its alt text, and none without a url", () => {
+    const { rerender } = render(
+      <CategorySlide
+        name="Shirts"
+        href="/categories/shirts"
+        productCount={2}
+        imageUrl="https://cdn.example/shirts.jpg"
+        imageAlt="A folded shirt"
+        isActive
+        position={1}
+        total={3}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "A folded shirt" })).toBeVisible();
+
+    rerender(
+      <CategorySlide
+        name="Shirts"
+        href="/categories/shirts"
+        productCount={2}
+        imageUrl=""
+        imageAlt="A folded shirt"
+        isActive
+        position={1}
+        total={3}
+      />,
+    );
+
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
   it("omits the count link when there are no products yet", () => {
     render(
       <CategorySlide
         name="Shirts"
         href="/categories/shirts"
         productCount={0}
+        imageUrl=""
+        imageAlt=""
         isActive
         position={1}
         total={3}

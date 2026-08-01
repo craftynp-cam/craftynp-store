@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowRight } from "../icons";
+import { Container } from "../ui";
 
 const HEADING_ID = "about-hero-heading";
 
@@ -31,8 +32,9 @@ export function AboutHero({
 
   return (
     <section aria-labelledby={HEADING_ID} className="bg-ink">
-      <div className="mx-auto grid max-w-6xl md:grid-cols-2 md:items-center">
-        <div className="px-4 py-16 sm:px-8 sm:py-20 md:py-24">
+      {/* Unpadded: the left cell pads itself and the right cell's image is flush. */}
+      <Container padded={false} className="grid md:grid-cols-2 md:items-center">
+        <div className="px-4 py-16 sm:px-6 sm:py-20 md:py-24 lg:px-8 xl:px-10 2xl:px-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-off-white/70">
             {eyebrow}
           </p>
@@ -58,7 +60,7 @@ export function AboutHero({
               alt={imageAlt}
               fill
               priority
-              sizes="(min-width: 768px) 50vw, 100vw"
+              sizes="(min-width: 1760px) 880px, (min-width: 768px) 50vw, 100vw"
               className="object-cover"
             />
           ) : (
@@ -68,7 +70,7 @@ export function AboutHero({
             />
           )}
         </div>
-      </div>
+      </Container>
     </section>
   );
 }

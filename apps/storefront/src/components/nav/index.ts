@@ -4,7 +4,7 @@ export { Breadcrumbs } from "./breadcrumbs";
 export { CartButton } from "./cart-button";
 export { CartDrawer } from "./cart-drawer";
 export { Footer } from "./footer";
-export { Logo } from "./logo";
+export { BrandLockup, Logo } from "./logo";
 export { MenuButton } from "./menu-button";
 export { NavDrawer } from "./nav-drawer";
 export { NavSearch } from "./nav-search";

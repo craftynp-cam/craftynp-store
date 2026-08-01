@@ -7,6 +7,8 @@ import {
   subscribeToReducedMotion,
 } from "@/lib/reduced-motion";
 
+import { Container } from "../ui";
+
 const PIXELS_PER_SECOND = 60;
 const MIN_DURATION_SECONDS = 8;
 
@@ -51,37 +53,41 @@ export function AnnouncementBar({ text }: AnnouncementBarProps) {
 
   return (
     <div className="h-10 overflow-hidden bg-ink text-off-white">
-      <div
-        ref={containerRef}
-        className="relative mx-auto flex h-full max-w-7xl items-center px-4"
-      >
-        <span
-          ref={measureRef}
-          aria-hidden="true"
-          className="invisible absolute top-0 left-0 whitespace-nowrap text-sm"
+      <Container className="h-full">
+        <div
+          ref={containerRef}
+          className="relative flex h-full w-full items-center"
         >
-          {text}
-        </span>
-
-        {shouldMarquee ? (
-          <div
-            className="flex w-max shrink-0 whitespace-nowrap"
-            style={{
-              animation: `marquee ${durationSeconds}s linear infinite`,
-              animationPlayState: isPausedByInteraction ? "paused" : "running",
-            }}
-            onMouseEnter={() => setIsPausedByInteraction(true)}
-            onMouseLeave={() => setIsPausedByInteraction(false)}
+          <span
+            ref={measureRef}
+            aria-hidden="true"
+            className="invisible absolute top-0 left-0 whitespace-nowrap text-sm"
           >
-            <span className="px-4 text-sm">{text}</span>
-            <span aria-hidden="true" className="px-4 text-sm">
-              {text}
-            </span>
-          </div>
-        ) : (
-          <p className="w-full truncate text-center text-sm">{text}</p>
-        )}
-      </div>
+            {text}
+          </span>
+
+          {shouldMarquee ? (
+            <div
+              className="flex w-max shrink-0 whitespace-nowrap"
+              style={{
+                animation: `marquee ${durationSeconds}s linear infinite`,
+                animationPlayState: isPausedByInteraction
+                  ? "paused"
+                  : "running",
+              }}
+              onMouseEnter={() => setIsPausedByInteraction(true)}
+              onMouseLeave={() => setIsPausedByInteraction(false)}
+            >
+              <span className="px-4 text-sm">{text}</span>
+              <span aria-hidden="true" className="px-4 text-sm">
+                {text}
+              </span>
+            </div>
+          ) : (
+            <p className="w-full truncate text-center text-sm">{text}</p>
+          )}
+        </div>
+      </Container>
     </div>
   );
 }

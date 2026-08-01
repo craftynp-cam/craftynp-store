@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { ThemeToggle } from "@/components";
+import { Container, ThemeToggle } from "@/components";
 import { gradeContrast } from "@/lib/contrast";
 import {
   brandColors,
@@ -22,7 +22,7 @@ import {
 import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Design tokens — The Crafty NP",
+  title: "Design tokens",
   description:
     "Reference page for the brand palette, type, spacing, radii, and both colour modes.",
 };
@@ -155,260 +155,260 @@ function ContrastTable({ mode }: { mode: Mode }) {
 
 export default function DesignTokensPage() {
   return (
-    <main
-      id="main-content"
-      tabIndex={-1}
-      className="mx-auto max-w-5xl px-6 py-16"
-    >
-      <h1 className="font-display text-4xl">Design tokens</h1>
-      <p className="mt-4 max-w-2xl text-lg text-foreground-muted">
-        Every colour, type step, spacing step and radius the storefront is
-        allowed to use. Tokens are declared once in{" "}
-        <code className="rounded-xs bg-surface-soft px-1 py-0.5 font-mono text-base">
-          src/app/globals.css
-        </code>
-        ; components reference the generated utilities, never raw hex. The{" "}
-        <Link
-          href="/design/primitives"
-          className="underline underline-offset-4"
-        >
-          UI primitives
-        </Link>{" "}
-        page shows what these tokens build.
-      </p>
-
-      <div className="mt-6 flex flex-wrap items-center gap-4">
-        <ThemeToggle />
-        <p className="text-sm text-foreground-muted">
-          Switches the whole page, not just this section — every colour below
-          comes from a mode-aware token. <strong>System</strong> follows your
-          OS.
+    <main id="main-content" tabIndex={-1} className="py-16">
+      <Container>
+        <h1 className="font-display text-4xl">Design tokens</h1>
+        <p className="mt-4 max-w-2xl text-lg text-foreground-muted">
+          Every colour, type step, spacing step and radius the storefront is
+          allowed to use. Tokens are declared once in{" "}
+          <code className="rounded-xs bg-surface-soft px-1 py-0.5 font-mono text-base">
+            src/app/globals.css
+          </code>
+          ; components reference the generated utilities, never raw hex. The{" "}
+          <Link
+            href="/design/primitives"
+            className="underline underline-offset-4"
+          >
+            UI primitives
+          </Link>{" "}
+          page shows what these tokens build.
         </p>
-      </div>
 
-      <Section
-        title="Palette"
-        description="The four official brand colours and three signed-off neutrals. Both modes are built from these seven."
-      >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {palette.map((token) => (
-            <Swatch
-              key={token.utility}
-              label={token.name}
-              caption={`${token.utility} · ${brandColors[token.utility]}`}
-              hex={brandColors[token.utility]}
-              usage={token.usage}
-            />
-          ))}
-        </div>
-      </Section>
-
-      <Section
-        title="Colour modes"
-        description="Light composites ink navy over off-white; dark composites off-white over ink navy. Ink navy is the darkest brand colour, so it becomes the dark page and surfaces lift away from it. Muted black sits within 1.1:1 of ink navy and is deliberately unused in dark mode — as a layer it would be invisible."
-      >
-        <div className="grid gap-4 lg:grid-cols-2">
-          {modes.map((mode) => (
-            <ModePane key={mode} mode={mode}>
-              <div className="grid grid-cols-3 gap-3">
-                {surfaceTokens.map((surface) => (
-                  <Swatch
-                    key={surface}
-                    label={surface}
-                    caption={tokenHex(surface, mode)}
-                    hex={tokenHex(surface, mode)}
-                    borderHex={tokenHex("border-strong", mode)}
-                  />
-                ))}
-              </div>
-              <div className="mt-5 space-y-1">
-                <p>Body text sits at foreground.</p>
-                <p style={{ color: tokenHex("foreground-muted", mode) }}>
-                  Secondary text sits at foreground-muted.
-                </p>
-                <p style={{ color: tokenHex("foreground-subtle", mode) }}>
-                  Placeholders sit at foreground-subtle.
-                </p>
-                <p style={{ color: tokenHex("danger-foreground", mode) }}>
-                  Errors sit at danger-foreground.
-                </p>
-              </div>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {(["primary", "accent", "success", "danger"] as const).map(
-                  (token) => (
-                    <span
-                      key={token}
-                      className="rounded-md px-3 py-2 text-sm font-medium"
-                      style={{
-                        backgroundColor: tokenHex(token, mode),
-                        color: tokenHex(
-                          token === "primary" ? "on-primary" : `on-${token}`,
-                          mode,
-                        ),
-                      }}
-                    >
-                      {token}
-                    </span>
-                  ),
-                )}
-              </div>
-            </ModePane>
-          ))}
-        </div>
-      </Section>
-
-      <Section
-        title="Semantic aliases"
-        description="Prefer these over the raw palette names — they carry intent, and they are the only colours that follow the active mode."
-      >
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-2xl border-collapse text-left text-sm">
-            <thead className="bg-surface-soft">
-              <tr>
-                <th className="p-3 font-medium">Token</th>
-                <th className="p-3 font-medium">Light</th>
-                <th className="p-3 font-medium">Dark</th>
-                <th className="p-3 font-medium">Usage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {semanticTokens.map((token) => (
-                <tr key={token.token} className="border-t border-border">
-                  <td className="p-3 font-mono">{token.token}</td>
-                  {modes.map((mode) => (
-                    <td key={mode} className="p-3">
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="inline-block size-4 shrink-0 rounded-xs border border-border-strong"
-                          style={{ backgroundColor: resolveHex(token[mode]) }}
-                        />
-                        <span className="font-mono text-xs text-foreground-muted">
-                          {resolveHex(token[mode])}
-                        </span>
-                      </span>
-                    </td>
-                  ))}
-                  <td className="p-3 text-foreground-muted">{token.usage}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
-
-      <Section
-        title="Typography"
-        description="Libre Baskerville sets display copy, Source Sans 3 sets everything else, and Cookie sets the wordmark and nothing else. All three load with font-display: swap."
-      >
-        <div className="rounded-lg border border-border bg-surface p-6">
-          <p className="font-display text-2xl">
-            Libre Baskerville — display and headings
-          </p>
-          <p className="mt-2 text-lg">Source Sans 3 — body and interface</p>
-          <div className="mt-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 font-brand leading-none">
-            <span style={{ fontSize: "20px" }}>{SITE_NAME}</span>
-            <span style={{ fontSize: "24px" }}>{SITE_NAME}</span>
-          </div>
-          <p className="mt-2 text-sm text-foreground-muted">
-            Cookie — the wordmark at 20px and 24px, its two real sizes.
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <ThemeToggle />
+          <p className="text-sm text-foreground-muted">
+            Switches the whole page, not just this section — every colour below
+            comes from a mode-aware token. <strong>System</strong> follows your
+            OS.
           </p>
         </div>
 
-        <ul className="mt-6 space-y-2">
-          {fontTokens.map((font) => (
-            <li key={font.token} className="font-mono text-sm">
-              <span className="text-foreground-muted">font-{font.token}</span> ·{" "}
-              {font.variable} · {font.usage}
-            </li>
-          ))}
-        </ul>
-
-        <ul className="mt-6 space-y-6">
-          {typeScale.map((step) => (
-            <li
-              key={step.utility}
-              className="border-b border-border pb-6 last:border-b-0"
-            >
-              <p className="font-mono text-sm text-foreground-muted">
-                {step.utility} · {step.size} / {step.lineHeight} · {step.usage}
-              </p>
-              <p
-                className="mt-2"
-                style={{ fontSize: step.size, lineHeight: step.lineHeight }}
-              >
-                Handmade with care
-              </p>
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      <Section
-        title="Spacing"
-        description="A 4px base. Utilities multiply it, so p-4 is 1rem."
-      >
-        <ul className="space-y-3">
-          {spacingScale.map((step) => (
-            <li key={step.utility} className="flex items-center gap-4">
-              <span className="w-24 shrink-0 font-mono text-sm text-foreground-muted">
-                {step.utility} · {step.value}
-              </span>
-              <span
-                className="h-4 rounded-xs bg-accent"
-                style={{ width: step.value }}
-              />
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      <Section
-        title="Page width"
-        description="One ladder for every page and the chrome alike, so the navbar, the hero and the grids all share a left edge. Container applies it; nothing sets a page width by hand."
-      >
-        <ul className="space-y-3">
-          {widthScale.map((step) => (
-            <li key={step.utility}>
-              <p className="font-mono text-sm text-foreground-muted">
-                {step.utility} · {step.value} · {step.breakpoint} · {step.usage}
-              </p>
-              <span
-                className="mt-2 block h-4 max-w-full rounded-xs bg-success"
-                style={{ width: step.value }}
-              />
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      <Section
-        title="Radii"
-        description="The soft (rounded) option, applied consistently from inputs through to hero panels."
-      >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {radiusScale.map((step) => (
-            <div key={step.utility} className="text-center">
-              <div
-                className="h-24 border border-border-strong bg-success"
-                style={{ borderRadius: step.value }}
-              />
-              <p className="mt-2 font-mono text-sm text-foreground-muted">
-                {step.utility} · {step.value}
-              </p>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      {modes.map((mode) => (
         <Section
-          key={mode}
-          title={`Contrast — ${modeLabel[mode].toLowerCase()} mode`}
-          description="Every sanctioned pairing, measured at render time. Text pairings meet WCAG AA at 4.5:1; anything below is decorative-only and says why."
+          title="Palette"
+          description="The four official brand colours and three signed-off neutrals. Both modes are built from these seven."
         >
-          <ContrastTable mode={mode} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {palette.map((token) => (
+              <Swatch
+                key={token.utility}
+                label={token.name}
+                caption={`${token.utility} · ${brandColors[token.utility]}`}
+                hex={brandColors[token.utility]}
+                usage={token.usage}
+              />
+            ))}
+          </div>
         </Section>
-      ))}
+
+        <Section
+          title="Colour modes"
+          description="Light composites ink navy over off-white; dark composites off-white over ink navy. Ink navy is the darkest brand colour, so it becomes the dark page and surfaces lift away from it. Muted black sits within 1.1:1 of ink navy and is deliberately unused in dark mode — as a layer it would be invisible."
+        >
+          <div className="grid gap-4 lg:grid-cols-2">
+            {modes.map((mode) => (
+              <ModePane key={mode} mode={mode}>
+                <div className="grid grid-cols-3 gap-3">
+                  {surfaceTokens.map((surface) => (
+                    <Swatch
+                      key={surface}
+                      label={surface}
+                      caption={tokenHex(surface, mode)}
+                      hex={tokenHex(surface, mode)}
+                      borderHex={tokenHex("border-strong", mode)}
+                    />
+                  ))}
+                </div>
+                <div className="mt-5 space-y-1">
+                  <p>Body text sits at foreground.</p>
+                  <p style={{ color: tokenHex("foreground-muted", mode) }}>
+                    Secondary text sits at foreground-muted.
+                  </p>
+                  <p style={{ color: tokenHex("foreground-subtle", mode) }}>
+                    Placeholders sit at foreground-subtle.
+                  </p>
+                  <p style={{ color: tokenHex("danger-foreground", mode) }}>
+                    Errors sit at danger-foreground.
+                  </p>
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {(["primary", "accent", "success", "danger"] as const).map(
+                    (token) => (
+                      <span
+                        key={token}
+                        className="rounded-md px-3 py-2 text-sm font-medium"
+                        style={{
+                          backgroundColor: tokenHex(token, mode),
+                          color: tokenHex(
+                            token === "primary" ? "on-primary" : `on-${token}`,
+                            mode,
+                          ),
+                        }}
+                      >
+                        {token}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </ModePane>
+            ))}
+          </div>
+        </Section>
+
+        <Section
+          title="Semantic aliases"
+          description="Prefer these over the raw palette names — they carry intent, and they are the only colours that follow the active mode."
+        >
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-2xl border-collapse text-left text-sm">
+              <thead className="bg-surface-soft">
+                <tr>
+                  <th className="p-3 font-medium">Token</th>
+                  <th className="p-3 font-medium">Light</th>
+                  <th className="p-3 font-medium">Dark</th>
+                  <th className="p-3 font-medium">Usage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {semanticTokens.map((token) => (
+                  <tr key={token.token} className="border-t border-border">
+                    <td className="p-3 font-mono">{token.token}</td>
+                    {modes.map((mode) => (
+                      <td key={mode} className="p-3">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="inline-block size-4 shrink-0 rounded-xs border border-border-strong"
+                            style={{ backgroundColor: resolveHex(token[mode]) }}
+                          />
+                          <span className="font-mono text-xs text-foreground-muted">
+                            {resolveHex(token[mode])}
+                          </span>
+                        </span>
+                      </td>
+                    ))}
+                    <td className="p-3 text-foreground-muted">{token.usage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+
+        <Section
+          title="Typography"
+          description="Libre Baskerville sets display copy, Source Sans 3 sets everything else, and Cookie sets the wordmark and nothing else. All three load with font-display: swap."
+        >
+          <div className="rounded-lg border border-border bg-surface p-6">
+            <p className="font-display text-2xl">
+              Libre Baskerville — display and headings
+            </p>
+            <p className="mt-2 text-lg">Source Sans 3 — body and interface</p>
+            <div className="mt-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 font-brand leading-none">
+              <span style={{ fontSize: "20px" }}>{SITE_NAME}</span>
+              <span style={{ fontSize: "24px" }}>{SITE_NAME}</span>
+            </div>
+            <p className="mt-2 text-sm text-foreground-muted">
+              Cookie — the wordmark at 20px and 24px, its two real sizes.
+            </p>
+          </div>
+
+          <ul className="mt-6 space-y-2">
+            {fontTokens.map((font) => (
+              <li key={font.token} className="font-mono text-sm">
+                <span className="text-foreground-muted">font-{font.token}</span>{" "}
+                · {font.variable} · {font.usage}
+              </li>
+            ))}
+          </ul>
+
+          <ul className="mt-6 space-y-6">
+            {typeScale.map((step) => (
+              <li
+                key={step.utility}
+                className="border-b border-border pb-6 last:border-b-0"
+              >
+                <p className="font-mono text-sm text-foreground-muted">
+                  {step.utility} · {step.size} / {step.lineHeight} ·{" "}
+                  {step.usage}
+                </p>
+                <p
+                  className="mt-2"
+                  style={{ fontSize: step.size, lineHeight: step.lineHeight }}
+                >
+                  Handmade with care
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        <Section
+          title="Spacing"
+          description="A 4px base. Utilities multiply it, so p-4 is 1rem."
+        >
+          <ul className="space-y-3">
+            {spacingScale.map((step) => (
+              <li key={step.utility} className="flex items-center gap-4">
+                <span className="w-24 shrink-0 font-mono text-sm text-foreground-muted">
+                  {step.utility} · {step.value}
+                </span>
+                <span
+                  className="h-4 rounded-xs bg-accent"
+                  style={{ width: step.value }}
+                />
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        <Section
+          title="Page width"
+          description="One ladder for every page and the chrome alike, so the navbar, the hero and the grids all share a left edge. Container applies it; nothing sets a page width by hand."
+        >
+          <ul className="space-y-3">
+            {widthScale.map((step) => (
+              <li key={step.utility}>
+                <p className="font-mono text-sm text-foreground-muted">
+                  {step.utility} · {step.value} · {step.breakpoint} ·{" "}
+                  {step.usage}
+                </p>
+                <span
+                  className="mt-2 block h-4 max-w-full rounded-xs bg-success"
+                  style={{ width: step.value }}
+                />
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        <Section
+          title="Radii"
+          description="The soft (rounded) option, applied consistently from inputs through to hero panels."
+        >
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {radiusScale.map((step) => (
+              <div key={step.utility} className="text-center">
+                <div
+                  className="h-24 border border-border-strong bg-success"
+                  style={{ borderRadius: step.value }}
+                />
+                <p className="mt-2 font-mono text-sm text-foreground-muted">
+                  {step.utility} · {step.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {modes.map((mode) => (
+          <Section
+            key={mode}
+            title={`Contrast — ${modeLabel[mode].toLowerCase()} mode`}
+            description="Every sanctioned pairing, measured at render time. Text pairings meet WCAG AA at 4.5:1; anything below is decorative-only and says why."
+          >
+            <ContrastTable mode={mode} />
+          </Section>
+        ))}
+      </Container>
     </main>
   );
 }
