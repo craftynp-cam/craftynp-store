@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import {
   brandColors,
+  fontTokens,
   modes,
   pairingsFor,
   palette,
@@ -12,6 +13,7 @@ import {
   tokenDeclaration,
   tokenHex,
   typeScale,
+  widthScale,
 } from "@/lib/design-tokens";
 
 const srcDir = join(__dirname, "..", "..", "src");
@@ -110,6 +112,13 @@ describe("scales", () => {
     }
   });
 
+  it("declares the page width ladder", () => {
+    for (const step of widthScale) {
+      const name = step.utility.replace("max-w-", "");
+      expect(globalsCss).toContain(`--container-${name}: ${step.value};`);
+    }
+  });
+
   it("uses a 4px spacing base", () => {
     expect(globalsCss).toContain("--spacing: 0.25rem;");
   });
@@ -118,12 +127,17 @@ describe("scales", () => {
 describe("layout", () => {
   const layout = readFileSync(join(srcDir, "app", "layout.tsx"), "utf8");
 
-  it.each(["Libre_Baskerville", "Source_Sans_3"])("loads %s", (font) => {
-    expect(layout).toContain(font);
+  it.each(
+    fontTokens.map((font) => [font.loader, font.token, font.variable] as const),
+  )("loads %s behind font-%s", (loader, token, variable) => {
+    expect(layout).toContain(loader);
+    expect(layout).toContain(`variable: "${variable}"`);
+    expect(globalsCss).toContain(`--font-${token}:`);
+    expect(globalsCss).toContain(`var(${variable})`);
   });
 
-  it("sets font-display: swap on both families", () => {
-    expect(layout.match(/display: "swap"/g)).toHaveLength(2);
+  it("sets font-display: swap on every family", () => {
+    expect(layout.match(/display: "swap"/g)).toHaveLength(fontTokens.length);
   });
 
   it("runs the theme script in <head> so a pinned mode lands before paint", () => {

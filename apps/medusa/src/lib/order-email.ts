@@ -1,3 +1,4 @@
+import { SITE_NAME, SITE_TAGLINE } from "@craftynp/types";
 import type { OrderConfirmation } from "@craftynp/types";
 
 import { formatMoney } from "./format-money";
@@ -40,6 +41,33 @@ function storefrontUrl(): string {
     /\/+$/,
     "",
   );
+}
+
+const BRAND_FONT = "'Cookie','Brush Script MT','Segoe Script',cursive";
+
+const BRAND_FONT_LINK =
+  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cookie&amp;display=swap">';
+
+function brandHeaderHtml(dateLabel: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td align="left" valign="middle" width="72" style="width:72px;">
+<img src="${storefrontUrl()}/logo.png" width="72" height="64" alt="" style="display:block; border:0;">
+</td>
+<td align="left" valign="middle" style="padding-left:14px;">
+<span style="font-family:${BRAND_FONT}; font-size:30px; line-height:32px; color:#04133b;">${SITE_NAME}</span>
+<br>
+<span style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:0.5px; color:#5a6377;">${SITE_TAGLINE}</span>
+</td>
+<td align="right" valign="top" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:18px; color:#5a6377; white-space:nowrap;">
+${dateLabel}
+</td>
+</tr>
+</table>`;
+}
+
+function brandFooterWordmarkHtml(): string {
+  return `<p style="margin-top:0; margin-bottom:8px; font-family:${BRAND_FONT}; font-size:26px; line-height:30px; color:#fbfaf7;">${SITE_NAME}</p>`;
 }
 
 export function orderConfirmationUrl(order: OrderConfirmation): string {
@@ -90,9 +118,7 @@ export function orderConfirmationContent(
   );
   const turnaroundNote = escapeHtml(notes.turnaroundNote);
   const shippingWindowNote = escapeHtml(notes.shippingWindowNote);
-  const shopAddress = escapeHtml(
-    process.env.SHOP_POSTAL_ADDRESS ?? "The Crafty NP",
-  );
+  const shopAddress = escapeHtml(process.env.SHOP_POSTAL_ADDRESS ?? SITE_NAME);
   const itemsHtml = renderOrderItemsHtml(order.lines, currencyCode, orderUrl);
   const itemsText = renderOrderItemsText(order.lines, currencyCode);
   const addressHtml = renderAddressHtml(order.shippingAddress);
@@ -109,6 +135,7 @@ export function orderConfirmationContent(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>Your order is confirmed</title>
+${BRAND_FONT_LINK}
 </head>
 <body style="margin:0; padding:0; background-color:#ecebe6;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ecebe6" style="background-color:#ecebe6;">
@@ -117,18 +144,7 @@ export function orderConfirmationContent(
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px;">
 <tr>
 <td bgcolor="#ffffff" style="background-color:#ffffff; padding-top:20px; padding-bottom:20px; padding-left:28px; padding-right:28px; border-top-left-radius:10px; border-top-right-radius:10px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr>
-<td align="left" style="font-family:Georgia,'Times New Roman',serif; font-size:18px; line-height:22px; color:#04133b; font-weight:bold;">
-The Crafty NP
-<br>
-<span style="font-family:Arial,Helvetica,sans-serif; font-size:10px; line-height:14px; letter-spacing:2px; color:#5a6377; font-weight:normal;">HANDMADE &middot; CUSTOM</span>
-</td>
-<td align="right" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:18px; color:#5a6377;">
-${orderDate}
-</td>
-</tr>
-</table>
+${brandHeaderHtml(orderDate)}
 </td>
 </tr>
 <tr>
@@ -254,7 +270,7 @@ Need to change something? Reply to this email within 24 hours and I&rsquo;ll cat
 </tr>
 <tr>
 <td bgcolor="#04133b" style="background-color:#04133b; padding-top:26px; padding-bottom:26px; padding-left:28px; padding-right:28px; border-bottom-left-radius:10px; border-bottom-right-radius:10px;">
-<p style="margin-top:0; margin-bottom:8px; font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:22px; color:#fbfaf7;">The Crafty NP</p>
+${brandFooterWordmarkHtml()}
 <p style="margin-top:0; margin-bottom:14px; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#c4cad6;">
 Handmade &amp; custom stickers, shirts, keychains, cups and banners &mdash; made one order at a time.
 </p>
@@ -271,7 +287,7 @@ You&rsquo;re getting this because you placed an order.
 </body>
 </html>`;
 
-  const text = `The Crafty NP — HANDMADE · CUSTOM
+  const text = `${SITE_NAME} — ${SITE_TAGLINE}
 
 THANK YOU — YOUR ORDER IS IN
 
@@ -303,11 +319,11 @@ Keep shopping: ${shopUrl}
 Need to change something? Reply to this email within 24 hours and I'll catch it before production.
 
 --
-${process.env.SHOP_POSTAL_ADDRESS ?? "The Crafty NP"}
+${process.env.SHOP_POSTAL_ADDRESS ?? SITE_NAME}
 You're getting this because you placed an order.`;
 
   return {
-    subject: `Your Crafty NP order ${orderNumber} is confirmed`,
+    subject: `Order ${orderNumber} is confirmed — ${SITE_NAME}`,
     html,
     text,
   };
@@ -333,9 +349,7 @@ export function orderShippedContent(
   const customerName = escapeHtml(customerFirstName(order));
   const carrierName = escapeHtml(shipment.carrierName);
   const trackingNumber = escapeHtml(shipment.trackingNumber);
-  const shopAddress = escapeHtml(
-    process.env.SHOP_POSTAL_ADDRESS ?? "The Crafty NP",
-  );
+  const shopAddress = escapeHtml(process.env.SHOP_POSTAL_ADDRESS ?? SITE_NAME);
   const itemsHtml = renderOrderItemsHtml(order.lines, currencyCode, orderUrl);
   const itemsText = renderOrderItemsText(order.lines, currencyCode);
   const addressHtml = renderAddressHtml(order.shippingAddress);
@@ -348,6 +362,7 @@ export function orderShippedContent(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>Your order is on its way</title>
+${BRAND_FONT_LINK}
 </head>
 <body style="margin:0; padding:0; background-color:#ecebe6;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ecebe6" style="background-color:#ecebe6;">
@@ -356,18 +371,7 @@ export function orderShippedContent(
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px;">
 <tr>
 <td bgcolor="#ffffff" style="background-color:#ffffff; padding-top:20px; padding-bottom:20px; padding-left:28px; padding-right:28px; border-top-left-radius:10px; border-top-right-radius:10px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr>
-<td align="left" style="font-family:Georgia,'Times New Roman',serif; font-size:18px; line-height:22px; color:#04133b; font-weight:bold;">
-The Crafty NP
-<br>
-<span style="font-family:Arial,Helvetica,sans-serif; font-size:10px; line-height:14px; letter-spacing:2px; color:#5a6377; font-weight:normal;">HANDMADE &middot; CUSTOM</span>
-</td>
-<td align="right" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:18px; color:#5a6377;">
-${shipDate}
-</td>
-</tr>
-</table>
+${brandHeaderHtml(shipDate)}
 </td>
 </tr>
 <tr>
@@ -465,7 +469,7 @@ Tracking can take a few hours to start updating after the label is scanned. If i
 </tr>
 <tr>
 <td bgcolor="#04133b" style="background-color:#04133b; padding-top:26px; padding-bottom:26px; padding-left:28px; padding-right:28px; border-bottom-left-radius:10px; border-bottom-right-radius:10px;">
-<p style="margin-top:0; margin-bottom:8px; font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:22px; color:#fbfaf7;">The Crafty NP</p>
+${brandFooterWordmarkHtml()}
 <p style="margin-top:0; margin-bottom:14px; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#c4cad6;">
 Handmade &amp; custom stickers, shirts, keychains, cups and banners &mdash; made one order at a time.
 </p>
@@ -482,7 +486,7 @@ You&rsquo;re getting this because you placed an order.
 </body>
 </html>`;
 
-  const text = `The Crafty NP — HANDMADE · CUSTOM
+  const text = `${SITE_NAME} — ${SITE_TAGLINE}
 
 IT'S ON ITS WAY
 
@@ -509,11 +513,11 @@ Keep shopping: ${shopUrl}
 Tracking can take a few hours to start updating after the label is scanned. If it still looks stuck tomorrow, just reply and I'll chase it.
 
 --
-${process.env.SHOP_POSTAL_ADDRESS ?? "The Crafty NP"}
+${process.env.SHOP_POSTAL_ADDRESS ?? SITE_NAME}
 You're getting this because you placed an order.`;
 
   return {
-    subject: `Your Crafty NP order ${orderNumber} is on its way`,
+    subject: `Order ${orderNumber} is on its way — ${SITE_NAME}`,
     html,
     text,
   };

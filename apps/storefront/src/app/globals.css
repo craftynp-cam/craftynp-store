@@ -37,10 +37,12 @@
   --color-muted-black: #1f1e1c;
   --color-alert: #b4574a;
 
-  /* Type. Libre Baskerville sets display copy; Source Sans 3 sets everything else. */
+  /* Type. Libre Baskerville sets display copy; Source Sans 3 sets everything
+     else; Cookie is the wordmark only. */
   --font-display:
     var(--font-libre-baskerville), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-source-sans-3), ui-sans-serif, system-ui, sans-serif;
+  --font-brand: var(--font-cookie), "Brush Script MT", cursive;
 
   /* Type scale — ~1.25 ratio above the base, tightening as sizes grow. */
   --text-xs: 0.75rem;
@@ -61,6 +63,14 @@
   --text-4xl--line-height: 1.15;
   --text-5xl: 3.75rem;
   --text-5xl--line-height: 1.05;
+  --text-6xl: 4.5rem;
+  --text-6xl--line-height: 1;
+
+  /* Page width ladder, replacing the ad-hoc max-w-6xl content / max-w-7xl
+     chrome mix. Generates max-w-page, max-w-page-xl and max-w-page-2xl. */
+  --container-page: 80rem;
+  --container-page-xl: 96rem;
+  --container-page-2xl: 110rem;
 
   /* Spacing — 4px base. Utilities multiply it, so p-4 is 1rem. */
   --spacing: 0.25rem;

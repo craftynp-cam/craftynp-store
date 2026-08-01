@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import {
   Breadcrumbs,
+  Container,
   ProductDetails,
   ProductGallery,
   ProductPurchase,
@@ -50,30 +51,28 @@ export default async function ProductPage({ params }: ProductPageProps) {
         }}
       />
 
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="mx-auto max-w-6xl px-4 py-8"
-      >
-        <Breadcrumbs />
+      <main id="main-content" tabIndex={-1} className="py-8">
+        <Container>
+          <Breadcrumbs />
 
-        <div className="mt-6 grid gap-10 lg:grid-cols-2">
-          <ProductGallery
-            images={product.images}
-            productTitle={product.title}
-          />
-
-          <div className="flex flex-col gap-8">
-            <ProductPurchase
-              title={product.title}
-              href={product.href}
-              imageUrl={product.images[0]?.url}
-              options={product.options}
-              variants={product.variants}
+          <div className="mt-6 grid gap-10 lg:grid-cols-2">
+            <ProductGallery
+              images={product.images}
+              productTitle={product.title}
             />
-            <ProductDetails description={product.description} />
+
+            <div className="flex flex-col gap-8">
+              <ProductPurchase
+                title={product.title}
+                href={product.href}
+                imageUrl={product.images[0]?.url}
+                options={product.options}
+                variants={product.variants}
+              />
+              <ProductDetails description={product.description} />
+            </div>
           </div>
-        </div>
+        </Container>
       </main>
     </>
   );

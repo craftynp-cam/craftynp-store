@@ -1,6 +1,6 @@
 import type { NavCategory } from "@/lib/categories";
 
-import { ThemeToggle } from "../ui";
+import { Container, ThemeToggle } from "../ui";
 import { AccountLink } from "./account-link";
 import { AnnouncementBar } from "./announcement-bar";
 import { CartDrawer } from "./cart-drawer";
@@ -21,7 +21,7 @@ export function Navbar({ categories, announcement }: NavbarProps) {
       <div className="sticky top-0 z-40">
         {announcement ? <AnnouncementBar text={announcement} /> : null}
         <header className="border-b border-border bg-surface">
-          <div className="mx-auto flex h-(--header-height) max-w-7xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
+          <Container className="flex h-(--header-height) items-center justify-between gap-2 sm:gap-4">
             <div className="flex shrink-0 items-center gap-2">
               <NavDrawer categories={categories} />
               <Logo />
@@ -36,7 +36,7 @@ export function Navbar({ categories, announcement }: NavbarProps) {
               <AccountLink />
               <CartDrawer />
             </div>
-          </div>
+          </Container>
         </header>
       </div>
     </>

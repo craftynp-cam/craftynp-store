@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
-import { CheckoutView } from "@/components";
+import { CheckoutView, Container } from "@/components";
 import { fetchCustomerAddresses } from "@/lib/addresses";
 import { AUTH_COOKIE_NAME, getCustomer } from "@/lib/auth";
 import { countryOptions } from "@/lib/checkout";
@@ -21,16 +21,14 @@ export default async function CheckoutPage() {
   const savedAddresses = customer ? await fetchCustomerAddresses(token) : [];
 
   return (
-    <main
-      id="main-content"
-      tabIndex={-1}
-      className="mx-auto max-w-6xl px-4 py-8"
-    >
-      <CheckoutView
-        customer={customer}
-        savedAddresses={savedAddresses}
-        countryOptions={countryOptions(region)}
-      />
+    <main id="main-content" tabIndex={-1} className="py-8">
+      <Container>
+        <CheckoutView
+          customer={customer}
+          savedAddresses={savedAddresses}
+          countryOptions={countryOptions(region)}
+        />
+      </Container>
     </main>
   );
 }

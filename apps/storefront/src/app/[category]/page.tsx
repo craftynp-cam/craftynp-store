@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { CatalogView } from "@/components";
+import { CatalogView, Container } from "@/components";
 import { fetchCatalogSidebar } from "@/lib/categories";
 import { fetchCatalogProducts } from "@/lib/product-list";
 import { fetchRegion } from "@/lib/region";
@@ -51,21 +51,19 @@ export default async function CategoryPage({
   });
 
   return (
-    <main
-      id="main-content"
-      tabIndex={-1}
-      className="mx-auto max-w-6xl px-4 py-8"
-    >
-      <CatalogView
-        title={category.name}
-        breadcrumbLabels={{ [href]: category.name }}
-        basePath={href}
-        activeHref={href}
-        sidebarCategories={sidebar.categories}
-        totalCount={sidebar.totalCount}
-        sort={sort}
-        products={products.map((product) => product.card)}
-      />
+    <main id="main-content" tabIndex={-1} className="py-8">
+      <Container>
+        <CatalogView
+          title={category.name}
+          breadcrumbLabels={{ [href]: category.name }}
+          basePath={href}
+          activeHref={href}
+          sidebarCategories={sidebar.categories}
+          totalCount={sidebar.totalCount}
+          sort={sort}
+          products={products.map((product) => product.card)}
+        />
+      </Container>
     </main>
   );
 }

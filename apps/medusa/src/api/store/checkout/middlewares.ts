@@ -5,6 +5,8 @@ import {
   checkoutPrepareRequestSchema,
 } from "@craftynp/types";
 
+import { rateLimit, ruleFromEnv } from "../../../lib/rate-limit";
+
 const validatedPrepareBodySchema =
   checkoutPrepareRequestSchema as unknown as Parameters<
     typeof validateAndTransformBody
@@ -19,11 +21,21 @@ export const checkoutMiddlewares: MiddlewareRoute[] = [
   {
     matcher: "/store/checkout/prepare-cart",
     method: "POST",
-    middlewares: [validateAndTransformBody(validatedPrepareBodySchema)],
+    middlewares: [
+      rateLimit(
+        ruleFromEnv("prepare-cart", "RATE_LIMIT_PREPARE_CART_PER_MINUTE", 20),
+      ),
+      validateAndTransformBody(validatedPrepareBodySchema),
+    ],
   },
   {
     matcher: "/store/checkout/complete",
     method: "POST",
-    middlewares: [validateAndTransformBody(validatedCompleteBodySchema)],
+    middlewares: [
+      rateLimit(
+        ruleFromEnv("complete", "RATE_LIMIT_CHECKOUT_COMPLETE_PER_MINUTE", 10),
+      ),
+      validateAndTransformBody(validatedCompleteBodySchema),
+    ],
   },
 ];

@@ -2,6 +2,7 @@ export { Badge, type BadgeTone } from "./badge";
 export { Button, type ButtonSize, type ButtonVariant } from "./button";
 export { Card, type CardProps } from "./card";
 export { Checkbox } from "./checkbox";
+export { Container, type ContainerProps } from "./container";
 export {
   ConfirmDialog,
   Dialog,

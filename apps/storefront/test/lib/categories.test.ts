@@ -2,6 +2,7 @@ import {
   fetchCatalogSidebar,
   fetchNavCategories,
   fetchShowcaseCategories,
+  toCategoryImage,
   toNavCategories,
   toShowcaseSources,
   toSidebarCategories,
@@ -151,14 +152,75 @@ describe("fetchNavCategories", () => {
   });
 });
 
+describe("toCategoryImage", () => {
+  it("passes a set image_url and image_alt through", () => {
+    expect(
+      toCategoryImage({
+        image_url: "https://cdn.example/shirts.jpg",
+        image_alt: "A folded shirt",
+      }),
+    ).toEqual({
+      imageUrl: "https://cdn.example/shirts.jpg",
+      imageAlt: "A folded shirt",
+    });
+  });
+
+  it.each([
+    ["blank", ""],
+    ["whitespace only", "   "],
+    ["a number", 42],
+    ["an object", { url: "https://cdn.example/shirts.jpg" }],
+    ["null", null],
+  ])("degrades a %s image_url to an empty url", (_label, imageUrl) => {
+    expect(toCategoryImage({ image_url: imageUrl }).imageUrl).toBe("");
+  });
+
+  it("drops the alt text when the url degrades", () => {
+    expect(
+      toCategoryImage({ image_url: "  ", image_alt: "A folded shirt" }),
+    ).toEqual({ imageUrl: "", imageAlt: "" });
+  });
+
+  it("falls back to an empty alt when only the url is set", () => {
+    expect(toCategoryImage({ image_url: "https://cdn.example/s.jpg" })).toEqual(
+      {
+        imageUrl: "https://cdn.example/s.jpg",
+        imageAlt: "",
+      },
+    );
+  });
+
+  it.each([
+    ["undefined", undefined],
+    ["null", null],
+    ["empty", {}],
+  ])("is safe when metadata is %s", (_label, metadata) => {
+    expect(toCategoryImage(metadata)).toEqual({ imageUrl: "", imageAlt: "" });
+  });
+});
+
 describe("toShowcaseSources", () => {
-  it("keeps the id alongside the mapped name and href", () => {
+  it("keeps the id and the category image alongside the mapped name and href", () => {
     const sources: ShowcaseCategorySource[] = [
-      { id: "pcat_1", name: "Shirts", handle: "shirts" },
+      {
+        id: "pcat_1",
+        name: "Shirts",
+        handle: "shirts",
+        metadata: {
+          image_url: "https://cdn.example/shirts.jpg",
+          image_alt: "A folded shirt",
+        },
+      },
     ];
 
     expect(toShowcaseSources(sources)).toEqual([
-      { id: "pcat_1", name: "Shirts", href: "/shirts" },
+      {
+        id: "pcat_1",
+        name: "Shirts",
+        href: "/shirts",
+        imageUrl: "https://cdn.example/shirts.jpg",
+        imageAlt: "A folded shirt",
+      },
     ]);
   });
 
@@ -342,7 +404,13 @@ describe("fetchShowcaseCategories", () => {
     });
 
     expect(await fetchShowcaseCategories()).toEqual([
-      { name: "Shirts", href: "/shirts", productCount: 4 },
+      {
+        name: "Shirts",
+        href: "/shirts",
+        productCount: 4,
+        imageUrl: "",
+        imageAlt: "",
+      },
     ]);
     expect(sdk.store.product.list).toHaveBeenCalledWith(
       expect.objectContaining({ category_id: ["pcat_1"] }),
@@ -373,8 +441,20 @@ describe("fetchShowcaseCategories", () => {
 
     // toShowcaseSources sorts alphabetically, so Pants precedes Shirts.
     expect(categories).toEqual([
-      { name: "Pants", href: "/pants", productCount: 5 },
-      { name: "Shirts", href: "/shirts", productCount: 2 },
+      {
+        name: "Pants",
+        href: "/pants",
+        productCount: 5,
+        imageUrl: "",
+        imageAlt: "",
+      },
+      {
+        name: "Shirts",
+        href: "/shirts",
+        productCount: 2,
+        imageUrl: "",
+        imageAlt: "",
+      },
     ]);
   });
 
@@ -392,7 +472,13 @@ describe("fetchShowcaseCategories", () => {
       .mockImplementation(() => {});
 
     expect(await fetchShowcaseCategories()).toEqual([
-      { name: "Shirts", href: "/shirts", productCount: 0 },
+      {
+        name: "Shirts",
+        href: "/shirts",
+        productCount: 0,
+        imageUrl: "",
+        imageAlt: "",
+      },
     ]);
 
     consoleError.mockRestore();

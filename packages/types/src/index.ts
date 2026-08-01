@@ -5,6 +5,7 @@ export {
   customTextSchema,
   lineItemCustomizationSchema,
 } from "./customization.js";
+export { SITE_NAME, SITE_TAGLINE } from "./site.js";
 export {
   SITE_CONTENT_FIELDS,
   SITE_CONTENT_KEYS,

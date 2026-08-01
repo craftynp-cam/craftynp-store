@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowRight } from "../icons";
+import { Container } from "../ui";
 
 const HEADING_ID = "maker-intro-heading";
 
@@ -31,14 +32,14 @@ export function MakerIntro({
 
   return (
     <section aria-labelledby={HEADING_ID} className="bg-surface py-16 sm:py-20">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 md:grid-cols-2 md:items-center md:gap-16">
+      <Container className="grid gap-10 md:grid-cols-2 md:items-center md:gap-16">
         <div className="relative aspect-[4/5] overflow-hidden rounded-2xl">
           {imageUrl ? (
             <Image
               src={imageUrl}
               alt={imageAlt}
               fill
-              sizes="(min-width: 768px) 50vw, 100vw"
+              sizes="(min-width: 1536px) 800px, (min-width: 1280px) 700px, (min-width: 768px) 45vw, 100vw"
               className="object-cover"
             />
           ) : (
@@ -65,7 +66,7 @@ export function MakerIntro({
             <ArrowRight aria-hidden="true" size={18} />
           </Link>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }

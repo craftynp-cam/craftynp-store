@@ -62,7 +62,7 @@ describe("orderConfirmationContent", () => {
     // that shape again, because there is no variable substitution left to fail.
     const { subject, html, text } = orderConfirmationContent(ORDER, NOTES);
 
-    expect(subject).toBe("Your Crafty NP order #CNP-9 is confirmed");
+    expect(subject).toBe("Order #CNP-9 is confirmed — The Crafty NP");
     expect(html).toContain("#CNP-9");
     expect(html).toContain("$20.75");
     expect(html).not.toContain("#CNP-0000");
@@ -114,7 +114,7 @@ describe("orderShippedContent", () => {
   it("embeds the real tracking details, not a template default", () => {
     const { subject, html } = orderShippedContent(ORDER, SHIPMENT);
 
-    expect(subject).toBe("Your Crafty NP order #CNP-9 is on its way");
+    expect(subject).toBe("Order #CNP-9 is on its way — The Crafty NP");
     expect(html).toContain("9400111899223197428490");
     expect(html).toContain(SHIPMENT.trackingUrl);
     expect(html).not.toContain("the carrier");

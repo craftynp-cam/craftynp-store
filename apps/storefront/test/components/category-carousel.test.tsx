@@ -3,11 +3,30 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { CategoryCarousel } from "@/components";
 import type { ShowcaseCategory } from "@/lib/categories";
 import { setDrawerOpen } from "@/lib/drawer-open";
+import { SITE_NAME } from "@/lib/site";
 
 const categories: ShowcaseCategory[] = [
-  { name: "Shirts", href: "/categories/shirts", productCount: 2 },
-  { name: "Keychains", href: "/categories/keychains", productCount: 5 },
-  { name: "Stickers", href: "/categories/stickers", productCount: 0 },
+  {
+    name: "Shirts",
+    href: "/categories/shirts",
+    productCount: 2,
+    imageUrl: "",
+    imageAlt: "",
+  },
+  {
+    name: "Keychains",
+    href: "/categories/keychains",
+    productCount: 5,
+    imageUrl: "",
+    imageAlt: "",
+  },
+  {
+    name: "Stickers",
+    href: "/categories/stickers",
+    productCount: 0,
+    imageUrl: "",
+    imageAlt: "",
+  },
 ];
 
 function mockMatchMedia(matches: boolean) {
@@ -197,7 +216,13 @@ describe("CategoryCarousel", () => {
     render(
       <CategoryCarousel
         categories={[
-          { name: "Shirts", href: "/categories/shirts", productCount: 2 },
+          {
+            name: "Shirts",
+            href: "/categories/shirts",
+            productCount: 2,
+            imageUrl: "",
+            imageAlt: "",
+          },
         ]}
       />,
     );
@@ -215,9 +240,7 @@ describe("CategoryCarousel", () => {
     render(<CategoryCarousel categories={[]} />);
 
     expect(
-      within(screen.getByRole("heading", { level: 1 })).getByText(
-        "The Crafty NP",
-      ),
+      within(screen.getByRole("heading", { level: 1 })).getByText(SITE_NAME),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Shop All Products" }),

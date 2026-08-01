@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import type { NavCategory } from "@/lib/categories";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
 
 import { Drawer, DrawerCloseButton, DrawerPanel, DrawerTitle } from "../ui";
 import { ArrowRight } from "../icons";
@@ -22,9 +23,14 @@ export function NavDrawer({ categories }: NavDrawerProps) {
         {({ close }) => (
           <>
             <div className="flex items-center justify-between gap-4 border-b border-border bg-surface px-6 py-5">
-              <DrawerTitle className="font-display text-2xl text-foreground">
-                Shop
-              </DrawerTitle>
+              <div className="min-w-0">
+                <DrawerTitle className="font-brand text-3xl leading-none text-foreground">
+                  {SITE_NAME}
+                </DrawerTitle>
+                <p className="mt-2 text-sm text-foreground-muted">
+                  {SITE_TAGLINE}
+                </p>
+              </div>
               <DrawerCloseButton
                 label="Close menu"
                 className="static shrink-0 rounded-lg p-2 text-foreground hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"

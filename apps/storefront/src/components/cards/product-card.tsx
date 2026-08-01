@@ -57,7 +57,7 @@ export function ProductCard(props: ProductCardProps) {
             src={imageUrl}
             alt={imageAlt}
             fill
-            sizes="(min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw"
+            sizes="(min-width: 1536px) 320px, (min-width: 1280px) 365px, (min-width: 1024px) 290px, (min-width: 640px) 45vw, 100vw"
             className="object-cover"
           />
         ) : (

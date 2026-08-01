@@ -10,6 +10,7 @@ import {
   readPrefersReducedMotion,
   subscribeToReducedMotion,
 } from "@/lib/reduced-motion";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
 
 import { CaretLeft, CaretRight, Pause, Play } from "../icons";
 import { CategorySlide } from "./category-slide";
@@ -23,7 +24,7 @@ const arrowButtonClassName =
   "flex size-11 shrink-0 items-center justify-center rounded-full bg-off-white/90 text-ink transition-colors hover:bg-off-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
 const shellClassName =
-  "relative aspect-square w-full overflow-hidden md:aspect-auto md:h-[calc(100svh-var(--chrome-height)-4rem)] md:min-h-[28rem]";
+  "relative aspect-square w-full overflow-hidden md:aspect-auto md:h-[calc(100svh-var(--chrome-height)-4rem)] md:max-h-[52rem] md:min-h-[28rem] xl:min-h-[34rem] 2xl:min-h-[40rem]";
 
 type CategoryCarouselProps = { categories: readonly ShowcaseCategory[] };
 
@@ -76,12 +77,10 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
         className={`${shellClassName} flex items-center justify-center bg-ink`}
       >
         <div className="flex flex-col items-center gap-4 p-8 text-center">
-          <h1 className="font-display text-3xl text-off-white">
-            The Crafty NP
+          <h1 className="font-brand text-4xl leading-none text-off-white">
+            {SITE_NAME}
           </h1>
-          <p className="max-w-xs text-off-white/80">
-            Categories are on their way. Browse everything in the meantime.
-          </p>
+          <p className="max-w-sm text-off-white/80">{SITE_TAGLINE}</p>
           <Link
             href="/products"
             className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-base font-semibold text-on-accent transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
@@ -101,7 +100,10 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
           name={only.name}
           href={only.href}
           productCount={only.productCount}
+          imageUrl={only.imageUrl}
+          imageAlt={only.imageAlt}
           isActive
+          isFirst
           position={1}
           total={1}
         />
@@ -149,7 +151,10 @@ export function CategoryCarousel({ categories }: CategoryCarouselProps) {
                 name={category.name}
                 href={category.href}
                 productCount={category.productCount}
+                imageUrl={category.imageUrl}
+                imageAlt={category.imageAlt}
                 isActive={index === activeIndex}
+                isFirst={index === 0}
                 position={index + 1}
                 total={total}
               />

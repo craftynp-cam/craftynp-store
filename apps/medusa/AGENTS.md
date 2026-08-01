@@ -15,6 +15,14 @@ Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
   `@craftynp/types`, not by the `siteContent` module.** Adding a field —
   including an `image` field, whose stored value is just the URL string — is a
   registry change, never a migration.
+- **Category imagery is not site content.** The storefront's homepage carousel
+  renders one slide per product category and reads each slide's photo from that
+  category's own `metadata.image_url` / `metadata.image_alt`, written by the
+  `product_category.details.side.after` widget in
+  `src/admin/widgets/category-image.tsx`. Fixed site-content slots cannot track
+  a category list the client edits freely. **The widget must spread the existing
+  metadata into its update** — Medusa replaces the jsonb column wholesale, so an
+  unspread write silently destroys every other key on the category.
 - **`src/admin` typechecks separately.** It is the only `.tsx` here and needs
   DOM lib types the Node-only backend doesn't carry, so `tsconfig.json` excludes
   it and `typecheck` runs a second `tsc -p src/admin --noEmit`. Put a file that
@@ -106,6 +114,53 @@ the Google Cloud OAuth Web client whose redirect URI must exactly match
 the Workspace org's 2-Step Verification policy; and Stripe Tax's nexus and
 per-state registrations. Workspace 2SV is the real MFA enforcement — Medusa's
 TOTP is config-only and opt-in per identity, so do not implement enrolment.
+
+## Abuse and rate limiting
+
+Four store routes are reachable with no session at all, and two of them spend
+money on every call: `/store/tax-quote` bills a Stripe Tax calculation and
+`/store/shipping-rates` burns the ShipStation limit. Because there is
+deliberately no flat-rate fallback, exhausting ShipStation returns
+`502 shipping_unavailable` and **blocks checkout for genuine customers** — so
+this is a denial-of-checkout vector, not only a cost one.
+
+- **`rateLimit()` from `src/lib/rate-limit.ts` goes on every new anonymous store
+  route that costs money or sends mail.** It is wired in the route's
+  `middlewares.ts`, **before** `validateAndTransformBody`, so a flood of
+  malformed bodies is rejected without parsing them.
+- **It fails open.** A missing or throwing cache calls `next()` rather than
+  refusing the request — a broken cache must never take checkout down with it.
+  That is the right trade here and the reason this is a second line of defence
+  behind Cloudflare, not the only one.
+- **It keys on `cf-connecting-ip` first.** Cloudflare strips any client-supplied
+  copy of that header, so it is the one value a caller cannot forge;
+  `x-forwarded-for` is the fallback for a non-Cloudflare proxy and **is**
+  spoofable. **If Medusa is ever reachable directly, bypassing Cloudflare, the
+  limiter is trivially defeated by forging that header** — the origin must only
+  accept traffic through the proxy.
+- **The window counter lives in `Modules.CACHE`, which is in-memory until Redis
+  is wired up (CNP-16).** So the counters are per-process and reset on deploy.
+  That still stops a single-source flood; it is not a distributed limiter, and
+  it should be revisited when the cache moves to Redis.
+- Limits are per-IP per-minute and come from `RATE_LIMIT_*` env vars, documented
+  in `.env.example`. A non-positive-integer value is ignored rather than
+  applied, so a typo cannot lock every caller out.
+
+**Cloudflare is the first line and has no in-repo representation** — like the
+Auth0 and Stripe Tax dashboard state above, don't search for it here. The
+rate-limiting rule on `/store/tax-quote`, `/store/shipping-rates` and
+`/store/checkout/*` lives there and sheds volume long before it reaches this
+limiter.
+
+- **Medusa is served from `api.thecraftynp.com`, a different zone from the
+  storefront's `thecraftynp.org`, and Bot Fight Mode is deliberately off on
+  that zone.** On the Free plan Bot Fight Mode is zone-wide and cannot be
+  skipped — Cloudflare documents that Skip, Bypass and Allow "have no effect"
+  on it — so in front of this app it would challenge the Stripe and ShipStation
+  webhooks and the storefront's server-side fetches. Every one of those fails
+  silently: payment succeeds at Stripe and no order appears, tracking never
+  updates. The split zone is what keeps the API challenge-free while the
+  storefront keeps the protection. See [README.md](../../README.md).
 
 ## Money, units, and external APIs
 
@@ -331,7 +386,12 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   a `200` throughout, nothing errored). `order-confirmation` and
   `order-shipped` still exist as published Resend templates and render
   correctly in Resend's own dashboard preview — that is now their only
-  purpose, as the design reference. See
+  purpose, as the design reference. **A brand change therefore has to be made
+  in three places**, none of which the others can see: `order-email.ts`, the
+  Resend templates, and the Auth0 Action in
+  [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md).
+  CNP-79 updated all three; the password-reset Action is the easiest to miss,
+  because it is the one live customer email with no code in `src/`. See
   [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md)
   for where this was first found (in the password-reset Action) and confirmed.
 - **`createNotifications({ content: { subject, html, text } })`, not
@@ -427,18 +487,37 @@ a real `pnpm run dev` checkout, not `tsc`/`jest` alone.
 ## Migrations and seeds
 
 `pnpm run db:migrate` runs every script in `src/migration-scripts/` and prints
-the `pk_…` publishable key the storefront needs.
+the `pk_…` publishable key the storefront needs (from `seed-defaults.ts`). There
+is no `db:seed` — the Medusa starter seed and its demo data were deleted in
+CNP-79.
 
 - **Add a new seed as a new file, never an edit to an existing one.** The ledger
   tracks each script independently, so a new file still runs against an
   already-migrated database while an edit to an already-run script does nothing.
+- **The `script_migrations` ledger keys on the script's basename, not its
+  path.** Renaming a script re-runs it, and deleting one leaves its ledger row
+  behind, so a database migrated before a deletion keeps whatever that script
+  created. That is why dev databases seeded before CNP-79 still carry the
+  Europe region and the four demo products; see the cleanup section in
+  [README.md](../../README.md).
 - **Scripts run in filename order** — name a new one so it sorts after any seed
   whose data it depends on.
+- **`createDefaultsWorkflow` runs at application start, not during
+  `db:migrate`.** `medusa db:migrate` forks `db:migrate:scripts`, which loads
+  the modules but never calls it, so the default sales channel, store, and
+  publishable key do not exist while the seeds run. `seed-defaults.ts` runs it
+  itself, which is why that script must keep sorting first: `seed-us-region.ts`
+  hard-fails on a missing "Default Sales Channel". It also corrects the store's
+  `supported_currencies` to USD-default, because core's `createDefaultStoreStep`
+  hardcodes EUR-only.
+- **Every environment gets exactly one region, United States.** A second region
+  is not a harmless addition — it changes the currency the storefront quotes in
+  and which shipping options a cart is offered, both silently.
+- **`db:migrate` needs a fully populated `.env`.** `seed-us-region.ts` throws on
+  a missing `SHIP_FROM_*` or `SHIPPING_OPTION_DEFAULT_*`, so a partly-filled
+  environment fails the migration rather than half-configuring the store.
 - **The ship-from address comes from `SHIP_FROM_*` env**, never hard-coded into
   a migration script, so the client's real address stays out of git.
-- **`pnpm run db:seed` is only for a database you have deliberately reset.**
-  `db:migrate` already seeds through the ledger; `db:seed` runs outside it,
-  minting a second publishable key and duplicating products.
 - **Shipping-dimension validation for publishable products is a workflow hook**
   on `createProductsWorkflow` / `updateProductsWorkflow`, not route middleware —
   a status-only publish, `/admin/products/batch`, CSV import, and custom

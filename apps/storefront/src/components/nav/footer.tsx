@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import type { NavCategory } from "@/lib/categories";
@@ -10,6 +9,8 @@ import {
 } from "@/lib/site";
 
 import { FacebookLogo, InstagramLogo, TiktokLogo } from "../icons";
+import { Container } from "../ui";
+import { BrandLockup } from "./logo";
 
 type FooterProps = { categories: readonly NavCategory[] };
 
@@ -28,16 +29,11 @@ const headingClassName =
 export function Footer({ categories }: FooterProps) {
   return (
     <footer className="bg-ink text-off-white">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+      <Container className="py-14 lg:py-16">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <Image src="/logo.svg" alt="" width={40} height={40} />
-              <span className="font-display text-2xl text-off-white">
-                {SITE_NAME}
-              </span>
-            </div>
-            <p className="mt-4 max-w-xs text-off-white/80">{SITE_TAGLINE}</p>
+          <div className="lg:col-span-2">
+            <BrandLockup />
+            <p className="mt-4 max-w-sm text-off-white/80">{SITE_TAGLINE}</p>
             <ul className="mt-6 flex items-center gap-3">
               {SOCIAL_LINKS.map((social) => {
                 const Icon =
@@ -97,7 +93,7 @@ export function Footer({ categories }: FooterProps) {
           </p>
           <p>Secure checkout · Powered by Stripe</p>
         </div>
-      </div>
+      </Container>
     </footer>
   );
 }
