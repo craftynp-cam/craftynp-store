@@ -537,11 +537,33 @@ function moneyCurrency(value: unknown, fallback: string): string {
   return typeof currency === "string" && currency !== "" ? currency : fallback;
 }
 
+function readPackage(rate: Record<string, unknown>): {
+  code: string | null;
+  name: string | null;
+} {
+  const code =
+    typeof rate.package_type === "string"
+      ? rate.package_type
+      : typeof rate.package_code === "string"
+        ? rate.package_code
+        : null;
+
+  if (code == null || code === "package") return { code, name: null };
+
+  const name = code
+    .split("_")
+    .map((word) => (word.length > 0 ? word[0]!.toUpperCase() + word.slice(1) : word))
+    .join(" ");
+
+  return { code, name };
+}
+
 export function normalizeLiveRates(
   rawRates: readonly unknown[],
   opts: { carrierId?: string } = {},
 ): LiveRate[] {
   const rates: LiveRate[] = [];
+  const seen = new Set<string>();
 
   for (const raw of rawRates) {
     if (raw == null || typeof raw !== "object") continue;
@@ -567,6 +589,13 @@ export function normalizeLiveRates(
       moneyAmount(rate.confirmation_amount) +
       moneyAmount(rate.other_amount);
 
+    const amount = Number((shippingAmount + surcharges).toFixed(2));
+    const parcelPackage = readPackage(rate);
+
+    const dedupeKey = `${carrierId}|${serviceCode}|${parcelPackage.code ?? ""}|${amount}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
     rates.push({
       rateId: typeof rate.rate_id === "string" ? rate.rate_id : serviceCode,
       carrierId,
@@ -579,7 +608,9 @@ export function normalizeLiveRates(
       serviceName:
         typeof rate.service_type === "string" ? rate.service_type : serviceCode,
       serviceCode,
-      amount: Number((shippingAmount + surcharges).toFixed(2)),
+      packageCode: parcelPackage.code,
+      packageName: parcelPackage.name,
+      amount,
       shippingAmount,
       surcharges: Number(surcharges.toFixed(2)),
       currencyCode: moneyCurrency(shipping, "usd"),

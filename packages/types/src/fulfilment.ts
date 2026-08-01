@@ -36,6 +36,8 @@ export const liveRateSchema = z.object({
   carrierName: z.string().min(1),
   serviceName: z.string().min(1),
   serviceCode: z.string().min(1),
+  packageCode: z.string().nullable(),
+  packageName: z.string().nullable(),
   amount: z.number().nonnegative(),
   shippingAmount: z.number().nonnegative(),
   surcharges: z.number().nonnegative(),
