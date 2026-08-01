@@ -54,6 +54,22 @@ Resend dashboard but opens the wrong page — this is the same bug. Those
 templates use `href="{{{ORDER_URL}}}"` / `href="{{{TRACKING_URL}}}"` the
 identical way and have not been independently verified against it.
 
+## Brand assets in this email
+
+The header matches `src/lib/order-email.ts`, and the two have to be changed
+together — there is no shared constant, because the Action runs in Auth0's
+tenant and can read neither `@craftynp/types` nor `STOREFRONT_URL`.
+
+- **The logo is an absolute `https://thecraftynp.org/logo.png`**, hardcoded.
+  It has to be a PNG — Gmail and Outlook strip `image/svg+xml` — and it has to
+  be absolute, because email resolves no relative paths. **Until the storefront
+  is deployed at that host the image renders broken**, so check it after the
+  first deploy. If the domain changes, this line is the one to change.
+- **Cookie only renders in Apple Mail, iOS Mail, Samsung Mail and
+  Thunderbird.** Gmail and Outlook drop the webfont link and fall back to
+  `Brush Script MT` / `Segoe Script` / `cursive`. The layout does not depend on
+  it, and the logo carries the brand either way.
+
 ## Dashboard prerequisites
 
 **Do these in order.** Auth0 ignores every email-template edit until a custom
@@ -102,6 +118,7 @@ function passwordResetHtml(resetUrl, customerName, shopAddress) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>Reset your password</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cookie&amp;display=swap">
 </head>
 <body style="margin:0; padding:0; background-color:#ecebe6;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ecebe6" style="background-color:#ecebe6;">
@@ -110,8 +127,18 @@ function passwordResetHtml(resetUrl, customerName, shopAddress) {
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px;">
 <tr>
 <td bgcolor="#ffffff" style="background-color:#ffffff; padding-top:20px; padding-bottom:20px; padding-left:28px; padding-right:28px; border-top-left-radius:10px; border-top-right-radius:10px;">
-<p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:18px; line-height:22px; color:#04133b; font-weight:bold;">The Crafty NP</p>
-<p style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:10px; line-height:14px; letter-spacing:2px; color:#5a6377;">HANDMADE &middot; CUSTOM</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td align="left" valign="middle" width="72" style="width:72px;">
+<img src="https://thecraftynp.org/logo.png" width="72" height="64" alt="" style="display:block; border:0;">
+</td>
+<td align="left" valign="middle" style="padding-left:14px;">
+<span style="font-family:'Cookie','Brush Script MT','Segoe Script',cursive; font-size:30px; line-height:32px; color:#04133b;">The Crafty NP</span>
+<br>
+<span style="font-family:Arial,Helvetica,sans-serif; font-size:11px; line-height:16px; letter-spacing:0.5px; color:#5a6377;">Elevated Creativity. Custom designs personalized with you in mind!</span>
+</td>
+</tr>
+</table>
 </td>
 </tr>
 <tr>
@@ -151,7 +178,7 @@ function passwordResetHtml(resetUrl, customerName, shopAddress) {
 </tr>
 <tr>
 <td bgcolor="#04133b" style="background-color:#04133b; padding-top:26px; padding-bottom:26px; padding-left:28px; padding-right:28px; border-bottom-left-radius:10px; border-bottom-right-radius:10px;">
-<p style="margin-top:0; margin-bottom:8px; font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:22px; color:#fbfaf7;">The Crafty NP</p>
+<p style="margin-top:0; margin-bottom:8px; font-family:'Cookie','Brush Script MT','Segoe Script',cursive; font-size:26px; line-height:30px; color:#fbfaf7;">The Crafty NP</p>
 <p style="margin-top:0; margin-bottom:14px; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:20px; color:#c4cad6;">Handmade &amp; custom stickers, shirts, keychains, cups and banners &mdash; made one order at a time.</p>
 <p style="margin-top:0; margin-bottom:4px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#8d97ac;">${shopAddress}</p>
 <p style="margin-top:0; margin-bottom:0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#8d97ac;">You&rsquo;re getting this because a password reset was requested for this address.</p>
@@ -166,7 +193,7 @@ function passwordResetHtml(resetUrl, customerName, shopAddress) {
 }
 
 function passwordResetText(resetUrl, customerName, shopAddress) {
-  return `The Crafty NP — HANDMADE · CUSTOM
+  return `The Crafty NP — Elevated Creativity. Custom designs personalized with you in mind!
 
 RESET YOUR PASSWORD
 

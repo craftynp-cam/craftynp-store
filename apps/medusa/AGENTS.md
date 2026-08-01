@@ -339,7 +339,12 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   a `200` throughout, nothing errored). `order-confirmation` and
   `order-shipped` still exist as published Resend templates and render
   correctly in Resend's own dashboard preview — that is now their only
-  purpose, as the design reference. See
+  purpose, as the design reference. **A brand change therefore has to be made
+  in three places**, none of which the others can see: `order-email.ts`, the
+  Resend templates, and the Auth0 Action in
+  [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md).
+  CNP-79 updated all three; the password-reset Action is the easiest to miss,
+  because it is the one live customer email with no code in `src/`. See
   [docs/auth0-custom-email-provider.md](docs/auth0-custom-email-provider.md)
   for where this was first found (in the password-reset Action) and confirmed.
 - **`createNotifications({ content: { subject, html, text } })`, not
