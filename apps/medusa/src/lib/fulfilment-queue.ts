@@ -1,4 +1,9 @@
-import type { ParcelOverride, QueueEntry, QueueItem } from "@craftynp/types";
+import type {
+  ParcelOverride,
+  PrintableLabel,
+  QueueEntry,
+  QueueItem,
+} from "@craftynp/types";
 
 import {
   packItemsIntoOneBox,
@@ -166,6 +171,11 @@ function toIsoString(value: string | Date | null | undefined): string {
   return "";
 }
 
+function toIso(value: string | Date | null | undefined): string | null {
+  const iso = toIsoString(value);
+  return iso === "" ? null : iso;
+}
+
 export function buildQueueEntries(
   orderIds: readonly string[],
   orders: readonly OrderRow[],
@@ -213,4 +223,41 @@ export function buildQueueEntries(
   }
 
   return entries;
+}
+
+export const PRINTABLE_WINDOW_DAYS = 14;
+
+export type PrintableRow = {
+  orderId: string;
+  trackingNumber: string;
+  carrierCode: string | null;
+  shippedAt: Date | string | null;
+};
+
+export function buildPrintableLabels(
+  rows: readonly PrintableRow[],
+  orders: readonly OrderRow[],
+): PrintableLabel[] {
+  const ordersById = new Map(orders.map((order) => [order.id, order]));
+  const labels: PrintableLabel[] = [];
+
+  for (const row of rows) {
+    const order = ordersById.get(row.orderId);
+    if (!order) continue;
+
+    const address = order.shipping_address ?? null;
+
+    labels.push({
+      orderId: row.orderId,
+      displayId: order.display_id ?? 0,
+      customerName: address ? fullName(address) : (order.email ?? ""),
+      trackingNumber: row.trackingNumber,
+      carrierCode: row.carrierCode,
+      shippedAt: toIso(row.shippedAt),
+    });
+  }
+
+  return labels.sort((a, b) =>
+    (b.shippedAt ?? "").localeCompare(a.shippedAt ?? ""),
+  );
 }

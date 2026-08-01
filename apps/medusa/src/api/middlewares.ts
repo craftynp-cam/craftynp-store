@@ -1,6 +1,7 @@
 import { defineMiddlewares } from "@medusajs/framework/http";
 
 import { adminSsoMiddlewares } from "./admin-sso/link/middlewares";
+import { fulfilmentMiddlewares } from "./admin/fulfilment/middlewares";
 import { orderStatusMiddlewares } from "./admin/orders/middlewares";
 import { siteContentMiddlewares } from "./admin/site-content/middlewares";
 import { shipstationTrackMiddlewares } from "./hooks/shipstation/track/middlewares";
@@ -13,6 +14,7 @@ export default defineMiddlewares({
   routes: [
     ...siteContentMiddlewares,
     ...orderStatusMiddlewares,
+    ...fulfilmentMiddlewares,
     ...adminSsoMiddlewares,
     ...shipstationTrackMiddlewares,
     ...shippingRatesMiddlewares,

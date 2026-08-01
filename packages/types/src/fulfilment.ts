@@ -86,8 +86,19 @@ export const queueEntrySchema = z.object({
 });
 export type QueueEntry = z.infer<typeof queueEntrySchema>;
 
+export const printableLabelSchema = z.object({
+  orderId: z.string(),
+  displayId: z.number().int(),
+  customerName: z.string(),
+  trackingNumber: z.string(),
+  carrierCode: z.string().nullable(),
+  shippedAt: z.string().nullable(),
+});
+export type PrintableLabel = z.infer<typeof printableLabelSchema>;
+
 export const fulfilmentQueueResponseSchema = z.object({
   orders: z.array(queueEntrySchema),
+  printable: z.array(printableLabelSchema),
 });
 export type FulfilmentQueueResponse = z.infer<
   typeof fulfilmentQueueResponseSchema

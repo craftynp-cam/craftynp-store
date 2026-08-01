@@ -7,8 +7,11 @@ import type { Logger } from "@medusajs/framework/types";
 
 import { describeError } from "../../../../lib/describe-error";
 import {
+  PRINTABLE_WINDOW_DAYS,
+  buildPrintableLabels,
   buildQueueEntries,
   type OrderRow,
+  type PrintableRow,
   type VariantDimensions,
 } from "../../../../lib/fulfilment-queue";
 import { ORDER_STATUS_MODULE } from "../../../../modules/order-status";
@@ -38,6 +41,56 @@ const VARIANT_FIELDS = [
   "product.height",
 ];
 
+type ShipmentRow = {
+  order_status_id: string;
+  tracking_number: string;
+  carrier_code: string | null;
+  label_file_id: string | null;
+  shipped_at: Date | string | null;
+};
+
+async function loadPrintableRows(
+  service: OrderStatusModuleService,
+): Promise<PrintableRow[]> {
+  const shippedRecords = (await service.listOrderStatusRecords({
+    status: "shipped",
+  })) as { id: string; order_id: string }[];
+
+  if (shippedRecords.length === 0) return [];
+
+  const orderIdByStatusId = new Map(
+    shippedRecords.map((record) => [record.id, record.order_id]),
+  );
+
+  const shipments = (await service.listShipmentTrackings({
+    order_status_id: [...orderIdByStatusId.keys()],
+    voided_at: null,
+  })) as ShipmentRow[];
+
+  const cutoff = Date.now() - PRINTABLE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  return shipments.flatMap((shipment) => {
+    if (!shipment.label_file_id) return [];
+
+    const orderId = orderIdByStatusId.get(shipment.order_status_id);
+    if (!orderId) return [];
+
+    if (shipment.shipped_at) {
+      const shippedMs = new Date(shipment.shipped_at).getTime();
+      if (!Number.isNaN(shippedMs) && shippedMs < cutoff) return [];
+    }
+
+    return [
+      {
+        orderId,
+        trackingNumber: shipment.tracking_number,
+        carrierCode: shipment.carrier_code,
+        shippedAt: shipment.shipped_at,
+      },
+    ];
+  });
+}
+
 export async function GET(
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse,
@@ -53,13 +106,19 @@ export async function GET(
       status: "packing",
     })) as { order_id: string }[];
 
+    const printableRows = await loadPrintableRows(service);
+
     const orderIds = records.map((record) => record.order_id);
-    if (orderIds.length === 0) return res.json({ orders: [] });
+    const allIds = [
+      ...new Set([...orderIds, ...printableRows.map((row) => row.orderId)]),
+    ];
+
+    if (allIds.length === 0) return res.json({ orders: [], printable: [] });
 
     const { data: orders } = await query.graph({
       entity: "order",
       fields: ORDER_FIELDS,
-      filters: { id: orderIds },
+      filters: { id: allIds },
     });
 
     const variantIds = [
@@ -88,6 +147,7 @@ export async function GET(
 
     return res.json({
       orders: buildQueueEntries(orderIds, orders as OrderRow[], variantsById),
+      printable: buildPrintableLabels(printableRows, orders as OrderRow[]),
     });
   } catch (error) {
     const detail = describeError(error);
