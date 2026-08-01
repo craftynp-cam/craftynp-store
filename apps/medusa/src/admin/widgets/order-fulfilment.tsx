@@ -14,7 +14,11 @@ import {
   toast,
 } from "@medusajs/ui";
 import type { DetailWidgetProps, AdminOrder } from "@medusajs/framework/types";
-import type { OrderStatus, OrderStatusDetail } from "@craftynp/types";
+import type {
+  OrderStatus,
+  OrderStatusDetail,
+  TrackingStatus,
+} from "@craftynp/types";
 
 import { sdk } from "../lib/client";
 
@@ -39,6 +43,15 @@ const STATUS_COLORS: Record<
   shipped: "blue",
   delivered: "green",
   cancelled: "red",
+};
+
+const TRACKING_STATUS_LABELS: Record<TrackingStatus, string> = {
+  accepted: "Accepted by the carrier",
+  in_transit: "In transit",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  exception: "Delayed — check with the carrier",
+  unknown: "Awaiting the first scan",
 };
 
 const CARRIERS = [
@@ -125,6 +138,12 @@ const OrderFulfilmentWidget = ({
   const busy =
     transition.isPending || recordShipment.isPending || voidShipment.isPending;
 
+  const offeredTransitions = allowedTransitions.filter((next) => {
+    if (next === "shipped") return false;
+    if (next === "packing" && tracking) return false;
+    return true;
+  });
+
   return (
     <Container className="divide-y p-0">
       <div className="flex items-center justify-between px-6 py-4">
@@ -132,21 +151,19 @@ const OrderFulfilmentWidget = ({
         <Badge color={STATUS_COLORS[status]}>{STATUS_LABELS[status]}</Badge>
       </div>
 
-      {allowedTransitions.length > 0 && (
+      {offeredTransitions.length > 0 && (
         <div className="flex flex-wrap gap-2 px-6 py-4">
-          {allowedTransitions
-            .filter((next) => next !== "shipped")
-            .map((next) => (
-              <Button
-                key={next}
-                size="small"
-                variant={next === "cancelled" ? "danger" : "secondary"}
-                disabled={busy}
-                onClick={() => transition.mutate(next)}
-              >
-                Mark {STATUS_LABELS[next].toLowerCase()}
-              </Button>
-            ))}
+          {offeredTransitions.map((next) => (
+            <Button
+              key={next}
+              size="small"
+              variant={next === "cancelled" ? "danger" : "secondary"}
+              disabled={busy}
+              onClick={() => transition.mutate(next)}
+            >
+              Mark {STATUS_LABELS[next].toLowerCase()}
+            </Button>
+          ))}
         </div>
       )}
 
@@ -170,7 +187,8 @@ const OrderFulfilmentWidget = ({
             )}
           </Text>
           <Text size="small" className="text-ui-fg-subtle">
-            {tracking.statusDescription ?? tracking.status.replace(/_/g, " ")}
+            {tracking.statusDescription ??
+              TRACKING_STATUS_LABELS[tracking.status]}
           </Text>
           <div>
             <Button
@@ -220,7 +238,7 @@ const OrderFulfilmentWidget = ({
                 id="cnp-tracking"
                 value={trackingNumber}
                 onChange={(event) => setTrackingNumber(event.target.value)}
-                placeholder="9400111899223197428490"
+                placeholder="Paste the number from your label"
               />
             </div>
             <div>
