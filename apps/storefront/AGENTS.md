@@ -7,10 +7,15 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
 
 ## Routing
 
-- **`next.config.ts` rewrites `/api/:path*` and `/app/:path*` to Medusa**, so a
-  route handler mounted under `/api` is proxied away and never runs. Every
-  handler this app owns lives outside it — `src/app/auth/*` and
-  `src/app/checkout/*`.
+- **`next.config.ts` rewrites `/api/:path*` and `/app/:path*` to Medusa in
+  development**, so a route handler mounted under `/api` is proxied away and
+  never runs. Every handler this app owns lives outside it — `src/app/auth/*`
+  and `src/app/checkout/*`. The rewrites return `[]` in production on purpose:
+  the admin is served by Medusa on its own domain there, and proxying it through
+  Vercel would bill every admin request as a function invocation and undo the
+  zone split (see [README.md](../../README.md)). Keep the `/api` rule above
+  regardless — it still applies in development, which is where a stray route
+  handler would be written.
 - **Leave `images.dangerouslyAllowLocalIP: true` in `next.config.ts`.** It is
   named to look like a mistake and is load-bearing in development: Next's image
   optimizer blocks any upstream host that resolves to a private or loopback IP

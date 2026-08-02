@@ -5,9 +5,6 @@ const backendUrl =
 
 const backend = new URL(backendUrl);
 
-// Where Medusa's file provider serves uploaded imagery from — the public R2
-// bucket in deployment, the MinIO container locally. It is a different origin
-// from the backend, so the optimizer has to be told about it separately.
 const mediaUrl = process.env.NEXT_PUBLIC_MEDIA_BASE_URL;
 const media = mediaUrl ? new URL(mediaUrl) : null;
 
@@ -16,6 +13,8 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["@phosphor-icons/react"],
   },
   async rewrites() {
+    if (process.env.NODE_ENV === "production") return [];
+
     return [
       {
         source: "/api/:path*",
