@@ -142,7 +142,13 @@ this is a denial-of-checkout vector, not only a cost one.
   `x-forwarded-for` is the fallback for a non-Cloudflare proxy and **is**
   spoofable. **If Medusa is ever reachable directly, bypassing Cloudflare, the
   limiter is trivially defeated by forging that header** — the origin must only
-  accept traffic through the proxy.
+  accept traffic through the proxy. That is what `originGuard()` in
+  `src/lib/origin-guard.ts` is for: a Transform Rule sets a shared secret header
+  on the API hostname and the guard refuses anything without it, wired first in
+  `src/api/middlewares.ts` on `/*`. Its `ORIGIN_GUARD_MODE` is three-state and
+  **anything unrecognised disables it**, deliberately — a typo must not refuse
+  every request including the platform's healthcheck. Do not exempt the webhook
+  routes from it; they come through Cloudflare and carry the header.
 - **The window counter lives in `Modules.CACHE`, which is Redis-backed wherever
   `REDIS_URL` is set** — so the counters are shared across the server, the
   worker and any future replica, and the `RATE_LIMIT_*` values are the real

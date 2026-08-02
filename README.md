@@ -24,7 +24,7 @@ story (CNP-16/17/20).
 | Backend        | Medusa 2.18 (also serves the admin dashboard), React 18    |
 | Language       | TypeScript 5.9 (strict), pinned `~5.9.3`                   |
 | Database       | Postgres 15 (Docker)                                       |
-| Cache / events | Redis 7 (Docker; provisioned, not yet wired into Medusa)   |
+| Cache / events | Redis 7 (Docker locally; backs the cache, bus and locks)    |
 | Tests          | Jest                                                       |
 | Monorepo       | pnpm workspaces + Turborepo                                |
 | Formatting     | Prettier (root), ESLint flat config (extended per app)     |
@@ -650,11 +650,28 @@ product imagery goes to a **public** bucket through Medusa's file module
 and R2 has no object-level ACLs, so one bucket cannot be both. See
 [apps/medusa/AGENTS.md](apps/medusa/AGENTS.md).
 
-**The origin lock-down in step 2 has no mechanism yet.** Railway exposes a
+**The origin lock-down in step 2 is a shared-secret header.** Railway exposes a
 public `*.up.railway.app` hostname that bypasses Cloudflare entirely, and while
-it is reachable the limiter can be defeated by forging `cf-connecting-ip`.
-Either Authenticated Origin Pulls or a shared-secret header added by a Transform
-Rule and checked by the app would close it; neither is built.
+it is reachable the limiter can be defeated by forging `cf-connecting-ip`. A
+Transform Rule on `api.thecraftynp.com` sets `x-cnp-origin-secret`, and
+`src/lib/origin-guard.ts` checks it — Cloudflare _sets_ rather than appends, so
+a caller cannot supply their own, which is the same property the limiter relies
+on. Configured by `ORIGIN_SHARED_SECRET` and `ORIGIN_GUARD_MODE`.
+
+**Authenticated Origin Pulls was the other candidate and is not implementable
+here.** It needs the origin to demand a client certificate during the TLS
+handshake; Railway terminates TLS at its own proxy and hands the container plain
+HTTP, so Cloudflare would present the certificate and Railway would ignore it.
+
+Roll it out as `log` first and only then `enforce` — the mode is a variable so
+backing out is a dashboard change rather than a redeploy. Nothing is exempt:
+the Stripe and ShipStation webhooks arrive through Cloudflare like everything
+else, so they carry the header, and exempting them would leave the two most
+sensitive routes open on the Railway hostname. `GET /health` needs no exemption
+because `medusa start` registers it on the Express app, where the app's own
+middleware never sees it — **verify that with a direct `curl` to the Railway
+hostname after switching to `enforce`**, because a 403 there fails the
+healthcheck and the service never goes live.
 
 **CI ordering** (CNP-18): on a clean checkout `pnpm run build` must precede
 `pnpm run typecheck`, since `next-env.d.ts` is build-generated, and the build
