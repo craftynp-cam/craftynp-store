@@ -7,8 +7,6 @@ const fetchError = (status?: number) =>
 
 describe("isBackendFailure", () => {
   it("treats a rejection that is not a FetchError as a backend failure", () => {
-    // A connection that never completed — wrong host, DNS, refused, TLS,
-    // timeout — rejects with a plain TypeError and never reaches FetchError.
     expect(isBackendFailure(new TypeError("fetch failed"))).toBe(true);
   });
 

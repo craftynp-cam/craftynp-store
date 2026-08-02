@@ -31,7 +31,6 @@ async function loadProduct(params: ProductPageProps["params"]) {
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  // See the note in src/app/[category]/page.tsx on swallowing here.
   const product = await loadProduct(params).catch(() => null);
   if (!product) return {};
 
@@ -46,7 +45,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
   try {
     product = await loadProduct(params);
   } catch (error) {
-    // See the note in src/app/products/page.tsx.
     if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
     throw error;
   }

@@ -24,8 +24,6 @@ export async function generateMetadata({
   params,
 }: CategoryPageProps): Promise<Metadata> {
   const { category: handle } = await params;
-  // A metadata throw is a 500 of its own, and the page below already renders
-  // the unavailable view — an untitled document is the better half-answer.
   const loaded = await loadCategory(handle).catch(() => null);
   if (!loaded) return {};
 
@@ -43,8 +41,6 @@ export default async function CategoryPage({
   let loaded, products;
   try {
     loaded = await loadCategory(handle);
-    // Only reachable once the sidebar genuinely loaded, so this is a real
-    // "no such category" rather than a backend outage wearing a 404.
     if (!loaded) notFound();
 
     const region = await fetchRegion();
@@ -54,7 +50,6 @@ export default async function CategoryPage({
       regionId: region?.id,
     });
   } catch (error) {
-    // See the note in src/app/products/page.tsx.
     if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
     throw error;
   }

@@ -365,9 +365,6 @@ describe("fetchCatalogSidebar", () => {
     });
   });
 
-  // An empty sidebar makes loadCategory find no matching handle, so every
-  // category page answers 404. That must not be what a backend outage looks
-  // like.
   it("throws when the backend itself is unreachable", async () => {
     const sdk = mockSdk();
     sdk.store.category.list.mockRejectedValue(new TypeError("fetch failed"));

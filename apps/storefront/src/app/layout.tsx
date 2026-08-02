@@ -47,12 +47,6 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // error.tsx renders *inside* this layout, so a layout that throws takes the
-  // error boundary down with it and there is nothing left to show the visitor.
-  // Both of these are chrome — the navbar's category links and the announcement
-  // bar — so the layout degrades where a page would raise
-  // MedusaUnavailableError. The page inside it still errors visibly, which is
-  // what CNP-17 asks for.
   const [categories, siteContent] = await Promise.all([
     fetchNavCategories().catch(() => []),
     fetchSiteContent().catch(() => resolveSiteContent([])),

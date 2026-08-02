@@ -30,9 +30,6 @@ export default async function ProductsPage({
     sidebar = loadedSidebar;
     products = await fetchCatalogProducts({ sort, regionId: region?.id });
   } catch (error) {
-    // Next does not render error.tsx for a server-component throw on the
-    // initial document request — it answers 500 with its own unstyled page —
-    // so the shop's own "unavailable" view has to be returned from here.
     if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
     throw error;
   }

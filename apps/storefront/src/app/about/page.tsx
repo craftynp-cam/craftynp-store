@@ -16,7 +16,6 @@ export const metadata: Metadata = {
   description: `Meet the maker behind ${SITE_NAME} and how every order is made by hand.`,
 };
 
-// Per request, not prerendered — see the note in src/app/page.tsx.
 export const dynamic = "force-dynamic";
 
 export default async function AboutPage() {
@@ -24,7 +23,6 @@ export default async function AboutPage() {
   try {
     siteContent = await fetchSiteContent();
   } catch (error) {
-    // See the note in src/app/products/page.tsx.
     if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
     throw error;
   }

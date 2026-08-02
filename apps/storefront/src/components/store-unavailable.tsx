@@ -3,9 +3,6 @@ import { Container } from "./ui";
 export function StoreUnavailable() {
   return (
     <main id="main-content" tabIndex={-1} className="py-24">
-      {/* A page render cannot set a 5xx status in the App Router, so this
-          answers 200. The noindex is what stops a crawler treating an outage
-          as the real page and indexing it. React hoists it into <head>. */}
       <meta name="robots" content="noindex" />
       <Container>
         <div className="mx-auto max-w-lg text-center">

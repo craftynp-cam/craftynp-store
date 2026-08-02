@@ -143,9 +143,6 @@ export const fetchCatalogSidebar = cache(async (): Promise<SidebarCatalog> => {
     const sidebar = toSidebarCategories(product_categories, products);
     return { ...sidebar, totalCount: count };
   } catch (error) {
-    // Without this the sidebar comes back empty, loadCategory finds no matching
-    // handle and every category page answers 404 — a backend outage rendered as
-    // "this category does not exist".
     if (isBackendFailure(error)) {
       throw new MedusaUnavailableError("the catalogue categories", error);
     }
