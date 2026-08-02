@@ -12,18 +12,27 @@ FROM node:22-bookworm-slim AS build
 
 # NODE_ENV must NOT be production here, or pnpm install skips devDependencies
 # and `medusa build` — which needs the admin bundler and tsc — cannot run.
-ENV PNPM_HOME=/pnpm PATH=$PNPM_HOME:$PATH CI=true
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+ENV CI=true
 RUN corepack enable
 
 WORKDIR /app
 
-# Manifests first so a source-only change reuses the install layer.
+# Manifests first so a source-only change reuses this install layer, which is
+# the caching that actually matters here.
+#
+# Deliberately no `--mount=type=cache` for pnpm's store. Railway requires cache
+# mount ids to be `s/<service id>-<target>` and forbids environment variables
+# inside them, so a single id cannot serve both the server and the worker that
+# share this file — it rejects the build outright with "missing the cacheKey
+# prefix from its id". The store mount only helps when the lockfile changes,
+# which the layer above already handles for every other case.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 COPY apps/medusa/package.json apps/medusa/
 COPY apps/storefront/package.json apps/storefront/
 COPY packages/types/package.json packages/types/
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
