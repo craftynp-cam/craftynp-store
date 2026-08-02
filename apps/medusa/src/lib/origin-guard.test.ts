@@ -62,7 +62,10 @@ describe("originGuard", () => {
     process.env = originalEnv;
   });
 
-  function call(headers: Record<string, unknown>) {
+  function call(
+    headers: Record<string, unknown>,
+    originalUrl = "/store/tax-quote",
+  ) {
     const warn = jest.fn();
     const next = jest.fn();
     const json = jest.fn();
@@ -70,7 +73,9 @@ describe("originGuard", () => {
     const req = {
       headers,
       method: "POST",
-      path: "/store/tax-quote",
+      // Always "/" in practice: req.path is relative to the mount point.
+      path: "/",
+      originalUrl,
       scope: { resolve: () => ({ warn }) },
     };
 
@@ -124,6 +129,39 @@ describe("originGuard", () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it("serves /health with no header, so the platform healthcheck survives enforce", () => {
+    process.env.ORIGIN_SHARED_SECRET = "s3cret";
+    process.env.ORIGIN_GUARD_MODE = "enforce";
+
+    const { warn, next, status } = call({}, "/health");
+
+    expect(next).toHaveBeenCalled();
+    expect(status).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("still refuses a path that merely starts with /health", () => {
+    process.env.ORIGIN_SHARED_SECRET = "s3cret";
+    process.env.ORIGIN_GUARD_MODE = "enforce";
+
+    const { next, status } = call({}, "/healthz");
+
+    expect(next).not.toHaveBeenCalled();
+    expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it("logs the real path rather than the mount-relative one", () => {
+    process.env.ORIGIN_SHARED_SECRET = "s3cret";
+    process.env.ORIGIN_GUARD_MODE = "log";
+
+    const { warn } = call({}, "/store/shipping-rates?foo=1");
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("/store/shipping-rates"),
+    );
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?foo=1"));
   });
 
   it("serves the request when the header matches", () => {

@@ -687,11 +687,18 @@ Roll it out as `log` first and only then `enforce` — the mode is a variable so
 backing out is a dashboard change rather than a redeploy. Nothing is exempt:
 the Stripe and ShipStation webhooks arrive through Cloudflare like everything
 else, so they carry the header, and exempting them would leave the two most
-sensitive routes open on the Railway hostname. `GET /health` needs no exemption
-because `medusa start` registers it on the Express app, where the app's own
-middleware never sees it — **verify that with a direct `curl` to the Railway
-hostname after switching to `enforce`**, because a 403 there fails the
-healthcheck and the service never goes live.
+sensitive routes open on the Railway hostname.
+
+**`GET /health` is the one exemption, and it is required.** It was assumed not
+to need one, on the grounds that `medusa start` registers it on the Express app
+outside `defineMiddlewares`. That is wrong: a direct request to the Railway
+hostname's `/health` logs `[origin:blocked]`, so under `enforce` it would answer
+403, Railway's deploy healthcheck would fail, and no deploy would ever go live
+again. `ORIGIN_GUARD_EXEMPT_PATHS` in `src/lib/origin-guard.ts` holds it, and
+the exemption is an exact path match — `/healthz` is still refused.
+
+This was found because the guard was rolled out in `log` mode first, which is
+the whole reason that mode exists.
 
 **CI ordering** (CNP-18): on a clean checkout `pnpm run build` must precede
 `pnpm run typecheck`, since `next-env.d.ts` is build-generated, and the build
