@@ -93,7 +93,10 @@ pull requests target `dev`. Prefixes: `feature/`, `fix/`, `chore/`.
 - `dev` and `main` are never deleted or force-pushed. GitHub rulesets enforce
   this with no bypass actors, repository admins included.
 
-Nothing is deployed yet.
+`main` deploys to production automatically: Vercel builds the storefront, and
+Railway builds and deploys both Medusa services. What is configured where is in
+[docs/dns.md](docs/dns.md) — read it before changing anything in Cloudflare,
+Railway or Vercel, and update it in the same pull request when you do.
 
 ## Conventions
 

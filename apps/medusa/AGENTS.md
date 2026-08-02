@@ -106,6 +106,12 @@ for both actors.
   its middleware passes `allowUnregistered: true` to `authenticate`. The route
   must take the identity only from `req.auth_context.auth_identity_id`, never
   from the request body, or a caller could name who they link as.
+- **The login widget's callback effect must claim its `useRef` guard and clear
+  the query string _before_ awaiting `sdk.auth.callback`**, not in the `.then`.
+  Google rejects a replayed authorization code, so any re-run of that effect
+  inside the ~400ms exchange — a StrictMode double-mount, a changed `navigate`
+  identity — fires a second exchange that 400s and renders "Failed to
+  authenticate with Google" over a sign-in that actually succeeded.
 - **Deleting an admin `user` strands its Google auth identity** the same way a
   deleted customer does — `setAuthAppMetadataStep` throws when
   `app_metadata.user_id` is merely present, including present-and-`null` — and

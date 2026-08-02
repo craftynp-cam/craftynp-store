@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { defineWidgetConfig } from "@medusajs/admin-sdk";
 import { Button, Hint, OtpInput, Text } from "@medusajs/ui";
@@ -33,8 +33,13 @@ const GoogleWorkspaceLoginWidget = () => {
   const [challenge, setChallenge] = useState<AuthMfaChallenge | null>(null);
   const [code, setCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
+  const hasExchangedCode = useRef(false);
 
   useEffect(() => {
+    if (hasExchangedCode.current) {
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const authCode = params.get("code");
     const state = params.get("state");
@@ -43,13 +48,13 @@ const GoogleWorkspaceLoginWidget = () => {
       return;
     }
 
+    hasExchangedCode.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
     setPhase("processing");
 
     sdk.auth
       .callback("user", "google-workspace", { code: authCode, state })
       .then((result) => {
-        window.history.replaceState(null, "", window.location.pathname);
-
         if (typeof result === "object" && "mfa_challenge" in result) {
           setChallenge(result.mfa_challenge);
           setPhase("mfa");
@@ -59,7 +64,6 @@ const GoogleWorkspaceLoginWidget = () => {
         return completeSignIn(navigate);
       })
       .catch((err) => {
-        window.history.replaceState(null, "", window.location.pathname);
         setError(err instanceof Error ? err.message : "Sign-in failed.");
         setPhase("error");
       });
