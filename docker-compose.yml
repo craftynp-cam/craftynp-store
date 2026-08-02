@@ -57,10 +57,16 @@ services:
       timeout: 5s
       retries: 10
 
-  # Creates the private labels bucket once MinIO is up, then exits. Nothing
-  # here makes the bucket public — a shipping label carries the customer's
-  # name and full address and is only ever served through the authenticated
-  # admin route.
+  # Creates the two buckets once MinIO is up, then exits.
+  #
+  # They are separate on purpose and must never be merged. A shipping label
+  # carries the customer's name and full address and is only ever served
+  # through the authenticated admin route, so craftynp-labels is private.
+  # Site-content and product imagery is served straight to browsers, so
+  # craftynp-media is public. R2 has no object-level ACLs — a bucket is public
+  # or private as a whole — and Medusa's file module takes exactly one
+  # provider, so one bucket cannot do both jobs.
+  #
   # Behind a profile so it stays out of `docker compose up --wait`, which
   # treats any container that exits — even successfully — as a failed start.
   # `pnpm run services:up` runs it explicitly once MinIO is healthy.
@@ -74,7 +80,9 @@ services:
       /bin/sh -c "
       mc alias set local http://minio:9000 craftynp craftynp-local-secret &&
       mc mb --ignore-existing local/craftynp-labels &&
-      mc anonymous set none local/craftynp-labels
+      mc anonymous set none local/craftynp-labels &&
+      mc mb --ignore-existing local/craftynp-media &&
+      mc anonymous set download local/craftynp-media
       "
 
 volumes:

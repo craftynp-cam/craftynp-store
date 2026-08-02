@@ -9,9 +9,57 @@ import { SHIPSTATION_MODULE } from "./src/modules/shipstation";
 
 loadEnv(process.env.NODE_ENV || "development", process.cwd());
 
+// Absent REDIS_URL — a clone that has not run `pnpm run services:up`, and every
+// CI build — Medusa keeps its in-memory cache, event bus, workflow engine and
+// locks, so neither local development nor `pnpm run build` needs Redis at all.
+// Set, all four become shared, which is what lets the server and the worker run
+// as separate processes.
+const redisUrl = process.env.REDIS_URL;
+
+const redisModules = redisUrl
+  ? [
+      // Modules.CACHE. src/lib/rate-limit.ts keeps its window counters here, so
+      // this is what turns them from per-process into a real shared ceiling.
+      // Deliberately no per-service namespace: sharing it is the point.
+      { resolve: "@medusajs/medusa/cache-redis", options: { redisUrl } },
+      { resolve: "@medusajs/medusa/event-bus-redis", options: { redisUrl } },
+      // Nested under `redis`, unlike every other module here. Its published
+      // RedisWorkflowsOptions type says the keys are top-level and is wrong:
+      // the loader destructures `options.redis`, so a flat `redisUrl` boots
+      // with "Cannot destructure property 'url' of '(intermediate value)'".
+      {
+        resolve: "@medusajs/medusa/workflow-engine-redis",
+        options: { redis: { redisUrl } },
+      },
+      // locking-redis is a provider of the Locking module, not a module —
+      // registering it as one fails the build with "No service found in module
+      // Locking".
+      {
+        resolve: "@medusajs/medusa/locking",
+        options: {
+          providers: [
+            {
+              resolve: "@medusajs/medusa/locking-redis",
+              id: "locking-redis",
+              is_default: true,
+              options: { redisUrl },
+            },
+          ],
+        },
+      },
+    ]
+  : [];
+
 module.exports = defineConfig({
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    // Also what wires express-session's store. Unset, admin sessions live in
+    // the per-process MemoryStore and are lost on every redeploy.
+    redisUrl,
+    // "shared" is one process doing both, which is local development. The two
+    // deployed services run this same image with "server" and "worker".
+    workerMode: (process.env.MEDUSA_WORKER_MODE ?? "shared") as
+      "shared" | "server" | "worker",
     http: {
       storeCors: process.env.STORE_CORS!,
       adminCors: process.env.ADMIN_CORS!,
@@ -24,7 +72,18 @@ module.exports = defineConfig({
       },
     },
   },
+  admin: {
+    // The worker has no admin worth serving, and building one on a second
+    // service is wasted deploy time.
+    disable: process.env.DISABLE_MEDUSA_ADMIN === "true",
+    // backendUrl is deliberately left unset. It is baked into the admin bundle
+    // at build time, and unset bakes "" — relative, same-origin calls — which
+    // is the only value that works identically on localhost:9000, the
+    // *.up.railway.app hostname and api.thecraftynp.com. It also means the
+    // dashboard is never cross-origin, so ADMIN_CORS never has to name it.
+  },
   modules: [
+    ...redisModules,
     { resolve: "./src/modules/site-content" },
     {
       resolve: "./src/modules/order-status",
@@ -150,14 +209,32 @@ module.exports = defineConfig({
       },
     },
     {
+      // Site-content and product imagery. A deployed container's filesystem is
+      // ephemeral, so file-local would destroy every image the owner uploaded
+      // on the next deploy. This bucket is public, and is NOT the labels
+      // bucket — see src/lib/label-storage.ts and AGENTS.md for why the two
+      // cannot be one.
       resolve: "@medusajs/medusa/file",
       options: {
         providers: [
           {
-            resolve: "@medusajs/medusa/file-local",
-            id: "local",
+            resolve: "@medusajs/medusa/file-s3",
+            id: "s3",
             options: {
-              backend_url: `${process.env.MEDUSA_BACKEND_URL}/static`,
+              file_url: process.env.FILE_STORAGE_PUBLIC_URL,
+              endpoint: process.env.FILE_STORAGE_ENDPOINT,
+              region: process.env.FILE_STORAGE_REGION ?? "auto",
+              bucket: process.env.FILE_STORAGE_BUCKET,
+              access_key_id: process.env.FILE_STORAGE_ACCESS_KEY_ID,
+              secret_access_key: process.env.FILE_STORAGE_SECRET_ACCESS_KEY,
+              // R2 has no object-level ACLs and rejects the header. `false` is
+              // not the same as omitting this: it omits the ACL header, where
+              // omitting the option would send `public-read`.
+              acl: false,
+              additional_client_config: {
+                forcePathStyle:
+                  process.env.FILE_STORAGE_FORCE_PATH_STYLE !== "false",
+              },
             },
           },
         ],

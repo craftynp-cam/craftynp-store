@@ -30,11 +30,16 @@ Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
 - **Admin extensions use `@medusajs/ui`, `@medusajs/admin-sdk`, and
   `@tanstack/react-query`.** Never import storefront components — they are
   HeroUI on React 19 and will not run in the React 18 admin bundle.
-- **Keep `@medusajs/medusa/file` registered explicitly**, with the `file-local`
-  provider's `backend_url` built from `MEDUSA_BACKEND_URL`. It looks like
-  redundant boilerplate, but `defineConfig`'s implicit default hardcodes
-  `http://localhost:9000/static`, which silently disagrees with the storefront's
-  `images.remotePatterns`.
+- **Site-content and product imagery goes to a public S3 bucket, never
+  `file-local`.** A deployed container's filesystem is ephemeral, so
+  `file-local` would destroy every image the owner uploaded on the next deploy,
+  silently and without an error anywhere. The provider is configured from
+  `FILE_STORAGE_*`; `FILE_STORAGE_PUBLIC_URL` is the base that ends up in every
+  image URL, so the storefront needs the same value as
+  `NEXT_PUBLIC_MEDIA_BASE_URL` or its optimizer rejects the host.
+  **`acl: false` is load-bearing** — it omits
+  the ACL header, where omitting the option sends `public-read`, which R2
+  rejects.
 - **Route a `@craftynp/types` schema through `unknown` before passing it to
   `validateAndTransformBody`** (see `api/admin/site-content/middlewares.ts`).
   `@medusajs/framework` bundles its own zod instance, and comparing the two
@@ -138,10 +143,14 @@ this is a denial-of-checkout vector, not only a cost one.
   spoofable. **If Medusa is ever reachable directly, bypassing Cloudflare, the
   limiter is trivially defeated by forging that header** — the origin must only
   accept traffic through the proxy.
-- **The window counter lives in `Modules.CACHE`, which is in-memory until Redis
-  is wired up (CNP-16).** So the counters are per-process and reset on deploy.
-  That still stops a single-source flood; it is not a distributed limiter, and
-  it should be revisited when the cache moves to Redis.
+- **The window counter lives in `Modules.CACHE`, which is Redis-backed wherever
+  `REDIS_URL` is set** — so the counters are shared across the server, the
+  worker and any future replica, and the `RATE_LIMIT_*` values are the real
+  global ceiling rather than a per-replica one. Without `REDIS_URL` the cache
+  is in-memory and the counters go back to being per-process and reset on
+  deploy, which is fine for local development and is what CI runs on. The
+  fail-open behaviour above now also covers a Redis outage, which is
+  deliberate: a cache blip must never take checkout down.
 - Limits are per-IP per-minute and come from `RATE_LIMIT_*` env vars, documented
   in `.env.example`. A non-positive-integer value is ignored rather than
   applied, so a typo cannot lock every caller out.
@@ -232,8 +241,10 @@ limiter.
   **The file module has exactly one provider** (`fileProviderService_`, no
   per-call selection), and R2 has no object-level ACLs, so a bucket is public
   or private as a whole. One provider therefore cannot serve public
-  site-content images and private labels. Site content stays on `file-local`;
-  labels get their own bucket.
+  site-content images and private labels. Site content gets the public
+  `FILE_STORAGE_*` bucket through the file module; labels get their own private
+  one, reached only through `label-storage.ts`. The two buckets must never be
+  collapsed into one.
   `label_file_id` holds the object key. `label_url` holds our own route; it
   falls back to ShipStation's 90-day URL only when storage failed, which is
   exactly what a null `label_file_id` marks.
@@ -425,9 +436,12 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   `no_notification: true` means the operator suppressed the customer email.
   `order.fulfillment_created` is the convenient-looking wrong event: it fires
   when a fulfillment is created, not when it ships.
-- **The in-memory event bus does not retry a failed subscriber** (Redis is not
-  wired up yet, CNP-16), so retry is the explicit
-  `retry-failed-notifications` job. It replays a failure under its original
+- **Keep the `retry-failed-notifications` job even though the event bus is
+  Redis-backed.** The bus retries a subscriber that throws, but a Resend send
+  that fails is caught and swallowed by the subscriber (see below), so the bus
+  never sees a failure to retry. Without `REDIS_URL` the bus is in-memory and
+  does not retry at all, which is the local and CI case. Either way the job is
+  the only retry there is. It replays a failure under its original
   `idempotency_key` — which the module reprocesses only while the row is
   `FAILURE` — inside Resend's own 24-hour idempotency window. Retrying past
   that window would start duplicating rather than resuming.
