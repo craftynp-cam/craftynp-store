@@ -10,11 +10,15 @@ products, discounts, and orders from the Medusa admin.
 
 ## Status
 
-Scaffolded and running locally. A clone reaches a working dev environment — the
-storefront server-renders products fetched live from Medusa, checkout takes a
-real Stripe payment and places a Medusa order — but no environment has been
-provisioned yet, so nothing is deployed. Artwork storage is wired in a later
-story (CNP-16/17/20).
+Deployed. The storefront is live at
+[thecraftynp.org](https://thecraftynp.org) on Vercel, and Medusa with its admin
+at `api.thecraftynp.com` on Railway. A clone still reaches a working dev
+environment — the storefront server-renders products fetched live from Medusa,
+checkout takes a real Stripe payment and places a Medusa order.
+
+The store has no products yet; the client adds those from the admin. Customer
+artwork upload is a later story (CNP-20). See [docs/dns.md](docs/dns.md) for the
+deployed configuration.
 
 ## Stack
 
@@ -29,10 +33,11 @@ story (CNP-16/17/20).
 | Monorepo       | pnpm workspaces + Turborepo                                |
 | Formatting     | Prettier (root), ESLint flat config (extended per app)     |
 
-**Deployment targets — planned, not yet provisioned:** Vercel (storefront),
-Railway (Medusa), Cloudflare R2 (customer artwork uploads), Stripe (payments and
-tax), ShipStation (shipping rates). CNP-16, CNP-17, and CNP-20 do that work; none
-of it exists in the repo today.
+**Deployed on:** Vercel (storefront), Railway (Medusa, Postgres, Redis),
+Cloudflare (DNS, TLS, rate limiting) and Cloudflare R2 (imagery and shipping
+labels), with Stripe for payments and tax, ShipStation for shipping, Resend for
+email, and Auth0 for customer accounts. [docs/dns.md](docs/dns.md) records the
+configuration.
 
 ## Getting started
 
@@ -479,8 +484,7 @@ All are run from the repo root.
 
 ## Deployment
 
-Nothing is deployed yet. The intended mapping, once CNP-16 and CNP-17 provision
-production:
+Production is live. The mapping:
 
 | Branch | Environment | Target                                 |
 | ------ | ----------- | -------------------------------------- |
@@ -488,7 +492,13 @@ production:
 | `dev`  | Preview     | Vercel preview deployments             |
 
 Production is the only environment provisioned. Preview deployments have no
-Medusa of their own and call the production API.
+Medusa of their own and call the production API, which is why `dev` has the
+stable `dev.thecraftynp.org` alias: Auth0 rejects a callback URL it has not been
+told about, so a per-deploy preview hostname could never complete sign-in.
+
+**[docs/dns.md](docs/dns.md) records what is actually configured** — every DNS
+record, the Cloudflare rules, and the Railway, Vercel, R2 and GitHub settings,
+along with the handful of places reality had to diverge from the plan below.
 
 ### Before the first public deploy
 
@@ -585,18 +595,15 @@ Revisit it if abuse gets through anyway.
 
 ### Constraints for CNP-16 / 17 / 18 / 73
 
-Provisioning itself is those four stories. This section is not a runbook — it is
-the set of decisions and traps already established, so they are honoured rather
-than rediscovered.
+These were the decisions and traps established before provisioning, kept because
+they explain _why_ the deployment looks the way it does. The resulting
+configuration is in [docs/dns.md](docs/dns.md), which is the one to read first if
+you only want to know what exists.
 
-**DNS, as it stands today** (CNP-73 asks for this to be in the repo). The zone
-split and its reasoning are above. Already configured: Bot Fight Mode off on
-`.com` and on for `.org`, Always Use HTTPS on both, the `.com` wildcard removed,
-proxied `A` placeholders at `thecraftynp.com` and `www` pointing at `192.0.2.1`,
-and the `.com` → `.org` redirect rule. **`.org` deliberately holds no
-`A`/`AAAA`/`CNAME` record yet** — it gets Vercel's at deploy. Still outstanding:
-the `.org` and `api.thecraftynp.com` records, the API rate-limiting rule, and
-flipping the redirect from `302` to `301`.
+**DNS is done.** Both zones' records, the `.com` → `.org` redirect (now a `301`),
+the API rate-limiting rule and the origin Transform Rule are all in place and
+recorded in [docs/dns.md](docs/dns.md), including three points where the Free
+plan would not express what this section asked for.
 
 **The `.com` zone also carries live mail** — `MX`, SPF, `_dmarc` and
 `_acme-challenge` records for businessidentity.llc. It is not a redirect-only
