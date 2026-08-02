@@ -1,5 +1,6 @@
 import { defineMiddlewares } from "@medusajs/framework/http";
 
+import { originGuard } from "../lib/origin-guard";
 import { adminSsoMiddlewares } from "./admin-sso/link/middlewares";
 import { fulfilmentMiddlewares } from "./admin/fulfilment/middlewares";
 import { orderStatusMiddlewares } from "./admin/orders/middlewares";
@@ -12,6 +13,7 @@ import { taxQuoteMiddlewares } from "./store/tax-quote/middlewares";
 
 export default defineMiddlewares({
   routes: [
+    { matcher: "/*", middlewares: [originGuard()] },
     ...siteContentMiddlewares,
     ...orderStatusMiddlewares,
     ...fulfilmentMiddlewares,
