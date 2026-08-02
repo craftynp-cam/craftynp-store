@@ -1,0 +1,35 @@
+{
+  "name": "craftynp-store",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Crafty NP storefront monorepo",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22 <23",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "pnpm run services:up && turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "services:up": "docker compose up -d --wait && docker compose run --rm minio-init",
+    "services:down": "docker compose down",
+    "db:migrate": "pnpm --filter apps-medusa run db:migrate",
+    "reset-auth0-account": "pnpm --filter apps-medusa run reset-auth0-account",
+    "list-carriers": "pnpm --filter apps-medusa run list-carriers",
+    "register-webhook": "pnpm --filter apps-medusa run register-webhook"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.6",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.0.0"
+  }
+}

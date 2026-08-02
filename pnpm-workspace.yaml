@@ -1,0 +1,62 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm blocks dependency lifecycle scripts by default. These packages ship
+# native binaries or generated code that only exist after their postinstall
+# runs, so each is allowed explicitly. @medusajs/telemetry is deliberately
+# omitted — its postinstall only exists to phone home.
+onlyBuiltDependencies:
+  - "@swc/core"
+  - esbuild
+  - msgpackr-extract
+  - protobufjs
+  - sharp
+  - unrs-resolver
+
+# Security floors for transitive dependencies flagged by `pnpm audit`. Each
+# entry pins a vulnerable package to its patched release; remove one once the
+# dependency that pulls it in has caught up on its own. The ajv and uuid
+# entries are scoped so unrelated majors (eslint's ajv 6) stay untouched.
+# vite is overridden — not just bumped in apps/medusa — because
+# @medusajs/admin-bundler carries its own vite dependency that would otherwise
+# stay on the vulnerable 5.x line.
+#
+# Known leftovers `pnpm audit` still reports, both unfixable from here:
+# react-router(-dom) 6.x in the Medusa admin (patched only in 7.18, which
+# Medusa's dashboard cannot take until Medusa itself moves), and
+# brace-expansion 1.x under jest's glob chain (the patched 5.x line changed
+# its export shape and breaks minimatch 3 — dev-only DoS exposure).
+overrides:
+  sharp: "^0.35.3"
+  postcss: "^8.5.18"
+  lodash: "^4.18.0"
+  vite: "^6.4.3"
+  "ajv@8": "^8.18.0"
+  "bullmq>uuid": "^11.1.1"
+
+# Pins the *type* side of the React major split.
+#
+# HeroUI and React Aria Components declare `react` as a peer but say nothing
+# about `@types/react`, so pnpm links no type package into their subgraphs and
+# their .d.ts files resolve `react` by walking up to pnpm's private hoist
+# directory. Both React majors are present in this workspace (Next 16 wants
+# 19, the Medusa admin wants 18), and it is 18 that lands there — so HeroUI's
+# props end up typed against React 18 while the storefront is on 19, and
+# anything crossing that boundary fails to typecheck.
+#
+# Declaring the peer explicitly makes pnpm resolve it from the importer, which
+# is the storefront, so these packages get 19. Do not "simplify" this by
+# hoisting or by adding @types/react to the root package.json: the first
+# removes the types entirely, the second makes React 19's types ambient for
+# apps/medusa, which runs React 18.
+packageExtensions:
+  react-aria-components:
+    peerDependencies:
+      "@types/react": "*"
+  react-aria:
+    peerDependencies:
+      "@types/react": "*"
+  "@heroui/react":
+    peerDependencies:
+      "@types/react": "*"

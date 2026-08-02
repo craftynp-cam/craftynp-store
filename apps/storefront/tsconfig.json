@@ -1,0 +1,34 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "jsx": "preserve",
+    "allowJs": true,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": true,
+    "moduleResolution": "Bundler",
+    "plugins": [{ "name": "next" }],
+    // Deliberately no `paths` entry for `@craftynp/types`. Turbopack honours
+    // tsconfig `paths` for runtime resolution too, so mapping the package at a
+    // `.d.ts` erased every value import of it from the bundle — the import
+    // vanished and `resolveSiteContent(...)` compiled to `(void 0)(...)`,
+    // crashing the render. Left alone, the workspace symlink resolves through
+    // the package's own `exports` map, which already hands TypeScript
+    // `dist/index.d.ts` and the bundler `dist/index.js`. Turbo builds the
+    // package first (`dependsOn: ["^build"]`), so `dist/` is always present.
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.mts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

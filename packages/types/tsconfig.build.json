@@ -1,0 +1,8 @@
+{
+  // Emit config. Identical to tsconfig.json except that tests are left out of
+  // `dist/` — they are not part of the package's surface, and both apps consume
+  // `dist/` directly. `tsconfig.json` still includes them so `typecheck` covers
+  // them; only the build narrows.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}

@@ -1,0 +1,35 @@
+# Claude Code — personal, per-machine overrides
+.claude/settings.local.json
+
+# Working specs and implementation plans. Scratch artifacts for in-flight work,
+# deleted once the story lands — never committed.
+docs/superpowers/
+.superpowers/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+.medusa/
+build/
+
+# Test output
+coverage/
+
+# Caches
+.turbo/
+*.tsbuildinfo
+
+# Local file uploads (Medusa's file-local provider)
+apps/medusa/static/

@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "paths": {},
+    "jsx": "react-jsx",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "outDir": "./.medusa/server",
+    "rootDir": "./",
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*", "medusa-config.ts"],
+  "exclude": ["node_modules", ".medusa", "dist", "src/admin"]
+}

@@ -1,0 +1,321 @@
+/*
+ * Pulls in Tailwind itself, plus HeroUI's base/component/theme layers. It
+ * replaces a bare `@import "tailwindcss"` — @heroui/styles already imports
+ * Tailwind, and importing both would emit it twice.
+ *
+ * HeroUI's component CSS is plain BEM (.button, .button--primary), not
+ * generated utilities, so Tailwind does not need to scan node_modules for it.
+ */
+@import "@heroui/styles";
+
+/*
+ * Design tokens (CNP-21). Every value the UI draws from lives here.
+ * Components use the generated utilities (bg-surface, text-foreground-muted,
+ * rounded-lg, text-2xl) — never raw hex.
+ *
+ * Three layers:
+ *   1. @theme        — the fixed brand palette and the type/spacing/radius scales.
+ *   2. @theme inline — semantic aliases, which point at the --t-* variables.
+ *   3. :root         — both modes of each --t-* variable, via light-dark().
+ *
+ * Both modes are built from the same seven brand colours: light composites
+ * ink navy over off-white, dark composites off-white over ink navy. No hue
+ * exists in one mode that does not exist in the other. Ink navy is the
+ * darkest brand colour, so it becomes the dark page and surfaces lift away
+ * from it. Muted black is deliberately unused in dark mode — it sits within
+ * 1.1:1 of ink navy, so as a layer it would be invisible.
+ *
+ * Contrast: see /design/tokens for the measured ratio of every pairing in both modes.
+ */
+@theme {
+  /* Brand palette. Raw values appear here and nowhere else. */
+  --color-gold: #ebb805;
+  --color-mint: #85dfc3;
+  --color-blush: #ecdad1;
+  --color-ink: #04133b;
+  --color-off-white: #fbfaf7;
+  --color-muted-black: #1f1e1c;
+  --color-alert: #b4574a;
+
+  /* Type. Libre Baskerville sets display copy; Source Sans 3 sets everything
+     else; Cookie is the wordmark only. */
+  --font-display:
+    var(--font-libre-baskerville), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-source-sans-3), ui-sans-serif, system-ui, sans-serif;
+  --font-brand: var(--font-cookie), "Brush Script MT", cursive;
+
+  /* Type scale — ~1.25 ratio above the base, tightening as sizes grow. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.55;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 2.25rem;
+  --text-3xl--line-height: 1.2;
+  --text-4xl: 2.875rem;
+  --text-4xl--line-height: 1.15;
+  --text-5xl: 3.75rem;
+  --text-5xl--line-height: 1.05;
+  --text-6xl: 4.5rem;
+  --text-6xl--line-height: 1;
+
+  /* Page width ladder, replacing the ad-hoc max-w-6xl content / max-w-7xl
+     chrome mix. Generates max-w-page, max-w-page-xl and max-w-page-2xl. */
+  --container-page: 80rem;
+  --container-page-xl: 96rem;
+  --container-page-2xl: 110rem;
+
+  /* Spacing — 4px base. Utilities multiply it, so p-4 is 1rem. */
+  --spacing: 0.25rem;
+
+  /* Radii — the soft (rounded) option. */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+  --radius-3xl: 2.25rem;
+}
+
+/*
+ * The sticky header's height, shared with anything that needs to size itself
+ * against the viewport below it. Kept as a plain custom property, not a
+ * @theme token — nothing generates a utility from it, it only feeds
+ * `calc()`.
+ */
+:root {
+  --header-height: 5rem;
+  --announcement-height: 0rem;
+  --chrome-height: calc(var(--header-height) + var(--announcement-height));
+}
+
+/*
+ * Semantic aliases. Prefer these in components — they carry intent and they
+ * are the only colours that follow the active mode. `inline` matters here:
+ * it emits var(--t-*) into each utility, so the utility tracks the mode
+ * instead of freezing at its light value.
+ */
+@theme inline {
+  --color-background: var(--t-background);
+  --color-surface: var(--t-surface);
+  --color-surface-soft: var(--t-surface-soft);
+  --color-foreground: var(--t-foreground);
+  --color-foreground-muted: var(--t-foreground-muted);
+  --color-foreground-subtle: var(--t-foreground-subtle);
+  --color-border: var(--t-border);
+  --color-border-strong: var(--t-border-strong);
+  --color-primary: var(--t-primary);
+  --color-on-primary: var(--t-on-primary);
+  --color-accent: var(--t-accent);
+  --color-on-accent: var(--t-on-accent);
+  --color-success: var(--t-success);
+  --color-on-success: var(--t-on-success);
+  --color-danger: var(--t-danger);
+  --color-on-danger: var(--t-on-danger);
+  --color-danger-foreground: var(--t-danger-foreground);
+}
+
+/*
+ * The two modes, declared together. light-dark() picks its first value when
+ * the used color-scheme is light and its second when it is dark, so each
+ * token states both modes on one line and there is no second block to keep
+ * in sync. Tokens whose value does not change are written plainly.
+ *
+ * `color-scheme: light dark` means the page follows the OS by default; the
+ * [data-theme] rules below let the toggle pin it. Because the modes hang off
+ * color-scheme rather than a media query, pinning also fixes form controls,
+ * scrollbars, and caret colour to match.
+ */
+:root {
+  color-scheme: light dark;
+
+  --t-background: light-dark(var(--color-off-white), var(--color-ink));
+  --t-surface: light-dark(
+    var(--color-white),
+    color-mix(in srgb, var(--color-off-white) 7%, var(--color-ink))
+  );
+  --t-surface-soft: light-dark(
+    var(--color-blush),
+    color-mix(in srgb, var(--color-blush) 14%, var(--color-ink))
+  );
+  --t-foreground: light-dark(var(--color-ink), var(--color-off-white));
+  --t-foreground-muted: light-dark(
+    color-mix(in srgb, var(--color-ink) 68%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 60%, var(--color-ink))
+  );
+  --t-foreground-subtle: light-dark(
+    color-mix(in srgb, var(--color-ink) 40%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 40%, var(--color-ink))
+  );
+  --t-border: light-dark(
+    color-mix(in srgb, var(--color-ink) 16%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 18%, var(--color-ink))
+  );
+  --t-border-strong: light-dark(
+    color-mix(in srgb, var(--color-ink) 32%, var(--color-off-white)),
+    color-mix(in srgb, var(--color-off-white) 36%, var(--color-ink))
+  );
+  --t-primary: light-dark(var(--color-ink), var(--color-off-white));
+  --t-on-primary: light-dark(var(--color-off-white), var(--color-ink));
+  --t-accent: var(--color-gold);
+  --t-on-accent: var(--color-ink);
+  --t-success: var(--color-mint);
+  --t-on-success: var(--color-ink);
+  --t-danger: var(--color-alert);
+  --t-on-danger: var(--color-off-white);
+  --t-danger-foreground: light-dark(
+    color-mix(in srgb, var(--color-ink) 20%, var(--color-alert)),
+    color-mix(in srgb, var(--color-off-white) 35%, var(--color-alert))
+  );
+}
+
+/*
+ * HeroUI bridge. HeroUI's components read bare variables directly — button.css
+ * is literally `--button-bg: var(--accent)` — so pointing those at our --t-*
+ * tokens re-skins the whole library in brand colours.
+ *
+ * This is what keeps `system` mode working. HeroUI's own theme has only two
+ * states, keyed off `.light`/`.dark`/[data-theme], with no OS-following
+ * equivalent; left alone it would paint light components on a dark page for a
+ * dark-OS reader who has not pinned a mode. Because every --t-* is a
+ * light-dark(), HeroUI's variables inherit color-scheme for free and no JS is
+ * involved. Nothing in theme.ts or ThemeToggle had to change.
+ *
+ * Deliberately unlayered: HeroUI declares its own values in a nested cascade
+ * layer, and unlayered declarations beat every layered one, so this wins
+ * without depending on layer-ordering subtleties.
+ *
+ * `accent` means two different things across the two systems — see the note
+ * on --accent below.
+ */
+:root {
+  --background: var(--t-background);
+  --foreground: var(--t-foreground);
+
+  --surface: var(--t-surface);
+  --surface-foreground: var(--t-foreground);
+  --surface-secondary: var(--t-surface-soft);
+  --surface-secondary-foreground: var(--t-foreground);
+  --surface-tertiary: var(--t-surface-soft);
+  --surface-tertiary-foreground: var(--t-foreground);
+
+  --overlay: var(--t-surface);
+  --overlay-foreground: var(--t-foreground);
+
+  --muted: var(--t-foreground-muted);
+  --border: var(--t-border);
+  --separator: var(--t-border);
+  --link: var(--t-foreground);
+
+  /*
+   * The ring takes `primary`, not gold. Gold is the brand's attention colour
+   * but it only reaches 1.36–1.84:1 against the light-mode surfaces, well
+   * under the 3:1 that WCAG 1.4.11 requires of a focus indicator; it clears
+   * the bar in dark mode only because the page is dark behind it. Primary
+   * inverts with the mode and measures 12.6:1 at worst. HeroUI draws the ring
+   * outside a 2px offset, so it reads even on a primary-coloured control.
+   * focus-ring.test.ts holds this to 3:1 on every surface of both modes.
+   */
+  --focus: var(--t-primary);
+
+  /*
+   * One colour drives HeroUI's primary button, its selected radio and
+   * checkbox, and its links. It has to be our gold `accent`, and the reason is
+   * not aesthetic: HeroUI reads this colour two different ways. button.css
+   * takes the bare variable (`--button-bg: var(--accent)`), while radio.css
+   * takes the Tailwind utility (`@apply bg-accent`), which resolves through
+   * --color-accent — and our own @theme inline defines that as gold. Point the
+   * bare variable anywhere else and the two disagree: a navy button beside a
+   * gold radio, in the same form.
+   *
+   * So `accent` means gold on both sides of the bridge, and the primary action
+   * is gold on ink navy — a pairing design-tokens.test.ts already holds to AA.
+   * The palette's `primary` (ink navy) still backs bg-primary and the focus
+   * ring below.
+   */
+  --accent: var(--t-accent);
+  --accent-foreground: var(--t-on-accent);
+
+  --default: var(--t-surface-soft);
+  --default-foreground: var(--t-foreground);
+
+  --success: var(--t-success);
+  --success-foreground: var(--t-on-success);
+  --danger: var(--t-danger);
+  --danger-foreground: var(--t-on-danger);
+
+  /* The palette has no separate warning hue. Gold is the one that carries
+     "attention" without reading as an error. */
+  --warning: var(--t-accent);
+  --warning-foreground: var(--t-on-accent);
+
+  --field-background: var(--t-surface);
+  --field-foreground: var(--t-foreground);
+  --field-placeholder: var(--t-foreground-subtle);
+  --field-border: var(--t-border);
+  --field-border-width: 1px;
+
+  --backdrop: color-mix(in srgb, var(--color-ink) 55%, transparent);
+
+  --radius: var(--radius-md);
+}
+
+/*
+ * The toggle writes data-theme on <html> to pin a mode. Absent the attribute
+ * the page follows the OS.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+}
+
+/*
+ * Drains the homepage carousel's pause/play ring over one slide's dwell
+ * time. The ring is a stroke-dasharray circle sized to its full
+ * circumference, so animating stroke-dashoffset from 0 to that same
+ * circumference erases it clockwise from the 12 o'clock mark (the circle is
+ * rotated -90deg in markup) until nothing is left. `animation-play-state`
+ * freezes it exactly in place while the carousel is paused, and remounting
+ * the element (keyed on when a run starts) snaps it back to full.
+ */
+@keyframes carousel-progress {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 119.4; /* 2 * PI * 19 — must match the ring's r in category-carousel.tsx */
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
