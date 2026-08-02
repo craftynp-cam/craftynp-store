@@ -498,7 +498,8 @@ call — `/store/tax-quote` bills a Stripe Tax calculation, and
 `502 shipping_unavailable` and blocks checkout for real customers once
 exhausted. The app carries per-IP limits on all four (see
 `RATE_LIMIT_*` in `apps/medusa/.env.example`), but those are a second line of
-defence and the counters are per-process until Redis lands with CNP-16.
+defence, shared across processes wherever `REDIS_URL` is set and per-process
+where it is not.
 
 **None of the following lives in this repo — it is Cloudflare dashboard state.**
 
@@ -629,18 +630,25 @@ endpoint, which mints a new `STRIPE_WEBHOOK_SECRET`, and
 the API hostname, and Bot Fight Mode must stay off on that zone or they are
 challenged and fail silently.
 
-**Real Redis changes the rate limiter** (CNP-16). Its counters live in
-`Modules.CACHE`, which is in-memory today, so they are per-process: **until
-Redis is wired up, every additional Railway replica multiplies the effective
-limit.** Wiring Redis makes them shared, which is the intended end state.
+**Redis is what makes a second process safe** (CNP-16). Setting `REDIS_URL`
+registers the Redis-backed cache, event bus, workflow engine and locking
+modules, and makes Redis the session store. Without it all five are
+per-process, so a worker never sees what the server emits, the rate limiter's
+counters multiply with every replica, and admin sessions die on redeploy.
+**Railway's private network is IPv6-only** — append `?family=0` to `REDIS_URL`
+or ioredis resolves IPv4 only and fails at boot with `ENOTFOUND`.
 
 **`db:migrate` has to run on deploy**, and needs a fully populated environment —
 `seed-us-region.ts` throws on a missing `SHIP_FROM_*` or
 `SHIPPING_OPTION_DEFAULT_*` rather than half-configuring the store.
 
-**Label storage moves to a real private R2 bucket** — never public, and never
-the bucket serving site-content images. See
-[apps/medusa/AGENTS.md](apps/medusa/AGENTS.md) for why that separation exists.
+**There are two R2 buckets, and they must stay two** (CNP-16). Site-content and
+product imagery goes to a **public** bucket through Medusa's file module
+(`FILE_STORAGE_*`); label PDFs go to a **private** one through
+`label-storage.ts`. A deployed container's filesystem is ephemeral, so
+`file-local` would silently destroy every uploaded image on the next deploy —
+and R2 has no object-level ACLs, so one bucket cannot be both. See
+[apps/medusa/AGENTS.md](apps/medusa/AGENTS.md).
 
 **The origin lock-down in step 2 has no mechanism yet.** Railway exposes a
 public `*.up.railway.app` hostname that bypasses Cloudflare entirely, and while
