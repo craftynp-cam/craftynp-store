@@ -156,6 +156,11 @@ this is a denial-of-checkout vector, not only a cost one.
   **anything unrecognised disables it**, deliberately — a typo must not refuse
   every request including the platform's healthcheck. Do not exempt the webhook
   routes from it; they come through Cloudflare and carry the header.
+  **`/health` is exempt and must stay exempt** — the platform's healthcheck
+  reaches the container directly, so it carries no header, and enforcing there
+  fails every future deploy. The guard reads `req.originalUrl`, not `req.path`:
+  the latter is relative to the mount point and is `"/"` for every request,
+  which makes it useless for both matching and logging.
 - **The window counter lives in `Modules.CACHE`, which is Redis-backed wherever
   `REDIS_URL` is set** — so the counters are shared across the server, the
   worker and any future replica, and the `RATE_LIMIT_*` values are the real

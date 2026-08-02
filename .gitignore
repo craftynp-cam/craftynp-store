@@ -33,3 +33,4 @@ coverage/
 
 # Local file uploads (Medusa's file-local provider)
 apps/medusa/static/
+.vercel
