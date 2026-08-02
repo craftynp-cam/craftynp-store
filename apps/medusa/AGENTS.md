@@ -23,6 +23,13 @@ Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
   a category list the client edits freely. **The widget must spread the existing
   metadata into its update** — Medusa replaces the jsonb column wholesale, so an
   unspread write silently destroys every other key on the category.
+- **`tsconfig.json` must keep `medusa-config.ts` in `include`, with `rootDir`
+  at `./`.** `medusa build` emits exactly `tsConfig.fileNames`, so scoping the
+  root to `src` leaves the built `.medusa/server` with no `medusa-config.js` and
+  `medusa start` there dies with "Cannot find module …/medusa-config". Nothing
+  local catches it: `medusa develop` reads `src/` directly, so only a deployment
+  ever runs the built output. The emitted layout is then `medusa-config.js`
+  beside a `src/` directory, which is what Medusa's own loaders expect.
 - **`src/admin` typechecks separately.** It is the only `.tsx` here and needs
   DOM lib types the Node-only backend doesn't carry, so `tsconfig.json` excludes
   it and `typecheck` runs a second `tsc -p src/admin --noEmit`. Put a file that
