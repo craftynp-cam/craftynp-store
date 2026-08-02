@@ -24,7 +24,7 @@ story (CNP-16/17/20).
 | Backend        | Medusa 2.18 (also serves the admin dashboard), React 18    |
 | Language       | TypeScript 5.9 (strict), pinned `~5.9.3`                   |
 | Database       | Postgres 15 (Docker)                                       |
-| Cache / events | Redis 7 (Docker locally; backs the cache, bus and locks)    |
+| Cache / events | Redis 7 (Docker locally; backs the cache, bus and locks)   |
 | Tests          | Jest                                                       |
 | Monorepo       | pnpm workspaces + Turborepo                                |
 | Formatting     | Prettier (root), ESLint flat config (extended per app)     |
