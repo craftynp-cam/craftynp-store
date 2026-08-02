@@ -14,11 +14,6 @@ export const ORIGIN_SECRET_HEADER = "x-cnp-origin-secret";
 
 export type OriginGuardMode = "off" | "log" | "enforce";
 
-/**
- * Anything that is not exactly "log" or "enforce" disables the guard, including
- * a typo. That is the safe direction: a mistyped mode leaves the app reachable
- * rather than refusing every request including the platform's healthcheck.
- */
 export function guardMode(
   secret: string | undefined,
   mode: string | undefined,
@@ -33,25 +28,9 @@ export function headerMatches(value: unknown, secret: string): boolean {
 
   const a = Buffer.from(raw);
   const b = Buffer.from(secret);
-  // timingSafeEqual throws on a length mismatch, so the length check is not
-  // just an optimisation. It leaks only the length, never the contents.
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/**
- * Refuses traffic that did not arrive through Cloudflare.
- *
- * The platform publishes its own hostname alongside the real one, and that
- * hostname bypasses the proxy entirely. While it is reachable, `rateLimit()` in
- * ./rate-limit.ts can be defeated outright by forging `cf-connecting-ip` — the
- * header it trusts precisely because Cloudflare strips any client-supplied
- * copy. A Transform Rule on the API hostname sets the header checked here, and
- * Cloudflare *sets* rather than appends, so a caller cannot supply their own.
- *
- * The mode is a variable rather than a code path so the lockout story is a
- * dashboard change and not a redeploy: ship in "log", watch until the only hits
- * are direct probes of the platform hostname, then switch to "enforce".
- */
 export function originGuard() {
   return (
     req: MedusaRequest,
@@ -70,9 +49,7 @@ export function originGuard() {
       req.scope
         .resolve<Logger>(ContainerRegistrationKeys.LOGGER)
         .warn(`${ORIGIN_BLOCKED_LOG_TAG} ${req.method} ${req.path}`);
-    } catch {
-      // Never let the absence of a logger decide whether a request is served.
-    }
+    } catch {}
 
     if (mode === "log") return next();
 
