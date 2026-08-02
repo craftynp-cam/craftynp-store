@@ -1,12 +1,11 @@
 {
-  "$schema": "https://railway.app/railway.schema.json",
+  "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "apps/medusa/Dockerfile"
   },
   "deploy": {
-    "startCommand": "node node_modules/.bin/medusa start -H 0.0.0.0",
-    "preDeployCommand": "node node_modules/.bin/medusa db:migrate",
+    "preDeployCommand": "node ../../node_modules/@medusajs/cli/cli.js db:migrate",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
