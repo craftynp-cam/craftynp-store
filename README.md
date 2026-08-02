@@ -602,11 +602,26 @@ flipping the redirect from `302` to `301`.
 `_acme-challenge` records for businessidentity.llc. It is not a redirect-only
 zone and must not be deleted or have its nameservers moved.
 
-**Vercel cannot build the storefront on its own** (CNP-17). The default monorepo
-setup — root directory `apps/storefront`, `next build` — **fails**, because the
-storefront resolves `@craftynp/types` from its built `dist/` and that build has
-not run. The build must come from the repo root through Turborepo so `^build`
-ordering applies. This is the same trap as the `pnpm --filter` ban above.
+**Vercel's default build command cannot build the storefront** (CNP-17). A plain
+`next build` **fails**, because the storefront resolves `@craftynp/types` from
+its built `dist/` and that build has not run. The build must come from the repo
+root through Turborepo so `^build` ordering applies — the same trap as the
+`pnpm --filter` ban above.
+
+It is the **command** that has to change, not the root directory. That stays
+`apps/storefront`, so Vercel's Next.js framework detection, output location and
+image handling all keep working; `apps/storefront/vercel.json` overrides the
+install and build commands to `cd ../..` and go through turbo, and adds
+`turbo-ignore` so a Medusa-only change does not rebuild the storefront. Do not
+"fix" this by moving the root directory to the repo root.
+
+**The admin is not proxied through the storefront in production.** The `/api`
+and `/app` rewrites in `next.config.ts` are development-only: they exist so the
+local admin is same-origin on `:8000`, and nothing in `src/` calls either path.
+In production the admin is served by Medusa at `api.thecraftynp.com/app`, which
+keeps it on the API's own zone, off Vercel's function billing, and — because
+`admin.backendUrl` is left unset so the bundle calls relative URLs — same-origin,
+which is what makes `ADMIN_CORS=https://api.thecraftynp.com` the whole answer.
 
 **The storefront and API are now cross-origin** (CNP-17), because they sit on
 different domains by design. Production values:
@@ -617,9 +632,14 @@ different domains by design. Production values:
 | `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`                                  |
 | `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`, plus the Vercel preview domains |
 
-`ADMIN_CORS` needs deciding rather than copying: the admin is reached through
-the storefront's `/app` rewrite, so the browser's origin is `thecraftynp.org`
-even though the app is served by Medusa. `AUTH0_CALLBACK_URL` and
+`ADMIN_CORS` is `https://api.thecraftynp.com` — the origin the admin is actually
+served from, and nothing else. With the `/app` rewrite dev-only and
+`admin.backendUrl` unset, the dashboard calls `/admin/*` relative to the page
+that served it, so it is same-origin and never preflights. Do **not** add
+`https://thecraftynp.org`: nothing there calls `/admin/*`, so it would only
+hand the storefront origin admin-API access for no reason.
+
+`AUTH0_CALLBACK_URL` and
 `GOOGLE_ADMIN_CALLBACK_URL` need production values **and** matching entries in
 the Auth0 and Google Cloud dashboards — the Google one must match exactly or
 admin sign-in breaks, with no useful error.
