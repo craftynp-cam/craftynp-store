@@ -3,6 +3,7 @@ import { cache } from "react";
 import { formatMoney } from "./money";
 import { productHref } from "./routes";
 import { sdk } from "./medusa";
+import { isBackendFailure, MedusaUnavailableError } from "./medusa-error";
 import { variantAvailability, type Availability } from "./variant";
 
 export type ProductDetailSourceVariant = {
@@ -162,6 +163,9 @@ export const fetchProductByHandle = cache(
       const product = products[0];
       return product ? toProductDetail(product) : null;
     } catch (error) {
+      if (isBackendFailure(error)) {
+        throw new MedusaUnavailableError(`the product "${handle}"`, error);
+      }
       console.error(`Could not load product "${handle}"`, error);
       return null;
     }

@@ -1,3 +1,7 @@
+import { FetchError } from "@medusajs/js-sdk";
+
+import { MedusaUnavailableError } from "@/lib/medusa-error";
+
 import { fetchProductByHandle, toProductDetail } from "@/lib/product";
 
 jest.mock("../../src/lib/medusa", () => ({
@@ -209,9 +213,20 @@ describe("fetchProductByHandle", () => {
     expect(await fetchProductByHandle("missing", "reg_us")).toBeNull();
   });
 
-  it("returns null and does not throw when the SDK rejects", async () => {
+  it("throws when the backend itself is unreachable", async () => {
     const sdk = mockSdk();
-    sdk.store.product.list.mockRejectedValue(new Error("backend is down"));
+    sdk.store.product.list.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(fetchProductByHandle("keychain", "reg_us")).rejects.toThrow(
+      MedusaUnavailableError,
+    );
+  });
+
+  it("returns null and does not throw when the request itself is rejected", async () => {
+    const sdk = mockSdk();
+    sdk.store.product.list.mockRejectedValue(
+      new FetchError("bad filter", "Bad Request", 400),
+    );
     const consoleError = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});

@@ -1,3 +1,5 @@
+import { resolveSiteContent } from "@craftynp/types";
+
 import { Footer, Navbar } from "@/components";
 import { fetchNavCategories } from "@/lib/categories";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
@@ -46,8 +48,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const [categories, siteContent] = await Promise.all([
-    fetchNavCategories(),
-    fetchSiteContent(),
+    fetchNavCategories().catch(() => []),
+    fetchSiteContent().catch(() => resolveSiteContent([])),
   ]);
   const announcement =
     siteContent.banner_enabled && siteContent.banner_text

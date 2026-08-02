@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
-import { CatalogView, Container } from "@/components";
+import { CatalogView, Container, StoreUnavailable } from "@/components";
 import { fetchCatalogSidebar } from "@/lib/categories";
+import { MedusaUnavailableError } from "@/lib/medusa-error";
 import { fetchCatalogProducts } from "@/lib/product-list";
 import { fetchRegion } from "@/lib/region";
 import { parseSort } from "@/lib/sort";
@@ -20,15 +21,18 @@ export default async function ProductsPage({
   const { sort: sortParam } = await searchParams;
   const sort = parseSort(sortParam);
 
-  const [region, sidebar] = await Promise.all([
-    fetchRegion(),
-    fetchCatalogSidebar(),
-  ]);
-
-  const products = await fetchCatalogProducts({
-    sort,
-    regionId: region?.id,
-  });
+  let sidebar, products;
+  try {
+    const [region, loadedSidebar] = await Promise.all([
+      fetchRegion(),
+      fetchCatalogSidebar(),
+    ]);
+    sidebar = loadedSidebar;
+    products = await fetchCatalogProducts({ sort, regionId: region?.id });
+  } catch (error) {
+    if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
+    throw error;
+  }
 
   return (
     <main id="main-content" tabIndex={-1} className="py-8">

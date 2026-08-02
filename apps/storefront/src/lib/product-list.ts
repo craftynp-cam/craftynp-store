@@ -3,6 +3,7 @@ import { cache } from "react";
 import type { ProductCardData } from "@/components";
 
 import { sdk } from "./medusa";
+import { isBackendFailure, MedusaUnavailableError } from "./medusa-error";
 import { medusaOrder, type CatalogSort } from "./sort";
 import {
   cheapestPrice,
@@ -55,6 +56,9 @@ export const fetchCatalogProducts = cache(
 
       return sortCatalogProducts(products, sort);
     } catch (error) {
+      if (isBackendFailure(error)) {
+        throw new MedusaUnavailableError("the catalogue", error);
+      }
       console.error("Could not load catalog products", error);
       return [];
     }

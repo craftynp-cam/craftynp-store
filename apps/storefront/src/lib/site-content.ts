@@ -4,6 +4,7 @@ import { resolveSiteContent } from "@craftynp/types";
 import type { SiteContent } from "@craftynp/types";
 
 import { sdk } from "./medusa";
+import { isBackendFailure, MedusaUnavailableError } from "./medusa-error";
 
 type SiteContentResponse = { site_content: SiteContent };
 
@@ -15,6 +16,9 @@ export const fetchSiteContent = cache(async (): Promise<SiteContent> => {
     );
     return site_content;
   } catch (error) {
+    if (isBackendFailure(error)) {
+      throw new MedusaUnavailableError("the site content", error);
+    }
     console.error("Could not load site content", error);
     return resolveSiteContent([]);
   }

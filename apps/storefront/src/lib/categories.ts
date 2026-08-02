@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { sdk } from "./medusa";
+import { isBackendFailure, MedusaUnavailableError } from "./medusa-error";
 import { categoryHref } from "./routes";
 
 export type NavCategorySource = {
@@ -35,6 +36,9 @@ export const fetchNavCategories = cache(async (): Promise<NavCategory[]> => {
     });
     return toNavCategories(product_categories);
   } catch (error) {
+    if (isBackendFailure(error)) {
+      throw new MedusaUnavailableError("the navigation categories", error);
+    }
     console.error("Could not load navigation categories", error);
     return [];
   }
@@ -139,6 +143,9 @@ export const fetchCatalogSidebar = cache(async (): Promise<SidebarCatalog> => {
     const sidebar = toSidebarCategories(product_categories, products);
     return { ...sidebar, totalCount: count };
   } catch (error) {
+    if (isBackendFailure(error)) {
+      throw new MedusaUnavailableError("the catalogue categories", error);
+    }
     console.error("Could not load the catalog sidebar", error);
     return { totalCount: 0, categories: [] };
   }
@@ -180,6 +187,9 @@ export const fetchShowcaseCategories = cache(
         imageAlt: category.imageAlt,
       }));
     } catch (error) {
+      if (isBackendFailure(error)) {
+        throw new MedusaUnavailableError("the featured categories", error);
+      }
       console.error("Could not load showcase categories", error);
       return [];
     }

@@ -7,7 +7,9 @@ import {
   ProductDetails,
   ProductGallery,
   ProductPurchase,
+  StoreUnavailable,
 } from "@/components";
+import { MedusaUnavailableError } from "@/lib/medusa-error";
 import { fetchProductByHandle } from "@/lib/product";
 import { fetchRegion } from "@/lib/region";
 import { serializeJsonLd, toProductJsonLd } from "@/lib/structured-data";
@@ -29,7 +31,7 @@ async function loadProduct(params: ProductPageProps["params"]) {
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const product = await loadProduct(params);
+  const product = await loadProduct(params).catch(() => null);
   if (!product) return {};
 
   return {
@@ -39,7 +41,13 @@ export async function generateMetadata({
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  const product = await loadProduct(params);
+  let product;
+  try {
+    product = await loadProduct(params);
+  } catch (error) {
+    if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
+    throw error;
+  }
   if (!product) notFound();
 
   return (

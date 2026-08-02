@@ -1,3 +1,7 @@
+import { FetchError } from "@medusajs/js-sdk";
+
+import { MedusaUnavailableError } from "@/lib/medusa-error";
+
 import { fetchRegion, selectDefaultRegion } from "@/lib/region";
 
 jest.mock("../../src/lib/medusa", () => ({
@@ -84,11 +88,22 @@ describe("fetchRegion", () => {
     });
   });
 
-  it("returns null and does not throw when the SDK rejects", async () => {
+  it("throws when the backend itself is unreachable", async () => {
     const { sdk } = jest.requireMock<{
       sdk: { store: { region: { list: jest.Mock } } };
     }>("../../src/lib/medusa");
-    sdk.store.region.list.mockRejectedValue(new Error("backend is down"));
+    sdk.store.region.list.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(fetchRegion()).rejects.toThrow(MedusaUnavailableError);
+  });
+
+  it("returns null and does not throw when the request itself is rejected", async () => {
+    const { sdk } = jest.requireMock<{
+      sdk: { store: { region: { list: jest.Mock } } };
+    }>("../../src/lib/medusa");
+    sdk.store.region.list.mockRejectedValue(
+      new FetchError("bad filter", "Bad Request", 400),
+    );
     const consoleError = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});

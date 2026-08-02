@@ -1,13 +1,27 @@
-import { CategoryCarousel, MakerIntro, WorkshopGallery } from "@/components";
+import {
+  CategoryCarousel,
+  MakerIntro,
+  StoreUnavailable,
+  WorkshopGallery,
+} from "@/components";
 import { fetchShowcaseCategories } from "@/lib/categories";
 import { toMakerIntro, toWorkshopGallery } from "@/lib/home-content";
+import { MedusaUnavailableError } from "@/lib/medusa-error";
 import { fetchSiteContent } from "@/lib/site-content";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
-  const [categories, siteContent] = await Promise.all([
-    fetchShowcaseCategories(),
-    fetchSiteContent(),
-  ]);
+  let categories, siteContent;
+  try {
+    [categories, siteContent] = await Promise.all([
+      fetchShowcaseCategories(),
+      fetchSiteContent(),
+    ]);
+  } catch (error) {
+    if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
+    throw error;
+  }
 
   return (
     <main id="main-content" tabIndex={-1}>

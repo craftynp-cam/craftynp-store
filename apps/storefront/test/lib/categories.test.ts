@@ -1,3 +1,7 @@
+import { FetchError } from "@medusajs/js-sdk";
+
+import { MedusaUnavailableError } from "@/lib/medusa-error";
+
 import {
   fetchCatalogSidebar,
   fetchNavCategories,
@@ -117,11 +121,22 @@ describe("fetchNavCategories", () => {
     ]);
   });
 
-  it("returns an empty array and does not throw when the SDK rejects", async () => {
+  it("throws when the backend itself is unreachable", async () => {
     const { sdk } = jest.requireMock<{
       sdk: { store: { category: { list: jest.Mock } } };
     }>("../../src/lib/medusa");
-    sdk.store.category.list.mockRejectedValue(new Error("backend is down"));
+    sdk.store.category.list.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(fetchNavCategories()).rejects.toThrow(MedusaUnavailableError);
+  });
+
+  it("returns an empty array and does not throw when the request itself is rejected", async () => {
+    const { sdk } = jest.requireMock<{
+      sdk: { store: { category: { list: jest.Mock } } };
+    }>("../../src/lib/medusa");
+    sdk.store.category.list.mockRejectedValue(
+      new FetchError("bad filter", "Bad Request", 400),
+    );
     const consoleError = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});
@@ -350,9 +365,24 @@ describe("fetchCatalogSidebar", () => {
     });
   });
 
-  it("returns an empty sidebar and does not throw when the SDK rejects", async () => {
+  it("throws when the backend itself is unreachable", async () => {
     const sdk = mockSdk();
-    sdk.store.category.list.mockRejectedValue(new Error("backend is down"));
+    sdk.store.category.list.mockRejectedValue(new TypeError("fetch failed"));
+    sdk.store.product.list.mockResolvedValue({
+      products: [],
+      count: 0,
+      offset: 0,
+      limit: 100,
+    });
+
+    await expect(fetchCatalogSidebar()).rejects.toThrow(MedusaUnavailableError);
+  });
+
+  it("returns an empty sidebar and does not throw when the request itself is rejected", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockRejectedValue(
+      new FetchError("bad filter", "Bad Request", 400),
+    );
     sdk.store.product.list.mockResolvedValue({
       products: [],
       count: 0,
@@ -484,9 +514,20 @@ describe("fetchShowcaseCategories", () => {
     consoleError.mockRestore();
   });
 
-  it("returns an empty array and does not throw when the category list rejects", async () => {
+  it("throws when the backend itself is unreachable", async () => {
     const sdk = mockSdk();
-    sdk.store.category.list.mockRejectedValue(new Error("backend is down"));
+    sdk.store.category.list.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(fetchShowcaseCategories()).rejects.toThrow(
+      MedusaUnavailableError,
+    );
+  });
+
+  it("returns an empty array and does not throw when the category list request is rejected", async () => {
+    const sdk = mockSdk();
+    sdk.store.category.list.mockRejectedValue(
+      new FetchError("bad filter", "Bad Request", 400),
+    );
     const consoleError = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { CatalogView, Container } from "@/components";
+import { CatalogView, Container, StoreUnavailable } from "@/components";
 import { fetchCatalogSidebar } from "@/lib/categories";
+import { MedusaUnavailableError } from "@/lib/medusa-error";
 import { fetchCatalogProducts } from "@/lib/product-list";
 import { fetchRegion } from "@/lib/region";
 import { categoryHref } from "@/lib/routes";
@@ -23,7 +24,7 @@ export async function generateMetadata({
   params,
 }: CategoryPageProps): Promise<Metadata> {
   const { category: handle } = await params;
-  const loaded = await loadCategory(handle);
+  const loaded = await loadCategory(handle).catch(() => null);
   if (!loaded) return {};
 
   return { title: loaded.category.name };
@@ -37,18 +38,24 @@ export default async function CategoryPage({
   const { sort: sortParam } = await searchParams;
   const sort = parseSort(sortParam);
 
-  const loaded = await loadCategory(handle);
-  if (!loaded) notFound();
+  let loaded, products;
+  try {
+    loaded = await loadCategory(handle);
+    if (!loaded) notFound();
+
+    const region = await fetchRegion();
+    products = await fetchCatalogProducts({
+      categoryId: loaded.category.id,
+      sort,
+      regionId: region?.id,
+    });
+  } catch (error) {
+    if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
+    throw error;
+  }
 
   const { sidebar, category } = loaded;
   const href = categoryHref(category.handle);
-
-  const region = await fetchRegion();
-  const products = await fetchCatalogProducts({
-    categoryId: category.id,
-    sort,
-    regionId: region?.id,
-  });
 
   return (
     <main id="main-content" tabIndex={-1} className="py-8">
