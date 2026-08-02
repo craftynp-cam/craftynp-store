@@ -582,6 +582,76 @@ Turnstile was considered and deliberately left out: it is the only measure here
 that adds friction to the conversion path, and it covers the same surface as 3.
 Revisit it if abuse gets through anyway.
 
+### Constraints for CNP-16 / 17 / 18 / 73
+
+Provisioning itself is those four stories. This section is not a runbook — it is
+the set of decisions and traps already established, so they are honoured rather
+than rediscovered.
+
+**DNS, as it stands today** (CNP-73 asks for this to be in the repo). The zone
+split and its reasoning are above. Already configured: Bot Fight Mode off on
+`.com` and on for `.org`, Always Use HTTPS on both, the `.com` wildcard removed,
+proxied `A` placeholders at `thecraftynp.com` and `www` pointing at `192.0.2.1`,
+and the `.com` → `.org` redirect rule. **`.org` deliberately holds no
+`A`/`AAAA`/`CNAME` record yet** — it gets Vercel's at deploy. Still outstanding:
+the `.org` and `api.thecraftynp.com` records, the API rate-limiting rule, and
+flipping the redirect from `302` to `301`.
+
+**The `.com` zone also carries live mail** — `MX`, SPF, `_dmarc` and
+`_acme-challenge` records for businessidentity.llc. It is not a redirect-only
+zone and must not be deleted or have its nameservers moved.
+
+**Vercel cannot build the storefront on its own** (CNP-17). The default monorepo
+setup — root directory `apps/storefront`, `next build` — **fails**, because the
+storefront resolves `@craftynp/types` from its built `dist/` and that build has
+not run. The build must come from the repo root through Turborepo so `^build`
+ordering applies. This is the same trap as the `pnpm --filter` ban above.
+
+**The storefront and API are now cross-origin** (CNP-17), because they sit on
+different domains by design. Production values:
+
+| Variable                                               | Value                                                      |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
+| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com`                              |
+| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`                                  |
+| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`, plus the Vercel preview domains |
+
+`ADMIN_CORS` needs deciding rather than copying: the admin is reached through
+the storefront's `/app` rewrite, so the browser's origin is `thecraftynp.org`
+even though the app is served by Medusa. `AUTH0_CALLBACK_URL` and
+`GOOGLE_ADMIN_CALLBACK_URL` need production values **and** matching entries in
+the Auth0 and Google Cloud dashboards — the Google one must match exactly or
+admin sign-in breaks, with no useful error.
+
+**Both webhooks must be re-pointed and re-registered** (CNP-16): a new Stripe
+endpoint, which mints a new `STRIPE_WEBHOOK_SECRET`, and
+`SHIPSTATION_WEBHOOK_URL` plus `pnpm run register-webhook`. Both must land on
+the API hostname, and Bot Fight Mode must stay off on that zone or they are
+challenged and fail silently.
+
+**Real Redis changes the rate limiter** (CNP-16). Its counters live in
+`Modules.CACHE`, which is in-memory today, so they are per-process: **until
+Redis is wired up, every additional Railway replica multiplies the effective
+limit.** Wiring Redis makes them shared, which is the intended end state.
+
+**`db:migrate` has to run on deploy**, and needs a fully populated environment —
+`seed-us-region.ts` throws on a missing `SHIP_FROM_*` or
+`SHIPPING_OPTION_DEFAULT_*` rather than half-configuring the store.
+
+**Label storage moves to a real private R2 bucket** — never public, and never
+the bucket serving site-content images. See
+[apps/medusa/AGENTS.md](apps/medusa/AGENTS.md) for why that separation exists.
+
+**The origin lock-down in step 2 has no mechanism yet.** Railway exposes a
+public `*.up.railway.app` hostname that bypasses Cloudflare entirely, and while
+it is reachable the limiter can be defeated by forging `cf-connecting-ip`.
+Either Authenticated Origin Pulls or a shared-secret header added by a Transform
+Rule and checked by the app would close it; neither is built.
+
+**CI ordering** (CNP-18): on a clean checkout `pnpm run build` must precede
+`pnpm run typecheck`, since `next-env.d.ts` is build-generated, and the build
+needs `apps/storefront/.env.local` — `.env.example` placeholders are enough.
+
 ## Contributing
 
 Work flows in one direction: `feature/*` → `dev` → `main`.
