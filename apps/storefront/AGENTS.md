@@ -58,10 +58,25 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   fails every suite that imports the `@/components` barrel. Keep pure logic in
   medusa-free modules (`saved-address.ts`, `shipping-rates.ts`, `tax-quote.ts`,
   `payment.ts`, `upstream-error.ts`). `import type` is fine.
-- **Medusa fetch helpers never throw** — they catch and degrade to an empty or
-  default value (`categories.ts`, `region.ts`, `site-content.ts`,
-  `addresses.ts`, `getCustomer()`), so a backend outage degrades the page
-  instead of killing it. New fetchers follow this.
+- **Medusa fetch helpers degrade for a failed _query_ and throw for a failed
+  _backend_.** The split is `isBackendFailure()` in `src/lib/medusa-error.ts`: a
+  rejection that is not a `FetchError` (DNS, refused, TLS, timeout), or one
+  carrying 401/403 (wrong publishable key), 404 on a core store route, or any
+  5xx, is a misconfigured or down backend and is rethrown as
+  `MedusaUnavailableError` so `app/error.tsx` renders a visible error. Anything
+  else — a rejected filter, a 422 — still degrades to an empty or default value.
+  New fetchers follow this split.
+  Degrading on everything, which is what this used to say, meant a wrong
+  `NEXT_PUBLIC_MEDUSA_BACKEND_URL` served an empty catalogue and a 200, and
+  404'd every category page, with nothing visible anywhere (CNP-17).
+  Three helpers deliberately keep degrading on everything, and should not be
+  "fixed": **`getCustomer()`**, because it sends a bearer token so a 401 there
+  is an expired session, not a misconfiguration; **`fetchOrderConfirmation`**,
+  because it runs after money has been taken and a thank-you beats an error
+  page; and the **inner per-category count** in `fetchShowcaseCategories`,
+  because one flaky count must not take the homepage down.
+- **`medusa-error.ts` must stay free of `medusa.ts`.** Same reason as the rule
+  above it — importing it would drag in the module-eval throw.
 - **Pass the region's `id` as `region_id` on every product query**, or
   `calculated_price` comes back null with no error from Medusa.
 - **Call `sdk.auth.login` / `.callback` / `.refresh` only on a fresh
@@ -79,8 +94,10 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   the production bundle: `site-content.ts`'s `resolveSiteContent([])` fell out
   as `(void 0)([])` and crashed the render. Nothing caught it — `tsc` was happy,
   and Jest maps the package to its `src/` — because that call sits in a catch
-  block that only runs when Medusa is unreachable, which is exactly the state a
-  CI build is in. Left unmapped, the workspace symlink resolves through the
+  block that used to run on any Medusa failure, which is exactly the state a CI
+  build was in. Since CNP-17 that path is narrower still (only a query-level
+  4xx reaches it), so it is even less likely to be exercised by accident.
+  Left unmapped, the workspace symlink resolves through the
   package's `exports` map, which serves types and runtime separately. This is
   the only value import of `@craftynp/types` in the app; every other one is
   `import type`, which is why it was the only casualty.

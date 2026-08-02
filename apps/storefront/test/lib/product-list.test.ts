@@ -1,3 +1,7 @@
+import { FetchError } from "@medusajs/js-sdk";
+
+import { MedusaUnavailableError } from "@/lib/medusa-error";
+
 import { fetchCatalogProducts, sortCatalogProducts } from "@/lib/product-list";
 import type { ProductCardSourceProduct } from "@/lib/product-card";
 
@@ -138,9 +142,20 @@ describe("fetchCatalogProducts", () => {
     expect(result.map((p) => p.card.title)).toEqual(["A", "B"]);
   });
 
-  it("returns an empty array and does not throw when the SDK rejects", async () => {
+  it("throws when the backend itself is unreachable", async () => {
     const sdk = mockSdk();
-    sdk.store.product.list.mockRejectedValue(new Error("backend is down"));
+    sdk.store.product.list.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(
+      fetchCatalogProducts({ sort: "featured", regionId: "reg_us" }),
+    ).rejects.toThrow(MedusaUnavailableError);
+  });
+
+  it("returns an empty array and does not throw when the request itself is rejected", async () => {
+    const sdk = mockSdk();
+    sdk.store.product.list.mockRejectedValue(
+      new FetchError("bad filter", "Bad Request", 400),
+    );
     const consoleError = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});

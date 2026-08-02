@@ -1,3 +1,5 @@
+import { resolveSiteContent } from "@craftynp/types";
+
 import { Footer, Navbar } from "@/components";
 import { fetchNavCategories } from "@/lib/categories";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
@@ -45,9 +47,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // error.tsx renders *inside* this layout, so a layout that throws takes the
+  // error boundary down with it and there is nothing left to show the visitor.
+  // Both of these are chrome — the navbar's category links and the announcement
+  // bar — so the layout degrades where a page would raise
+  // MedusaUnavailableError. The page inside it still errors visibly, which is
+  // what CNP-17 asks for.
   const [categories, siteContent] = await Promise.all([
-    fetchNavCategories(),
-    fetchSiteContent(),
+    fetchNavCategories().catch(() => []),
+    fetchSiteContent().catch(() => resolveSiteContent([])),
   ]);
   const announcement =
     siteContent.banner_enabled && siteContent.banner_text

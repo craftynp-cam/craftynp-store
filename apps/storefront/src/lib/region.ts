@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { sdk } from "./medusa";
+import { isBackendFailure, MedusaUnavailableError } from "./medusa-error";
 
 export type RegionSource = {
   id: string;
@@ -39,6 +40,9 @@ export const fetchRegion = cache(async (): Promise<RegionSource | null> => {
     });
     return selectDefaultRegion(regions, process.env.NEXT_PUBLIC_DEFAULT_REGION);
   } catch (error) {
+    if (isBackendFailure(error)) {
+      throw new MedusaUnavailableError("the store's region", error);
+    }
     console.error("Could not load the default region", error);
     return null;
   }

@@ -1,3 +1,7 @@
+import { FetchError } from "@medusajs/js-sdk";
+
+import { MedusaUnavailableError } from "@/lib/medusa-error";
+
 import { fetchSiteContent } from "@/lib/site-content";
 
 jest.mock("../../src/lib/medusa", () => ({
@@ -39,11 +43,22 @@ describe("fetchSiteContent", () => {
     );
   });
 
-  it("returns the bar-off defaults and does not throw when the SDK rejects", async () => {
+  it("throws when the backend itself is unreachable", async () => {
     const { sdk } = jest.requireMock<{
       sdk: { client: { fetch: jest.Mock } };
     }>("../../src/lib/medusa");
-    sdk.client.fetch.mockRejectedValue(new Error("backend is down"));
+    sdk.client.fetch.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(fetchSiteContent()).rejects.toThrow(MedusaUnavailableError);
+  });
+
+  it("returns the bar-off defaults and does not throw when the request itself is rejected", async () => {
+    const { sdk } = jest.requireMock<{
+      sdk: { client: { fetch: jest.Mock } };
+    }>("../../src/lib/medusa");
+    sdk.client.fetch.mockRejectedValue(
+      new FetchError("bad request", "Bad Request", 400),
+    );
     const consoleError = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});

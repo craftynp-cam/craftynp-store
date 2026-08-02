@@ -6,4 +6,5 @@ export * from "./catalog";
 export * from "./home";
 export * from "./nav";
 export * from "./product";
+export { StoreUnavailable } from "./store-unavailable";
 export * from "./ui";
