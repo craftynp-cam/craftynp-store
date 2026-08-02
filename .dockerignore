@@ -1,0 +1,18 @@
+# Everything here is either rebuilt inside the image or must never enter it.
+node_modules
+**/node_modules
+**/.next
+**/.turbo
+**/.medusa
+**/dist
+**/coverage
+.git
+.github
+
+# Secrets. The image takes its configuration from the platform's environment.
+**/.env
+**/.env.*
+!**/.env.example
+
+# file-local's old upload directory, superseded by the S3 provider.
+apps/medusa/static

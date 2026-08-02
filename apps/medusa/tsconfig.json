@@ -8,10 +8,10 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "outDir": "./.medusa/server",
-    "rootDir": "./src",
+    "rootDir": "./",
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "medusa-config.ts"],
   "exclude": ["node_modules", ".medusa", "dist", "src/admin"]
 }
