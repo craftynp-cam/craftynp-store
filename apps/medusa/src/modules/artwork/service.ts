@@ -1,0 +1,135 @@
+import { MedusaService } from "@medusajs/framework/utils";
+
+import ArtworkAsset from "./models/artwork-asset";
+
+export type ArtworkAssetRow = {
+  id: string;
+  upload_id: string;
+  staging_key: string;
+  storage_key: string | null;
+  order_id: string | null;
+  line_item_id: string | null;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_at: Date;
+  promoted_at: Date | null;
+  purged_at: Date | null;
+  purge_reason: string | null;
+};
+
+export type RecordUploadInput = {
+  uploadId: string;
+  stagingKey: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export type PromoteInput = {
+  orderId: string;
+  lineItemId: string;
+  storageKey: string;
+};
+
+function toDate(value: Date | string | null): Date | null {
+  if (value == null) return null;
+  return value instanceof Date ? value : new Date(value);
+}
+
+function toRow(raw: Record<string, unknown>): ArtworkAssetRow {
+  return {
+    ...(raw as unknown as ArtworkAssetRow),
+    uploaded_at: toDate(raw.uploaded_at as Date | string) as Date,
+    promoted_at: toDate(raw.promoted_at as Date | string | null),
+    purged_at: toDate(raw.purged_at as Date | string | null),
+  };
+}
+
+class ArtworkModuleService extends MedusaService({ ArtworkAsset }) {
+  async recordUpload(input: RecordUploadInput): Promise<ArtworkAssetRow> {
+    const created = await this.createArtworkAssets({
+      upload_id: input.uploadId,
+      staging_key: input.stagingKey,
+      file_name: input.fileName,
+      mime_type: input.mimeType,
+      size_bytes: input.sizeBytes,
+      uploaded_at: new Date(),
+    });
+
+    return toRow(created as unknown as Record<string, unknown>);
+  }
+
+  async findByUploadId(uploadId: string): Promise<ArtworkAssetRow | null> {
+    const rows = (await this.listArtworkAssets({
+      upload_id: uploadId,
+    })) as unknown as Record<string, unknown>[];
+
+    return rows[0] ? toRow(rows[0]) : null;
+  }
+
+  async findAsset(id: string): Promise<ArtworkAssetRow | null> {
+    const rows = (await this.listArtworkAssets({
+      id,
+    })) as unknown as Record<string, unknown>[];
+
+    return rows[0] ? toRow(rows[0]) : null;
+  }
+
+  async listForOrder(orderId: string): Promise<ArtworkAssetRow[]> {
+    const rows = (await this.listArtworkAssets({
+      order_id: orderId,
+    })) as unknown as Record<string, unknown>[];
+
+    return rows.map(toRow);
+  }
+
+  async claimForOrder(
+    id: string,
+    orderId: string,
+    lineItemId: string,
+  ): Promise<void> {
+    await this.updateArtworkAssets({
+      id,
+      order_id: orderId,
+      line_item_id: lineItemId,
+    });
+  }
+
+  async markPromoted(id: string, input: PromoteInput): Promise<void> {
+    await this.updateArtworkAssets({
+      id,
+      order_id: input.orderId,
+      line_item_id: input.lineItemId,
+      storage_key: input.storageKey,
+      promoted_at: new Date(),
+    });
+  }
+
+  async markPurged(id: string, reason: string): Promise<void> {
+    await this.updateArtworkAssets({
+      id,
+      purged_at: new Date(),
+      purge_reason: reason,
+    });
+  }
+
+  async listPromotedUnpurged(): Promise<ArtworkAssetRow[]> {
+    const rows = (await this.listArtworkAssets({
+      purged_at: null,
+    })) as unknown as Record<string, unknown>[];
+
+    return rows.map(toRow).filter((row) => row.promoted_at != null);
+  }
+
+  async listPendingPromotion(): Promise<ArtworkAssetRow[]> {
+    const rows = (await this.listArtworkAssets({
+      promoted_at: null,
+      purged_at: null,
+    })) as unknown as Record<string, unknown>[];
+
+    return rows.map(toRow).filter((row) => row.order_id != null);
+  }
+}
+
+export default ArtworkModuleService;
