@@ -12,6 +12,11 @@ const props: MakerIntroProps = {
   linkLabel: "Read the full story",
 };
 
+function gridCells(container: HTMLElement) {
+  const grid = container.querySelector("section > div");
+  return grid?.children.length ?? 0;
+}
+
 describe("MakerIntro", () => {
   it("renders the heading as an h2", () => {
     render(<MakerIntro {...props} />);
@@ -30,16 +35,17 @@ describe("MakerIntro", () => {
   });
 
   it("renders the portrait with the supplied alt text", () => {
-    render(<MakerIntro {...props} />);
+    const { container } = render(<MakerIntro {...props} />);
     expect(
       screen.getByAltText("The maker at her workbench"),
     ).toBeInTheDocument();
+    expect(gridCells(container)).toBe(2);
   });
 
-  it("falls back to a placeholder when there is no portrait", () => {
+  it("omits the image cell when there is no portrait", () => {
     const { container } = render(<MakerIntro {...props} imageUrl="" />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(container.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+    expect(gridCells(container)).toBe(1);
   });
 
   it("returns null when heading and body are both empty", () => {

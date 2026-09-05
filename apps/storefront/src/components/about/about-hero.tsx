@@ -9,6 +9,8 @@ const HEADING_ID = "about-hero-heading";
 const ctaClassName =
   "mt-8 inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-base font-semibold text-on-accent transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink";
 
+const gridClassName = "grid md:items-center";
+
 export type AboutHeroProps = {
   eyebrow: string;
   heading: string;
@@ -33,7 +35,10 @@ export function AboutHero({
   return (
     <section aria-labelledby={HEADING_ID} className="bg-ink">
       {/* Unpadded: the left cell pads itself and the right cell's image is flush. */}
-      <Container padded={false} className="grid md:grid-cols-2 md:items-center">
+      <Container
+        padded={false}
+        className={imageUrl ? `${gridClassName} md:grid-cols-2` : gridClassName}
+      >
         <div className="px-4 py-16 sm:px-6 sm:py-20 md:py-24 lg:px-8 xl:px-10 2xl:px-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-off-white/70">
             {eyebrow}
@@ -53,8 +58,8 @@ export function AboutHero({
           ) : null}
         </div>
 
-        <div className="relative aspect-[4/3] overflow-hidden md:aspect-auto md:h-full md:min-h-[28rem]">
-          {imageUrl ? (
+        {imageUrl ? (
+          <div className="relative aspect-[4/3] overflow-hidden md:aspect-auto md:h-full md:min-h-[28rem]">
             <Image
               src={imageUrl}
               alt={imageAlt}
@@ -63,13 +68,8 @@ export function AboutHero({
               sizes="(min-width: 1760px) 880px, (min-width: 768px) 50vw, 100vw"
               className="object-cover"
             />
-          ) : (
-            <div
-              aria-hidden="true"
-              className="size-full bg-[repeating-linear-gradient(45deg,color-mix(in_srgb,var(--color-off-white)_8%,transparent)_0,color-mix(in_srgb,var(--color-off-white)_8%,transparent)_1px,transparent_1px,transparent_12px)]"
-            />
-          )}
-        </div>
+          </div>
+        ) : null}
       </Container>
     </section>
   );
