@@ -194,6 +194,58 @@ class OrderStatusModuleService extends MedusaService({
     return rows[0] ?? null;
   }
 
+  // Delivery has two sources and both count. The ShipStation track webhook
+  // stamps delivered_at on the shipment, but the owner can also move an order
+  // to delivered by hand, which leaves that column null — so the history entry
+  // is the fallback. Whichever came first starts the retention clock.
+  async deliveredAtByOrder(
+    orderIds: readonly string[],
+  ): Promise<Map<string, Date>> {
+    const delivered = new Map<string, Date>();
+    if (orderIds.length === 0) return delivered;
+
+    const records = (await this.listOrderStatusRecords({
+      order_id: orderIds as string[],
+    })) as StatusRow[];
+    if (records.length === 0) return delivered;
+
+    const orderIdByRecord = new Map(
+      records.map((row) => [row.id, row.order_id]),
+    );
+    const recordIds = records.map((row) => row.id);
+
+    const keepEarliest = (orderId: string, at: Date) => {
+      const existing = delivered.get(orderId);
+      if (!existing || at.getTime() < existing.getTime()) {
+        delivered.set(orderId, at);
+      }
+    };
+
+    const shipments = (await this.listShipmentTrackings({
+      order_status_id: recordIds,
+      voided_at: null,
+    })) as (ShipmentRow & { order_status_id: string })[];
+
+    for (const shipment of shipments) {
+      const orderId = orderIdByRecord.get(shipment.order_status_id);
+      if (!orderId || !shipment.delivered_at) continue;
+      keepEarliest(orderId, new Date(shipment.delivered_at));
+    }
+
+    const history = (await this.listOrderStatusHistoryEntries({
+      order_status_id: recordIds,
+      to_status: "delivered",
+    })) as (HistoryRow & { order_status_id: string })[];
+
+    for (const entry of history) {
+      const orderId = orderIdByRecord.get(entry.order_status_id);
+      if (!orderId) continue;
+      keepEarliest(orderId, new Date(entry.created_at));
+    }
+
+    return delivered;
+  }
+
   async findShipmentByTrackingNumber(
     trackingNumber: string,
   ): Promise<(ShipmentRow & { order_status_id: string }) | null> {

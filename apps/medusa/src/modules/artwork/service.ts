@@ -68,6 +68,14 @@ class ArtworkModuleService extends MedusaService({ ArtworkAsset }) {
     return rows[0] ? toRow(rows[0]) : null;
   }
 
+  async findByStagingKey(stagingKey: string): Promise<ArtworkAssetRow | null> {
+    const rows = (await this.listArtworkAssets({
+      staging_key: stagingKey,
+    })) as unknown as Record<string, unknown>[];
+
+    return rows[0] ? toRow(rows[0]) : null;
+  }
+
   async findAsset(id: string): Promise<ArtworkAssetRow | null> {
     const rows = (await this.listArtworkAssets({
       id,
