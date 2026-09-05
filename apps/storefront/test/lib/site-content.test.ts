@@ -21,10 +21,23 @@ describe("fetchSiteContent", () => {
       site_content: { banner_enabled: true, banner_text: "Sale!" },
     });
 
-    expect(await fetchSiteContent()).toEqual({
-      banner_enabled: true,
-      banner_text: "Sale!",
+    expect(await fetchSiteContent()).toEqual(
+      expect.objectContaining({ banner_enabled: true, banner_text: "Sale!" }),
+    );
+  });
+
+  it("fills in a field the backend is too old to send yet", async () => {
+    const { sdk } = jest.requireMock<{
+      sdk: { client: { fetch: jest.Mock } };
+    }>("../../src/lib/medusa");
+    sdk.client.fetch.mockResolvedValue({
+      site_content: { banner_enabled: false, banner_text: "" },
     });
+
+    const content = await fetchSiteContent();
+
+    expect(content.contact_phone).toBe("317.843.1640");
+    expect(content.contact_email).toBe("hello@thecraftynp.com");
   });
 
   it("requests the store route with a 60 second revalidate window", async () => {
