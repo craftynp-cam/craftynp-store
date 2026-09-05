@@ -159,7 +159,7 @@ export const SITE_CONTENT_FIELDS = [
     group: "About the maker",
     label: "Portrait",
     description:
-      "Portrait orientation works best. Uploads immediately — shows on the site after Save.",
+      "Portrait orientation works best. Leave empty to hide the photo. Uploads immediately — shows on the site after Save.",
     defaultValue: "",
     maxLength: 512,
   },
@@ -215,7 +215,7 @@ export const SITE_CONTENT_FIELDS = [
     group: "About page",
     label: "Hero portrait",
     description:
-      "Portrait orientation works best. Uploads immediately — shows on the site after Save.",
+      "Portrait orientation works best. Leave empty to hide the photo. Uploads immediately — shows on the site after Save.",
     defaultValue: "",
     maxLength: 512,
   },
