@@ -6,6 +6,7 @@ import { fulfilmentMiddlewares } from "./admin/fulfilment/middlewares";
 import { orderStatusMiddlewares } from "./admin/orders/middlewares";
 import { siteContentMiddlewares } from "./admin/site-content/middlewares";
 import { shipstationTrackMiddlewares } from "./hooks/shipstation/track/middlewares";
+import { artworkUploadMiddlewares } from "./store/artwork/uploads/middlewares";
 import { checkoutMiddlewares } from "./store/checkout/middlewares";
 import { orderConfirmationMiddlewares } from "./store/order-confirmation/middlewares";
 import { shippingRatesMiddlewares } from "./store/shipping-rates/middlewares";
@@ -21,6 +22,7 @@ export default defineMiddlewares({
     ...shipstationTrackMiddlewares,
     ...shippingRatesMiddlewares,
     ...taxQuoteMiddlewares,
+    ...artworkUploadMiddlewares,
     ...checkoutMiddlewares,
     ...orderConfirmationMiddlewares,
   ],

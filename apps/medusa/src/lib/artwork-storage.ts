@@ -132,6 +132,14 @@ function s3(options: ArtworkStorageOptions): S3Client {
   return client;
 }
 
+// ContentLength lands in the signature, so the URL can only ever write the
+// number of bytes it was minted for — that is the ceiling on what one presign
+// call can store. ContentType does NOT: the S3 presigner adds it to its own
+// unsignable set, and a signableHeaders override does not reach the signer, so
+// the type a caller sends is advisory. Nothing here relies on it being honest.
+// The bucket is private and every read is a signed URL forcing an attachment
+// disposition, so a mislabelled file cannot be served as active content, and
+// CNP-40 inspects the bytes server-side.
 export async function presignArtworkUpload(
   input: {
     key: string;
