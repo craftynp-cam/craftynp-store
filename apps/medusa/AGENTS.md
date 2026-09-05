@@ -5,9 +5,10 @@ come from `@craftynp/types`. Repo-wide setup, commands, and conventions are in
 the root [AGENTS.md](../../AGENTS.md).
 
 Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
-`site-content`, `order-status`, `shipstation` and `shipstation-fulfillment`,
-`stripe-tax` (which registers both a module and a tax provider),
-`notification-resend`, `auth-auth0`, and `auth-google-workspace`.
+`site-content`, `artwork`, `order-status`, `shipstation` and
+`shipstation-fulfillment`, `stripe-tax` (which registers both a module and a
+tax provider), `notification-resend`, `auth-auth0`, and
+`auth-google-workspace`.
 
 ## Layout and config
 
@@ -267,13 +268,14 @@ limiter.
   or private as a whole. One provider therefore cannot serve public
   site-content images and private labels. Site content gets the public
   `FILE_STORAGE_*` bucket through the file module; labels get their own private
-  one, reached only through `label-storage.ts`. The two buckets must never be
-  collapsed into one.
+  one, reached only through `label-storage.ts`, and customer artwork gets a
+  third private one reached only through `artwork-storage.ts`. The three
+  buckets must never be collapsed.
   `label_file_id` holds the object key. `label_url` holds our own route; it
   falls back to ShipStation's 90-day URL only when storage failed, which is
   exactly what a null `label_file_id` marks.
-- **Never make the labels bucket public**, and never point it at the bucket
-  that serves site-content images.
+- **Never make the labels or artwork bucket public**, and never point either at
+  the bucket that serves site-content images.
 - **Storing the label PDF must never throw.** It runs after the purchase, so
   throwing would trigger the compensating void and cancel a perfectly good label
   because our own disk was full. That is a worse outcome than a link that
@@ -364,6 +366,64 @@ finding `SHIPSTATION_USPS_CARRIER_ID`.
   cart's tax can drift up to ~1¢ per line from the Stripe calculation. That is
   the accepted tradeoff, not a bug, and the tax provider is deliberately
   uncached unlike the sibling module service.
+
+## Customer artwork
+
+A shopper's artwork lands in a **third private bucket** (`ARTWORK_STORAGE_*`),
+reached only through `src/lib/artwork-storage.ts`. It cannot go through the file
+module for exactly the reason labels cannot — one provider, no object-level
+ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
+
+- **Uploads are two-phase, and the key is the point.** A shopper uploads before
+  a cart exists, so there is no order to key on: the object lands at
+  `staging/{uploadId}.{ext}`, and the `order.placed` subscriber copies it to
+  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` and deletes the staging
+  copy. That is what makes every stored file traceable to its order without
+  consulting the database.
+- **`presignArtworkUpload` binds Content-Length and does not bind
+  Content-Type.** The length is in the signature, so a URL can only ever write
+  the number of bytes it was minted for — that is the ceiling on what one
+  presign call can store. The S3 presigner adds `content-type` to its own
+  unsignable set and a `signableHeaders` override does not reach the signer, so
+  the declared type is advisory. Do not build a check on it. What actually
+  contains a mislabelled file is that the bucket is private and every read is a
+  signed URL forcing an attachment disposition; CNP-40 inspects the bytes.
+- **`GET /admin/artwork/:id` returns a signed URL where the label route streams
+  bytes.** That divergence is deliberate — a print-resolution file is far larger
+  than a label PDF and there is no reason to move it through Medusa. Do not
+  "unify" the two routes.
+- **Promotion must never throw.** It runs on `order.placed`, after payment, and
+  the repo rule that nothing after payment rolls back a paid order applies. It
+  swallows every failure, which means the event bus never sees one to retry —
+  so `promote-pending-artwork` (every 15 minutes) is the only retry there is.
+  The row is claimed onto the order _before_ the copy so a failure still leaves
+  the sweeper something to find, and a failed staging delete is not a failed
+  promotion: the R2 lifecycle rule reaps the leftover, and treating it as a
+  failure would send the sweeper back to re-copy an object already in place.
+- **Retention lives in exactly one file**, `src/lib/artwork-retention.ts`.
+  Nothing else reads `ARTWORK_RETENTION_DAYS` or
+  `ARTWORK_RETENTION_FALLBACK_DAYS`. A blank value reads as unset rather than as
+  zero — set-but-empty is what a half-filled deployment looks like, and zero
+  means purge everything on the next run.
+- **The window runs from delivery, and the upload fallback is not a ceiling.**
+  An order delivered on day 56 still gets its full 30 days and purges on day 86,
+  rather than being cut off at the day-61 upload fallback. **This is why R2's own
+  lifecycle rules cannot own retention** — they can only age on creation date.
+  The native rules cover the `staging/` prefix and a 180-day safety net on
+  `artwork/`; that 180 is deliberately far past anything the job can produce and
+  is not the policy. See [docs/dns.md](../../docs/dns.md).
+- **Delivery has two sources and both count.** `deliveredAtByOrder` takes the
+  earlier of the non-voided shipment's `delivered_at` and the `delivered`
+  history entry, because the owner can move an order to delivered by hand and
+  that leaves the shipment column null. The cross-module join lives in the purge
+  job — neither module reaches into the other.
+- **The purge job writes `artwork_asset` and nothing else.** That is what makes
+  "deleting artwork does not touch the order" structural rather than a promise.
+  Keep it that way.
+- **Both `@aws-sdk` packages move together.** A version split between
+  `client-s3` and `s3-request-presigner` puts two copies of `@smithy/types` in
+  the tree and `getSignedUrl` stops accepting the `S3Client`, with a type error
+  that names neither package.
 
 ## Order status and shipment tracking
 
@@ -474,8 +534,10 @@ provider in `src/modules/notification-resend`, fired by subscribers on
 - **Monitoring here means stable warn-level log tags**, because nothing is
   deployed and there is no alerting sink until CNP-16. Attach alerts to
   `[email:send-failed]`, `[email:quota]`, `[email:quota-low]`,
-  `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]` and
-  `[email:order-failed]` rather than inventing an alerting system now.
+  `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]`,
+  `[email:order-failed]`, `[artwork:purge]`, `[artwork:purge-failed]`,
+  `[artwork:promote]` and `[artwork:promote-failed]` rather than inventing an
+  alerting system now.
 - **`STOREFRONT_URL` is what builds the tokenized order link.** `order-email.ts`
   constructs `/checkout/confirmation?order=&number=&token=` independently of the
   storefront's own `checkoutConfirmationHref()`; the two drifting is the
