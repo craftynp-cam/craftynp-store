@@ -3,6 +3,7 @@ import { resolveSiteContent } from "@craftynp/types";
 import { Footer, Navbar } from "@/components";
 import { fetchNavCategories } from "@/lib/categories";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
+import { toFooterContact } from "@/lib/footer-content";
 import { fetchSiteContent } from "@/lib/site-content";
 import { themeInitScript } from "@/lib/theme";
 import type { Metadata } from "next";
@@ -75,7 +76,10 @@ export default async function RootLayout({
       >
         <Navbar categories={categories} announcement={announcement} />
         <div className="flex-1">{children}</div>
-        <Footer categories={categories} />
+        <Footer
+          categories={categories}
+          contact={toFooterContact(siteContent)}
+        />
       </body>
     </html>
   );

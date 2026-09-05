@@ -11,7 +11,6 @@ export const SOCIAL_LINKS: readonly SocialLink[] = [
 export type ContactLink = { name: string; href: string };
 
 export const CONTACT_LINKS: readonly ContactLink[] = [
-  { name: "Contact the maker", href: "/contact" },
   { name: "Request a custom quote", href: "/custom-quote" },
   { name: "About", href: "/about" },
 ];
