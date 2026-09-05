@@ -80,6 +80,14 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   because it runs after money has been taken and a thank-you beats an error
   page; and the **inner per-category count** in `fetchShowcaseCategories`,
   because one flaky count must not take the homepage down.
+- **`fetchSiteContent` must keep routing the response through
+  `resolveSiteContent`.** The store route's payload is unvalidated network data,
+  not a `SiteContent`: a Medusa deployed before a new `SITE_CONTENT_FIELDS`
+  entry existed answers without that key, and since the fetch runs in the root
+  layout, one `undefined` read 500s every page. Vercel and Railway deploy
+  independently, so that skew is a normal state, not an edge case. Resolving
+  fills any missing key from its registry default and drops keys the registry
+  does not declare.
 - **`medusa-error.ts` must stay free of `medusa.ts`.** Same reason as the rule
   above it — importing it would drag in the module-eval throw.
 - **Pass the region's `id` as `region_id` on every product query**, or

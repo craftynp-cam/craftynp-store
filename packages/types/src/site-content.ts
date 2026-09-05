@@ -306,6 +306,24 @@ export const SITE_CONTENT_FIELDS = [
       "Once shipped, delivery usually takes another 2–5 business days.",
     maxLength: 160,
   },
+  {
+    key: "contact_phone",
+    type: "text",
+    group: "Get in touch",
+    label: "Phone number",
+    description: "Shown in the site footer. Leave empty to hide it.",
+    defaultValue: "317.843.1640",
+    maxLength: 40,
+  },
+  {
+    key: "contact_email",
+    type: "text",
+    group: "Get in touch",
+    label: "Email address",
+    description: "Shown in the site footer. Leave empty to hide it.",
+    defaultValue: "hello@thecraftynp.com",
+    maxLength: 120,
+  },
 ] as const satisfies readonly SiteContentField[];
 
 export type SiteContentKey = (typeof SITE_CONTENT_FIELDS)[number]["key"];
