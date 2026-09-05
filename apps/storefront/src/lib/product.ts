@@ -10,6 +10,7 @@ export type ProductDetailSourceVariant = {
   id: string;
   title: string | null;
   sku?: string | null;
+  thumbnail?: string | null;
   allow_backorder?: boolean | null;
   manage_inventory?: boolean | null;
   inventory_quantity?: number | null;
@@ -52,6 +53,7 @@ export type ProductDetailOption = {
 export type ProductDetailVariant = {
   id: string;
   sku: string | null;
+  thumbnail: string | null;
   optionValueIds: string[];
   availability: Availability;
   price: string;
@@ -113,6 +115,7 @@ export function toProductDetail(
       return {
         id: variant.id,
         sku: variant.sku ?? null,
+        thumbnail: variant.thumbnail ?? null,
         optionValueIds: (variant.options ?? []).map((option) => option.id),
         availability: variantAvailability(variant),
         price:
@@ -157,7 +160,7 @@ export const fetchProductByHandle = cache(
         region_id: regionId,
         limit: 1,
         fields:
-          "*variants.calculated_price,+variants.inventory_quantity,*variants.options,*options.values,*images,*categories",
+          "*variants.calculated_price,+variants.inventory_quantity,+variants.thumbnail,*variants.options,*options.values,*images,*categories",
       });
 
       const product = products[0];

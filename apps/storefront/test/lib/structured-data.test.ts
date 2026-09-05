@@ -15,6 +15,7 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
       {
         id: "var_1",
         sku: "KEYCHAIN-BLUSH",
+        thumbnail: null,
         optionValueIds: [],
         availability: "in_stock",
         price: "$9.00",
@@ -61,6 +62,7 @@ describe("toProductJsonLd", () => {
           {
             id: "var_1",
             sku: null,
+            thumbnail: null,
             optionValueIds: [],
             availability: "low_stock",
             price: "$9.00",
@@ -78,6 +80,7 @@ describe("toProductJsonLd", () => {
           {
             id: "var_1",
             sku: null,
+            thumbnail: null,
             optionValueIds: [],
             availability: "out_of_stock",
             price: "$9.00",
@@ -105,6 +108,7 @@ describe("toProductJsonLd", () => {
           {
             id: "var_1",
             sku: null,
+            thumbnail: null,
             optionValueIds: [],
             availability: "in_stock",
             price: "",

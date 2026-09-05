@@ -51,6 +51,12 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   (`"../ui"`). `src/components/index.ts` re-exports every subdirectory barrel
   except `icons`; export a new component from its own directory's `index.ts` in
   the same change or it is unreachable.
+- **`ProductDetailView` owns the product page's selected-option state**, and is
+  why the gallery and the purchase panel are wrapped rather than rendered
+  side by side from the page. The selected variant's `thumbnail` drives the
+  gallery's main image, so the state has to sit above both. `ProductPurchase`
+  is controlled — it takes `selected` and `onOptionChange` and keeps only its
+  own quantity.
 - **Import icons only through `src/components/icons`** — the sole place
   `@phosphor-icons/react` is imported, and from its `/dist/ssr` subpath so
   glyphs render in server components too. Every glyph is decorative:
