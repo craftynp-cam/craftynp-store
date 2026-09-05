@@ -12,7 +12,17 @@ import { FacebookLogo, InstagramLogo, TiktokLogo } from "../icons";
 import { Container } from "../ui";
 import { BrandLockup } from "./logo";
 
-type FooterProps = { categories: readonly NavCategory[] };
+export type FooterContactItem = { label: string; href: string };
+
+export type FooterContact = {
+  phone: FooterContactItem | null;
+  email: FooterContactItem | null;
+};
+
+type FooterProps = {
+  categories: readonly NavCategory[];
+  contact: FooterContact;
+};
 
 const socialIcons = {
   Instagram: InstagramLogo,
@@ -26,7 +36,7 @@ const linkClassName =
 const headingClassName =
   "font-display text-sm font-bold tracking-widest text-gold uppercase";
 
-export function Footer({ categories }: FooterProps) {
+export function Footer({ categories, contact }: FooterProps) {
   return (
     <footer className="bg-ink text-off-white">
       <Container className="py-14 lg:py-16">
@@ -76,6 +86,16 @@ export function Footer({ categories }: FooterProps) {
           <nav aria-label="Get in touch links">
             <h2 className={headingClassName}>Get in touch</h2>
             <ul className="mt-4 space-y-3">
+              {[contact.phone, contact.email].map(
+                (item) =>
+                  item && (
+                    <li key={item.href}>
+                      <a href={item.href} className={linkClassName}>
+                        {item.label}
+                      </a>
+                    </li>
+                  ),
+              )}
               {CONTACT_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className={linkClassName}>

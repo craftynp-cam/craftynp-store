@@ -12,6 +12,11 @@ const props: AboutHeroProps = {
   ctaLabel: "Shop the work",
 };
 
+function gridCells(container: HTMLElement) {
+  const grid = container.querySelector("section > div");
+  return grid?.children.length ?? 0;
+}
+
 describe("AboutHero", () => {
   it("renders the heading as the page's h1", () => {
     render(<AboutHero {...props} />);
@@ -27,16 +32,17 @@ describe("AboutHero", () => {
   });
 
   it("renders the portrait with the supplied alt text", () => {
-    render(<AboutHero {...props} />);
+    const { container } = render(<AboutHero {...props} />);
     expect(
       screen.getByAltText("The maker in the workshop"),
     ).toBeInTheDocument();
+    expect(gridCells(container)).toBe(2);
   });
 
-  it("falls back to a placeholder when there is no portrait", () => {
+  it("omits the image cell when there is no portrait", () => {
     const { container } = render(<AboutHero {...props} imageUrl="" />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(container.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+    expect(gridCells(container)).toBe(1);
   });
 
   it("omits the CTA link when ctaLabel is empty", () => {

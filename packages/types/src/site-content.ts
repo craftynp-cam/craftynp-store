@@ -159,7 +159,7 @@ export const SITE_CONTENT_FIELDS = [
     group: "About the maker",
     label: "Portrait",
     description:
-      "Portrait orientation works best. Uploads immediately — shows on the site after Save.",
+      "Portrait orientation works best. Leave empty to hide the photo. Uploads immediately — shows on the site after Save.",
     defaultValue: "",
     maxLength: 512,
   },
@@ -215,7 +215,7 @@ export const SITE_CONTENT_FIELDS = [
     group: "About page",
     label: "Hero portrait",
     description:
-      "Portrait orientation works best. Uploads immediately — shows on the site after Save.",
+      "Portrait orientation works best. Leave empty to hide the photo. Uploads immediately — shows on the site after Save.",
     defaultValue: "",
     maxLength: 512,
   },
@@ -305,6 +305,24 @@ export const SITE_CONTENT_FIELDS = [
     defaultValue:
       "Once shipped, delivery usually takes another 2–5 business days.",
     maxLength: 160,
+  },
+  {
+    key: "contact_phone",
+    type: "text",
+    group: "Get in touch",
+    label: "Phone number",
+    description: "Shown in the site footer. Leave empty to hide it.",
+    defaultValue: "317.843.1640",
+    maxLength: 40,
+  },
+  {
+    key: "contact_email",
+    type: "text",
+    group: "Get in touch",
+    label: "Email address",
+    description: "Shown in the site footer. Leave empty to hide it.",
+    defaultValue: "hello@thecraftynp.com",
+    maxLength: 120,
   },
 ] as const satisfies readonly SiteContentField[];
 
