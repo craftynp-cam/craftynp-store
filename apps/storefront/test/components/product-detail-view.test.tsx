@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { ProductPurchase } from "@/components";
+import { ProductDetailView } from "@/components";
+import type { ProductDetail, ProductDetailVariant } from "@/lib/product";
 import { clearCart, readCart } from "@/lib/cart";
 import { readCartDrawerOpen, setCartDrawerOpen } from "@/lib/cart-drawer";
 
@@ -15,10 +16,11 @@ const options = [
   },
 ];
 
-const variants = [
+const variants: ProductDetailVariant[] = [
   {
     id: "var_blush",
     sku: "KEYCHAIN-BLUSH",
+    thumbnail: "https://example.com/blush.png",
     optionValueIds: ["val_blush"],
     availability: "in_stock" as const,
     price: "$9.00",
@@ -29,6 +31,7 @@ const variants = [
   {
     id: "var_sage",
     sku: "KEYCHAIN-SAGE",
+    thumbnail: "https://example.com/sage.png",
     optionValueIds: ["val_sage"],
     availability: "out_of_stock" as const,
     price: "$9.00",
@@ -38,7 +41,25 @@ const variants = [
   },
 ];
 
-describe("ProductPurchase", () => {
+function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
+  return {
+    id: "prod_keychain",
+    href: "/keychains/wildflower-acrylic-keychain",
+    title: "Wildflower Acrylic Keychain",
+    description: "Pressed wildflowers set in acrylic.",
+    categoryName: "Keychains",
+    categoryHandle: "keychains",
+    images: [
+      { url: "https://example.com/blush.png", alt: "Keychain, blush" },
+      { url: "https://example.com/sage.png", alt: "Keychain, sage" },
+    ],
+    options,
+    variants,
+    ...overrides,
+  };
+}
+
+describe("ProductDetailView", () => {
   beforeEach(() => {
     window.localStorage.clear();
     clearCart();
@@ -46,41 +67,20 @@ describe("ProductPurchase", () => {
   });
 
   it("defaults to the first option value and shows its price", () => {
-    render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={options}
-        variants={variants}
-      />,
-    );
+    render(<ProductDetailView product={makeProduct()} />);
 
     expect(screen.getByRole("radio", { name: "Blush" })).toBeChecked();
     expect(screen.getByText("$9.00")).toBeInTheDocument();
   });
 
   it("shows the ready-to-ship badge", () => {
-    render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={options}
-        variants={variants}
-      />,
-    );
+    render(<ProductDetailView product={makeProduct()} />);
 
     expect(screen.getByText(/ready to ship/i)).toBeInTheDocument();
   });
 
   it("disables add to cart when the selected variant is out of stock (AC 3)", () => {
-    render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={options}
-        variants={variants}
-      />,
-    );
+    render(<ProductDetailView product={makeProduct()} />);
 
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
 
@@ -89,14 +89,7 @@ describe("ProductPurchase", () => {
   });
 
   it("adds the selected variant to the cart and opens the drawer", () => {
-    render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={options}
-        variants={variants}
-      />,
-    );
+    render(<ProductDetailView product={makeProduct()} />);
 
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
 
@@ -112,10 +105,11 @@ describe("ProductPurchase", () => {
   });
 
   it("shows the savings badge for a variant on sale (AC 2)", () => {
-    const saleVariants = [
+    const saleVariants: ProductDetailVariant[] = [
       {
         id: "var_blush",
         sku: "KEYCHAIN-BLUSH",
+        thumbnail: null,
         optionValueIds: ["val_blush"],
         availability: "in_stock" as const,
         price: "$9.00",
@@ -127,12 +121,7 @@ describe("ProductPurchase", () => {
     ];
 
     render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={[options[0]!]}
-        variants={saleVariants}
-      />,
+      <ProductDetailView product={makeProduct({ variants: saleVariants })} />,
     );
 
     expect(screen.getByText("Save 25%")).toBeInTheDocument();
@@ -140,14 +129,7 @@ describe("ProductPurchase", () => {
   });
 
   it("adds the quantity selected in the stepper", () => {
-    render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={options}
-        variants={variants}
-      />,
-    );
+    render(<ProductDetailView product={makeProduct()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
@@ -156,14 +138,7 @@ describe("ProductPurchase", () => {
   });
 
   it("shows the unit price on the add to cart button at quantity 1", () => {
-    render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={options}
-        variants={variants}
-      />,
-    );
+    render(<ProductDetailView product={makeProduct()} />);
 
     expect(
       screen.getByRole("button", { name: "Add to cart · $9.00" }),
@@ -171,14 +146,7 @@ describe("ProductPurchase", () => {
   });
 
   it("multiplies the add to cart button's price by the selected quantity", () => {
-    render(
-      <ProductPurchase
-        title="Wildflower Acrylic Keychain"
-        href="/keychains/wildflower-acrylic-keychain"
-        options={options}
-        variants={variants}
-      />,
-    );
+    render(<ProductDetailView product={makeProduct()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
@@ -186,5 +154,45 @@ describe("ProductPurchase", () => {
     expect(
       screen.getByRole("button", { name: "Add to cart · $27.00" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows the selected variant's image as the main image", () => {
+    render(<ProductDetailView product={makeProduct()} />);
+
+    expect(screen.getByAltText("Keychain, blush")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
+
+    expect(screen.getByAltText("Keychain, sage")).toBeInTheDocument();
+    expect(screen.queryByAltText("Keychain, blush")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the first product image for a variant with no thumbnail", () => {
+    const unthumbnailed = variants.map((variant) =>
+      variant.id === "var_sage" ? { ...variant, thumbnail: null } : variant,
+    );
+
+    render(
+      <ProductDetailView product={makeProduct({ variants: unthumbnailed })} />,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
+
+    expect(screen.getByAltText("Keychain, blush")).toBeInTheDocument();
+  });
+
+  it("adds the selected variant's image to the cart line", () => {
+    const inStock = variants.map((variant) =>
+      variant.id === "var_sage"
+        ? { ...variant, availability: "in_stock" as const }
+        : variant,
+    );
+
+    render(<ProductDetailView product={makeProduct({ variants: inStock })} />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
+    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(readCart().lines[0]?.imageUrl).toBe("https://example.com/sage.png");
   });
 });

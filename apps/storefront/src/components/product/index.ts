@@ -1,3 +1,4 @@
+export { ProductDetailView } from "./product-detail-view";
 export { ProductDetails } from "./product-details";
 export { ProductGallery } from "./product-gallery";
 export { ProductPrice } from "./product-price";

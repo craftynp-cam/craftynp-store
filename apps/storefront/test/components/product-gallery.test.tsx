@@ -50,4 +50,32 @@ describe("ProductGallery", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(container.querySelector("[aria-hidden='true']")).toBeInTheDocument();
   });
+
+  it("starts on the variant's image when one is given", () => {
+    render(
+      <ProductGallery
+        images={images}
+        productTitle="Keychain"
+        variantImageUrl="https://example.com/2.png"
+      />,
+    );
+
+    expect(screen.getByAltText("Keychain, back")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /show image 2 of 2/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows a variant image that is not among the product images", () => {
+    render(
+      <ProductGallery
+        images={images}
+        productTitle="Keychain"
+        variantImageUrl="https://example.com/exclusive.png"
+      />,
+    );
+
+    expect(screen.getByAltText("Keychain")).toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(3);
+  });
 });
