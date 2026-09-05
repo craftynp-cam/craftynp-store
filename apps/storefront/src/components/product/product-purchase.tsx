@@ -18,18 +18,9 @@ type ProductPurchaseProps = {
   imageUrl?: string;
   options: readonly ProductDetailOption[];
   variants: readonly ProductDetailVariant[];
+  selected: Record<string, string>;
+  onOptionChange: (optionId: string, valueId: string) => void;
 };
-
-function defaultSelection(
-  options: readonly ProductDetailOption[],
-): Record<string, string> {
-  const selection: Record<string, string> = {};
-  for (const option of options) {
-    const firstValue = option.values[0];
-    if (firstValue) selection[option.id] = firstValue.id;
-  }
-  return selection;
-}
 
 export function ProductPurchase({
   title,
@@ -37,10 +28,9 @@ export function ProductPurchase({
   imageUrl,
   options,
   variants,
+  selected,
+  onOptionChange,
 }: ProductPurchaseProps) {
-  const [selected, setSelected] = useState<Record<string, string>>(() =>
-    defaultSelection(options),
-  );
   const [quantity, setQuantity] = useState(1);
 
   const optionIds = useMemo(
@@ -118,9 +108,7 @@ export function ProductPurchase({
         <VariantSelector
           options={options}
           selected={selected}
-          onChange={(optionId, valueId) =>
-            setSelected((current) => ({ ...current, [optionId]: valueId }))
-          }
+          onChange={onOptionChange}
           availability={availability}
         />
       ) : null}

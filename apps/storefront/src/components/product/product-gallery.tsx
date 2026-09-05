@@ -1,21 +1,46 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { ProductDetailImage } from "@/lib/product";
 
 type ProductGalleryProps = {
   images: readonly ProductDetailImage[];
   productTitle: string;
+  variantImageUrl?: string;
 };
 
 const placeholderClassName =
   "size-full bg-surface-soft bg-[repeating-linear-gradient(45deg,var(--color-border)_0,var(--color-border)_1px,transparent_1px,transparent_12px)]";
 
-export function ProductGallery({ images, productTitle }: ProductGalleryProps) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const selected = images[selectedIndex];
+function indexOfImage(
+  images: readonly ProductDetailImage[],
+  url: string | undefined,
+) {
+  if (!url) return 0;
+  return Math.max(
+    images.findIndex((image) => image.url === url),
+    0,
+  );
+}
+
+export function ProductGallery({
+  images,
+  productTitle,
+  variantImageUrl,
+}: ProductGalleryProps) {
+  const gallery = useMemo(() => {
+    if (!variantImageUrl) return images;
+    if (images.some((image) => image.url === variantImageUrl)) return images;
+    return [{ url: variantImageUrl, alt: productTitle }, ...images];
+  }, [images, productTitle, variantImageUrl]);
+
+  const [selectedIndex, setSelectedIndex] = useState(() =>
+    indexOfImage(gallery, variantImageUrl),
+  );
+
+  const selected = gallery[selectedIndex];
 
   return (
     <div>
@@ -34,14 +59,14 @@ export function ProductGallery({ images, productTitle }: ProductGalleryProps) {
         )}
       </div>
 
-      {images.length > 1 ? (
+      {gallery.length > 1 ? (
         <div className="mt-3 grid grid-cols-4 gap-3">
-          {images.map((image, index) => (
+          {gallery.map((image, index) => (
             <button
               key={image.url + index}
               type="button"
               aria-pressed={index === selectedIndex}
-              aria-label={`Show image ${index + 1} of ${images.length} for ${productTitle}`}
+              aria-label={`Show image ${index + 1} of ${gallery.length} for ${productTitle}`}
               onClick={() => setSelectedIndex(index)}
               className={`relative aspect-square overflow-hidden rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                 index === selectedIndex
