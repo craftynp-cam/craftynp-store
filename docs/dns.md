@@ -272,10 +272,24 @@ Needed because the browser PUTs straight to R2 against a presigned URL.
 | Headers | `content-type`                                                                    |
 | Max age | 3600                                                                              |
 
-The bucket's API token is a scoped **Object Read & Write** token for this bucket
-alone; it does not reuse the media or labels credentials. Tokens can only be
-created from the dashboard, so the value lives on the Railway services and
-nowhere else.
+### R2 credentials
+
+| Buckets                             | Token                                 |
+| ----------------------------------- | ------------------------------------- |
+| `craftynp-media`, `craftynp-labels` | one shared token                      |
+| `craftynp-artwork`                  | its own **Object Read & Write** token |
+
+`FILE_STORAGE_*` and `LABEL_STORAGE_*` carry **identical** access key and
+secret — the two buckets have always shared one credential. Artwork does not
+join them: it holds customer-supplied personal content on a deliberate 30-day
+clock, so a leaked media or labels key must not reach it, and a leaked artwork
+key must not reach product imagery or shipping labels.
+
+R2 tokens can only be created from the dashboard, so the values live on the
+Railway services and nowhere else. Both `medusa-server` and `medusa-worker`
+need them — the purge job runs only under worker duty, and a missing credential
+there means the job throws `ArtworkStorageNotConfiguredError` on every run with
+only the log tag to show for it.
 
 ## GitHub
 
