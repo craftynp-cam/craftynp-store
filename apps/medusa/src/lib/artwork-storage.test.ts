@@ -122,4 +122,10 @@ describe("contentDisposition", () => {
     expect(header).toContain('filename="my _art_.png"');
     expect(header).toContain("filename*=UTF-8''my%20%22art%22.png");
   });
+
+  it("escapes an apostrophe, which would otherwise close the ext-value early", () => {
+    expect(contentDisposition("Kid's drawing.png")).toContain(
+      "filename*=UTF-8''Kid%27s%20drawing.png",
+    );
+  });
 });

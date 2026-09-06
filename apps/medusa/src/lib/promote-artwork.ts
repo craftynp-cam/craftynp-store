@@ -34,14 +34,18 @@ export async function promoteArtworkAsset(
 
   if (asset.promoted_at != null) return true;
 
-  const destination = artworkObjectKey(
-    orderId,
-    lineItemId,
-    asset.upload_id,
-    keyExtension(asset.staging_key),
-  );
-
+  let destination: string;
   try {
+    // Inside the try: artworkObjectKey throws on an unsafe id, and this
+    // function is relied on never to throw — the subscriber's loop would
+    // otherwise abandon every remaining line item on the order.
+    destination = artworkObjectKey(
+      orderId,
+      lineItemId,
+      asset.upload_id,
+      keyExtension(asset.staging_key),
+    );
+
     await headArtwork(asset.staging_key);
     await copyArtwork(asset.staging_key, destination);
     await artwork.markPromoted(asset.id, {

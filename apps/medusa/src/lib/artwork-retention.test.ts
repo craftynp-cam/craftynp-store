@@ -1,9 +1,11 @@
 import {
   DEFAULT_FALLBACK_DAYS,
   DEFAULT_RETENTION_DAYS,
+  STAGING_WINDOW_DAYS,
   purgeDueAt,
   readRetentionPolicy,
   selectPurgeCandidates,
+  stagingWindowClosedBefore,
   type PurgeCandidate,
 } from "./artwork-retention.js";
 
@@ -123,5 +125,15 @@ describe("selectPurgeCandidates", () => {
         POLICY,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("stagingWindowClosedBefore", () => {
+  it("marks anything older than the staging window as past saving", () => {
+    // Beyond this the staging object is gone, so a promotion that has not
+    // succeeded never will. It must agree with the bucket's staging/ rule.
+    expect(stagingWindowClosedBefore(day(30))).toEqual(
+      day(30 - STAGING_WINDOW_DAYS),
+    );
   });
 });

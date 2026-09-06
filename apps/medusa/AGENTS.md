@@ -400,6 +400,21 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   the sweeper something to find, and a failed staging delete is not a failed
   promotion: the R2 lifecycle rule reaps the leftover, and treating it as a
   failure would send the sweeper back to re-copy an object already in place.
+- **`STAGING_WINDOW_DAYS` must equal the bucket's `staging/` lifecycle rule.**
+  Past it the staging object is gone, so the sweeper gives up once — marking
+  the row `staging_expired` and logging `[artwork:promote-abandoned]` — rather
+  than emitting a warn every 15 minutes forever on a tag that is an alerting
+  target. The same cutoff retires upload rows that never reached an order
+  (`never_ordered`); those rows are otherwise immortal, since a shopper who
+  abandons a cart leaves one behind.
+- **One upload can belong to two line items** — the same logo on two variants —
+  so the subscriber claims an asset only when it is unclaimed. Re-claiming
+  would repoint `line_item_id` at an item the stored key does not match.
+- **`requestChecksumCalculation: "WHEN_REQUIRED"` on the S3 client is
+  load-bearing.** Without it the SDK bakes `x-amz-checksum-crc32=AAAAAA==` —
+  the CRC32 of an empty body, because presigning sees no body — into the signed
+  query string, where a browser cannot strip it. MinIO ignores the mismatch, so
+  this is the shape of bug that passes locally and fails only in production.
 - **Retention lives in exactly one file**, `src/lib/artwork-retention.ts`.
   Nothing else reads `ARTWORK_RETENTION_DAYS` or
   `ARTWORK_RETENTION_FALLBACK_DAYS`. A blank value reads as unset rather than as

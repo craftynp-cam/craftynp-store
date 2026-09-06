@@ -49,22 +49,36 @@ export default async function promoteArtworkHandler({
       const stagingKey = artworkKeyOnLineItem(item);
       if (!stagingKey) continue;
 
-      const asset = await artwork.findByStagingKey(stagingKey);
-      if (!asset) {
-        logger.warn(
-          `${ARTWORK_PROMOTE_FAILED_LOG_TAG} order=${orderId} item=${item.id} key=${stagingKey} error=no_matching_upload`,
-        );
-        continue;
-      }
+      // Its own try: one bad line item must not abandon the rest of the order.
+      try {
+        const asset = await artwork.findByStagingKey(stagingKey);
+        if (!asset) {
+          logger.warn(
+            `${ARTWORK_PROMOTE_FAILED_LOG_TAG} order=${orderId} item=${item.id} key=${stagingKey} error=no_matching_upload`,
+          );
+          continue;
+        }
 
-      // Claimed before the copy, so a failed promotion still leaves the
-      // sweeper a row it can find.
-      await artwork.claimForOrder(asset.id, orderId, item.id);
-      await promoteArtworkAsset(
-        { asset, orderId, lineItemId: item.id },
-        artwork,
-        logger,
-      );
+        // One upload can be referenced by two line items — the same logo on
+        // two variants. The first claim wins; re-claiming would repoint
+        // line_item_id at an item the stored key does not match.
+        if (asset.order_id != null || asset.line_item_id != null) {
+          continue;
+        }
+
+        // Claimed before the copy, so a failed promotion still leaves the
+        // sweeper a row it can find.
+        await artwork.claimForOrder(asset.id, orderId, item.id);
+        await promoteArtworkAsset(
+          { asset, orderId, lineItemId: item.id },
+          artwork,
+          logger,
+        );
+      } catch (error) {
+        logger.warn(
+          `${ARTWORK_PROMOTE_FAILED_LOG_TAG} order=${orderId} item=${item.id} error=${describeError(error)}`,
+        );
+      }
     }
   } catch (error) {
     logger.warn(

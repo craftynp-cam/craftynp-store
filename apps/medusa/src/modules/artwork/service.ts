@@ -122,21 +122,39 @@ class ArtworkModuleService extends MedusaService({ ArtworkAsset }) {
     });
   }
 
+  // Both discriminators stay in the query rather than in a .filter() after it.
+  // An upload that never reaches an order leaves a row behind, and filtering
+  // in JS would serialise every one of those out of Postgres on every run of
+  // both scheduled jobs, forever.
   async listPromotedUnpurged(): Promise<ArtworkAssetRow[]> {
     const rows = (await this.listArtworkAssets({
       purged_at: null,
+      promoted_at: { $ne: null },
     })) as unknown as Record<string, unknown>[];
 
-    return rows.map(toRow).filter((row) => row.promoted_at != null);
+    return rows.map(toRow);
   }
 
   async listPendingPromotion(): Promise<ArtworkAssetRow[]> {
     const rows = (await this.listArtworkAssets({
       promoted_at: null,
       purged_at: null,
+      order_id: { $ne: null },
     })) as unknown as Record<string, unknown>[];
 
-    return rows.map(toRow).filter((row) => row.order_id != null);
+    return rows.map(toRow);
+  }
+
+  // Uploads that never made it onto an order. Their objects are already gone —
+  // the staging lifecycle rule reaps those — so this is the row cleanup.
+  async listAbandonedUploads(uploadedBefore: Date): Promise<ArtworkAssetRow[]> {
+    const rows = (await this.listArtworkAssets({
+      order_id: null,
+      purged_at: null,
+      uploaded_at: { $lt: uploadedBefore },
+    })) as unknown as Record<string, unknown>[];
+
+    return rows.map(toRow);
   }
 }
 

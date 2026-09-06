@@ -122,6 +122,12 @@ function s3(options: ArtworkStorageOptions): S3Client {
     endpoint: options.endpoint,
     region: options.region,
     forcePathStyle: options.forcePathStyle,
+    // Without this the SDK bakes x-amz-checksum-crc32=AAAAAA== — the CRC32 of
+    // an empty body, because presigning sees no body — into the signed query
+    // string, where the browser cannot strip it. MinIO ignores the mismatch
+    // and R2 is not guaranteed to, which is the shape of bug that passes
+    // locally and fails only in production.
+    requestChecksumCalculation: "WHEN_REQUIRED",
     credentials: {
       accessKeyId: options.accessKeyId,
       secretAccessKey: options.secretAccessKey,
@@ -187,7 +193,15 @@ export async function presignArtworkDownload(
 export function contentDisposition(fileName: string): string {
   const ascii = fileName.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
 
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  // encodeURIComponent leaves ' ( ) * ! alone, and ' is the ext-value
+  // delimiter in filename*=UTF-8''… — so a file called "Kid's drawing.png"
+  // would close the value early and the browser would mangle the name.
+  const extended = encodeURIComponent(fileName).replace(
+    /['()*!]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${extended}`;
 }
 
 export async function headArtwork(

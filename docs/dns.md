@@ -256,6 +256,11 @@ The 7-day staging window must stay comfortably longer than the promotion retry
 horizon (`promote-pending-artwork`, every 15 minutes). Shortening it risks
 destroying artwork for an order that has already been paid for.
 
+**Changing this 7 means changing `STAGING_WINDOW_DAYS` in
+`apps/medusa/src/lib/artwork-retention.ts` to match.** The sweeper uses it to
+decide when a promotion is past saving and stops retrying; if the code's value
+is longer than the rule, it retries objects that no longer exist.
+
 ### `craftynp-artwork` CORS
 
 Needed because the browser PUTs straight to R2 against a presigned URL.
