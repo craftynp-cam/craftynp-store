@@ -6,6 +6,7 @@ import {
   categoryHref,
   checkoutHref,
   productHref,
+  sanitizeDesignReturnTo,
   sanitizeReturnTo,
   signInHref,
 } from "@/lib/routes";
@@ -99,5 +100,34 @@ describe("sanitizeReturnTo", () => {
   it("falls back to /account for null or undefined", () => {
     expect(sanitizeReturnTo(null)).toBe("/account");
     expect(sanitizeReturnTo(undefined)).toBe("/account");
+  });
+});
+
+describe("sanitizeDesignReturnTo", () => {
+  it("keeps a path inside the design section", () => {
+    expect(sanitizeDesignReturnTo("/design/primitives")).toBe(
+      "/design/primitives",
+    );
+  });
+
+  it("falls back to /design/tokens for a path outside the design section", () => {
+    expect(sanitizeDesignReturnTo("/account")).toBe("/design/tokens");
+    expect(sanitizeDesignReturnTo("/designer/secret")).toBe("/design/tokens");
+  });
+
+  it("falls back to /design/tokens for a traversal out of the section", () => {
+    expect(sanitizeDesignReturnTo("/design/../account")).toBe("/design/tokens");
+  });
+
+  it("falls back to /design/tokens for an absolute or protocol-relative URL", () => {
+    expect(sanitizeDesignReturnTo("https://evil.example.com")).toBe(
+      "/design/tokens",
+    );
+    expect(sanitizeDesignReturnTo("//evil.example.com")).toBe("/design/tokens");
+  });
+
+  it("falls back to /design/tokens for null or undefined", () => {
+    expect(sanitizeDesignReturnTo(null)).toBe("/design/tokens");
+    expect(sanitizeDesignReturnTo(undefined)).toBe("/design/tokens");
   });
 });

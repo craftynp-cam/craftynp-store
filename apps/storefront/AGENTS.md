@@ -270,6 +270,51 @@ exchanges the code for a Medusa JWT and sets the session cookie.
   `error_description` to tell a cancelled sign-in from one blocked by the
   tenant's email-verification Action. The two call for opposite messages.
 
+## Design gate
+
+`/design/tokens`, `/design/primitives` and `/design/components` are internal and
+sit behind Google Workspace sign-in in every deployed environment. This is a
+**second, separate identity from customer auth** — different cookie, different
+routes, different audience. Do not merge the two.
+
+- **It reuses Medusa's `auth-google-workspace` provider**, the one the admin
+  signs in through, because that provider's check — the verified `hd` claim
+  _and_ the email's own domain — is called load-bearing in
+  [apps/medusa/AGENTS.md](../medusa/AGENTS.md) and must not be duplicated here.
+  `/auth/design/login` passes its own `callback_url`, which the provider honours
+  per request, so the admin flow is unaffected.
+- **Never gate on the customer session.** Customer sign-up is open to anyone, so
+  an email-domain check over `cnp_customer_token` would be a weak gate over an
+  open door.
+- **The cookie is signed by this app, not by Medusa.** `decodeJwtPayload` does
+  no signature verification — fine for `getCustomer()`, which hands the token to
+  Medusa to verify, and useless for a guard that only inspects a cookie. The
+  callback reads the email out of the Medusa JWT (trustworthy: it arrived on our
+  own server-side call, not from the browser), discards the token, and mints an
+  HMAC-signed `cnp_design_session` with `DESIGN_SESSION_SECRET` — its own
+  secret, never Medusa's `JWT_SECRET`.
+- **`design-session.ts` must stay medusa-free and must not throw at module
+  eval** on a missing secret. CI builds after `cp .env.example .env.local` with
+  `NODE_ENV=production`; a module-eval throw would break the build. It fails
+  closed at request time instead — gate on with no secret denies, never opens.
+- **Each page repeats `requireDesignAccess()` even though `design/layout.tsx`
+  calls it**, for the same reason every page under `/account` repeats its guard.
+- **`primitives/page.tsx` is a server page wrapping the client
+  `PrimitivesView`.** A client component cannot hold an `await` guard, so the
+  gallery moved into `primitives-view.tsx` — the same split as `CheckoutView`
+  and `SignInPanel`. It gained a `metadata` export it could not have before.
+- **`DESIGN_GATE` is three-state**: `on`/`off` win, anything else means "on in
+  production only", so `next dev` serves these pages with no sign-in round trip.
+  Set it to `on` to exercise the real flow locally, which also needs a localhost
+  redirect URI on the Google OAuth client.
+- **It is `off` on Vercel Preview and must stay that way.** A preview builds
+  with `NODE_ENV=production`, so the gate would switch itself on, and a per-PR
+  preview's `*.vercel.app` hostname can never be a registered Google redirect
+  URI — the flow cannot complete there whatever the secret says. Vercel SSO
+  already restricts previews to the team. See [docs/dns.md](../../docs/dns.md).
+- These pages read cookies and so are no longer prerendered. They are internal;
+  that was never load-bearing.
+
 ## Account
 
 `/account` (Account settings) and `/account/addresses` (Addresses) share

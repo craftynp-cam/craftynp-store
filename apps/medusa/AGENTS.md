@@ -92,6 +92,15 @@ for both actors.
   `auth-google-workspace/lib.ts` and requires both the verified `hd` claim and
   the email's own domain to match — the `hd` param on the authorize URL is only
   a UI hint. Do not collapse that two-part check.
+- **`auth-google-workspace` has two callers, and the second is not the admin.**
+  The storefront's `/design/*` gate signs in through this same provider (see
+  [apps/storefront/AGENTS.md](../storefront/AGENTS.md)), passing its own
+  `callback_url` — which `authenticate()` honours per request and stashes in the
+  OAuth state for the token exchange, so `GOOGLE_ADMIN_CALLBACK_URL` remains the
+  admin's default and that flow is unchanged. **Both callback URLs have to be
+  registered on the Google Cloud OAuth client.** The storefront needs no Medusa
+  `user` row: it only reads the email off the resulting token, so an actorless
+  token is a success there where the admin flow would go on to `/admin-sso/link`.
 - **There is no admin auto-provisioning.** Google sign-in produces an actorless
   token; the login widget then calls `POST /admin-sso/link`, which links only an
   existing Medusa `user` matched by verified email. Create the admin with

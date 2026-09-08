@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CartCard, Container, ProductCard, ThemeToggle } from "@/components";
+import { requireDesignAccess } from "@/lib/design-guard";
 
 import { CartCardDemo } from "./cart-card-demo";
 
@@ -53,7 +54,9 @@ function ComponentNav() {
   );
 }
 
-export default function ComponentsPage() {
+export default async function ComponentsPage() {
+  await requireDesignAccess("/design/components");
+
   return (
     <main id="main-content" tabIndex={-1} className="py-16">
       <Container>
