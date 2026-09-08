@@ -200,6 +200,25 @@ deployment from a script.
 Fork protection is on, which matters because the repo is public and
 `STORE_CORS` admits preview origins.
 
+### The `/design/*` gate
+
+The internal design-system pages are gated at the application level by Google
+Workspace sign-in, reusing Medusa's `auth-google-workspace` provider. Three
+environment variables on `craftynp-storefront` drive it —
+`DESIGN_SESSION_SECRET`, `DESIGN_ALLOWED_DOMAIN` and `DESIGN_GATE` — and are
+documented in
+[apps/storefront/.env.example](../apps/storefront/.env.example).
+
+**The Google Cloud OAuth Web client now needs two authorized redirect URIs**,
+not one: the admin's `GOOGLE_ADMIN_CALLBACK_URL` and the storefront's
+`https://thecraftynp.org/auth/design/callback`. The provider takes the callback
+URL per request, so an unregistered URI fails at Google, not in our code.
+
+On `dev.thecraftynp.org` this gate **stacks on top of Vercel SSO** above —
+Vercel's challenge first, then Google. That is expected, not a
+misconfiguration. Production is where this gate does the real work, since
+`thecraftynp.org` is exempt from Vercel's protection.
+
 ### Never deploy this repo with `vercel` from the command line
 
 `vercel --prod` from the repo root packages the whole working tree — it reached

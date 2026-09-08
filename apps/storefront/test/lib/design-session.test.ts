@@ -80,18 +80,21 @@ describe("isAllowedWorkspaceEmail", () => {
 });
 
 describe("isDesignGateEnabled", () => {
-  const original = { ...process.env };
-
-  afterEach(() => {
-    process.env.DESIGN_GATE = original.DESIGN_GATE;
-    process.env.NODE_ENV = original.NODE_ENV;
-  });
+  const originalGate = process.env.DESIGN_GATE;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   function setEnv(gate: string | undefined, nodeEnv: string) {
     if (gate === undefined) delete process.env.DESIGN_GATE;
     else process.env.DESIGN_GATE = gate;
-    process.env.NODE_ENV = nodeEnv;
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: nodeEnv,
+      configurable: true,
+    });
   }
+
+  afterEach(() => {
+    setEnv(originalGate, originalNodeEnv ?? "test");
+  });
 
   it("lets DESIGN_GATE win outright in either direction", () => {
     setEnv("on", "development");
