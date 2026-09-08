@@ -49,7 +49,16 @@ fi
 if [ -n "$REPO" ] && docker info >/dev/null 2>&1; then
   # Reads docker-compose.yml rather than naming tags here, so the image
   # versions cannot drift out of step with the compose file.
-  (cd "$REPO" && docker compose --profile init pull) || true
+  #
+  # Time-bounded because this is the one step that can be blocked rather than
+  # slow. Docker Hub hands out blob URLs on either of two CDNs, and only
+  # production.cloudflare.docker.com is on the default Trusted allowlist —
+  # a redirect to production.cloudfront.docker.com is answered 403 by the
+  # proxy, and Docker retries it. Unbounded, that eats the five-minute budget
+  # the environment snapshot has to build inside. See docs/cloud-environment.md
+  # for the allowed-domains entry that actually fixes it; this only stops a
+  # missing entry from costing the whole cache.
+  (cd "$REPO" && timeout 180 docker compose --profile init pull) || true
 fi
 
 exit 0
