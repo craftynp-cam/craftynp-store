@@ -1,3 +1,5 @@
+export { ArtworkUpload } from "./artwork-upload";
+export type { ArtworkUploadProps } from "./artwork-upload";
 export { ProductDetailView } from "./product-detail-view";
 export { ProductDetails } from "./product-details";
 export { ProductGallery } from "./product-gallery";
