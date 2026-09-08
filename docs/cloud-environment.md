@@ -30,14 +30,38 @@ existing one). There is no settings page or direct URL for it.
 | Field          | Value                                                                      |
 | -------------- | -------------------------------------------------------------------------- |
 | Name           | `craftynp-store`                                                           |
-| Network access | **Trusted**                                                                |
+| Network access | **Custom** — see below                                                     |
 | Env variables  | none needed                                                                |
 | Setup script   | the full contents of [`scripts/cloud-setup.sh`](../scripts/cloud-setup.sh) |
 
-**Trusted** is enough and **None** is not. The default allowlist already covers
-the npm registry, Docker Hub, and `fonts.googleapis.com` / `fonts.gstatic.com`,
-which `next/font/google` in `apps/storefront/src/app/layout.tsx` fetches at
-build time. No custom domain list is required.
+**None** does not work: the install, the build and the image pulls all need
+registries. The default **Trusted** allowlist covers almost everything this
+repo needs — the npm registry, Docker Hub, and the `fonts.googleapis.com` /
+`fonts.gstatic.com` pair that `next/font/google` in
+`apps/storefront/src/app/layout.tsx` fetches during the storefront build.
+
+It misses exactly one host, so select **Custom**, check **Also include default
+list of common package managers**, and add:
+
+```text
+production.cloudfront.docker.com
+```
+
+Docker Hub redirects blob downloads to one of two CDNs and picks per request.
+Only the Cloudflare one, `production.cloudflare.docker.com`, is on the default
+list, so a pull handed the CloudFront URL is answered `403 Forbidden` by the
+security proxy and Docker retries it until something gives up:
+
+```
+Image postgres:15-alpine Pulling
+unknown: failed to copy: httpReadSeeker: failed open: unexpected status from
+GET request to https://production.cloudfront.docker.com/registry-v2/... 403 Forbidden
+```
+
+Without the entry, `docker compose pull` and `pnpm run services:up` are a coin
+flip per image. `scripts/cloud-setup.sh` wraps its pull in `timeout 180` so a
+missing entry costs some images rather than the whole environment snapshot,
+but that is a guard, not the fix.
 
 Re-paste the setup script whenever `scripts/cloud-setup.sh` changes. Editing
 that field is also what rebuilds the cached snapshot; it otherwise rebuilds
