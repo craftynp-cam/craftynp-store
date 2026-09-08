@@ -214,10 +214,20 @@ not one: the admin's `GOOGLE_ADMIN_CALLBACK_URL` and the storefront's
 `https://thecraftynp.org/auth/design/callback`. The provider takes the callback
 URL per request, so an unregistered URI fails at Google, not in our code.
 
-On `dev.thecraftynp.org` this gate **stacks on top of Vercel SSO** above —
-Vercel's challenge first, then Google. That is expected, not a
-misconfiguration. Production is where this gate does the real work, since
-`thecraftynp.org` is exempt from Vercel's protection.
+`DESIGN_GATE` is set to `off` on **Preview**, so this gate is a
+production-only control and previews are protected by Vercel SSO alone. That
+is deliberate: a preview builds with `NODE_ENV=production`, so the gate would
+otherwise switch itself on there, and the two ways that ends are both bad.
+Without a `DESIGN_SESSION_SECRET` in Preview it fails closed and `/design`
+becomes unreachable rather than merely gated. With one, it still cannot work,
+because a per-pull-request preview's hostname is a freshly generated
+`*.vercel.app` name and **every redirect URI has to be registered on the Google
+OAuth client in advance** — which a hostname that does not exist yet cannot be.
+Only the stable `dev.thecraftynp.org` alias could ever be registered.
+
+Turning the gate off there costs nothing, because Vercel SSO already restricts
+every preview to the team. Production is where this gate does the real work,
+since `thecraftynp.org` is exempt from Vercel's protection.
 
 ### Never deploy this repo with `vercel` from the command line
 

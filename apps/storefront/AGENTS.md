@@ -307,6 +307,11 @@ routes, different audience. Do not merge the two.
   production only", so `next dev` serves these pages with no sign-in round trip.
   Set it to `on` to exercise the real flow locally, which also needs a localhost
   redirect URI on the Google OAuth client.
+- **It is `off` on Vercel Preview and must stay that way.** A preview builds
+  with `NODE_ENV=production`, so the gate would switch itself on, and a per-PR
+  preview's `*.vercel.app` hostname can never be a registered Google redirect
+  URI — the flow cannot complete there whatever the secret says. Vercel SSO
+  already restricts previews to the team. See [docs/dns.md](../../docs/dns.md).
 - These pages read cookies and so are no longer prerendered. They are internal;
   that was never load-bearing.
 
