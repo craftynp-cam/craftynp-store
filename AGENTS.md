@@ -79,6 +79,12 @@ here.
 
 Postgres listens on host port **5433**, not 5432. Redis is on 6379.
 
+Claude Code cloud sessions set themselves up: `scripts/cloud-session-start.sh`
+writes both env files, installs and builds on every cloud session, and
+`scripts/cloud-setup.sh` is the environment's setup script. Neither runs
+locally. See [docs/cloud-environment.md](docs/cloud-environment.md) before
+changing either, and update it in the same pull request when you do.
+
 ## Branching
 
 `feature/* → dev → main`, one direction only. Branch from an up-to-date `dev`;
