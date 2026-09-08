@@ -117,9 +117,56 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   build was in. Since CNP-17 that path is narrower still (only a query-level
   4xx reaches it), so it is even less likely to be exercised by accident.
   Left unmapped, the workspace symlink resolves through the
-  package's `exports` map, which serves types and runtime separately. This is
-  the only value import of `@craftynp/types` in the app; every other one is
-  `import type`, which is why it was the only casualty.
+  package's `exports` map, which serves types and runtime separately. At the
+  time it was the app's only value import of `@craftynp/types`, which is why it
+  was the only casualty. `artwork-upload.ts` is now the second — and it is worse
+  placed, because it lands in a **client** bundle, so the same failure mode
+  (`(void 0)(…)` at runtime, a green `tsc`, a green Jest) would reach shoppers
+  directly rather than only a server render. Every other import of the package
+  is still `import type`.
+
+## Artwork upload
+
+`ArtworkUpload` (`src/components/product/artwork-upload.tsx`) is the shopper's
+upload control; `src/lib/artwork-upload.ts` is the transport under it. The
+backend half — the presign route, the two-phase `staging/` key, retention — is
+in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+
+- **The PUT to R2 must carry `Content-Type` and no other request header.** The
+  bucket's CORS policy allows exactly that one, so an added `x-amz-*`,
+  `Authorization`, or hand-set `Content-Length` fails the preflight — and the
+  browser reports that as status 0 with no detail, indistinguishable from being
+  offline. `putArtworkFileWithXhr` therefore makes exactly one
+  `setRequestHeader` call, and a test asserts the _whole_ recorded header list
+  rather than just the presence of that one.
+- **The content type comes from the response's `requiredHeaders`, never from
+  `file.type`**, so what is sent cannot drift from what was signed.
+  `Content-Length` is inside the signature, which is why the same `File` object
+  has to flow from `checkArtworkFile` through to the PUT.
+- **It is `XMLHttpRequest`, not `fetch`, and that is not a style choice.**
+  `fetch` reports no upload progress at all, and the story requires a
+  determinate bar. XHR also supplies the `abort()` behind Cancel. `timeout`
+  stays `0`: a 25 MB upload on a slow connection must not be killed by us, and
+  the presigned URL's own expiry is the real bound.
+- **The presign call goes straight from the browser to Medusa**, not through a
+  route handler here. A proxy would put every shopper behind one Vercel IP and
+  defeat the route's per-IP rate limit, and a top-level `src/app/artwork`
+  segment would permanently shadow that Medusa category handle. It reads
+  `NEXT_PUBLIC_*` inside the function body rather than importing `medusa.ts`,
+  which throws at module eval and may not reach a client component.
+- **The component is controlled on the durable reference alone.** Progress,
+  error state and object URLs stay internal, so a progress tick cannot re-render
+  the configurator around it and CNP-45 has exactly one field to thread. The
+  rendered view is derived, `uploading → error → uploaded → idle`.
+- **A replacement runs without clearing `value`, and the preview is adopted on
+  success rather than at upload start.** `onChange` fires only when an upload
+  resolves, so a failed replace leaves the previous artwork attached and still
+  showing its own thumbnail rather than the one that failed.
+- **The drag counter is not incidental.** Crossing from the zone onto a child
+  fires `dragleave` on the zone before `dragenter` on the child, so a plain
+  boolean flickers off at every internal boundary. `dragDepthRef` is the fix.
+  Drag-over is signalled by the hint text changing, not by colour alone — which
+  is also the only form jsdom can assert, since it applies no CSS.
 
 ## Design tokens
 

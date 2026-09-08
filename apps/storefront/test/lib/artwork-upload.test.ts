@@ -54,7 +54,9 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
   try {
     await promise;
   } catch (error) {
-    return error instanceof ArtworkUploadError ? error.code : "not-an-upload-error";
+    return error instanceof ArtworkUploadError
+      ? error.code
+      : "not-an-upload-error";
   }
   return "resolved";
 }
@@ -90,10 +92,12 @@ describe("checkArtworkFile", () => {
   });
 
   it("rejects one byte over the limit and accepts one byte under it", () => {
-    expect(checkArtworkFile(makeFile({ size: MAX_ARTWORK_BYTES + 1 }))).toEqual({
-      ok: false,
-      code: "too_large",
-    });
+    expect(checkArtworkFile(makeFile({ size: MAX_ARTWORK_BYTES + 1 }))).toEqual(
+      {
+        ok: false,
+        code: "too_large",
+      },
+    );
     expect(checkArtworkFile(makeFile({ size: MAX_ARTWORK_BYTES })).ok).toBe(
       true,
     );
@@ -147,14 +151,17 @@ describe("uploadArtwork", () => {
 
   it("presigns with the file's own metadata, then PUTs that same file to the returned url", async () => {
     const file = makeFile();
-    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, presignBody));
-    const putFile = jest.fn<ReturnType<PutArtworkFile>, Parameters<PutArtworkFile>>(
-      () => Promise.resolve(),
-    );
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(jsonResponse(200, presignBody));
+    const putFile = jest.fn<
+      ReturnType<PutArtworkFile>,
+      Parameters<PutArtworkFile>
+    >(() => Promise.resolve());
 
     const reference = await uploadArtwork({ file, fetchImpl, putFile });
 
-    const [url, init] = fetchImpl.mock.calls[0];
+    const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe(`${BACKEND_URL}/store/artwork/uploads`);
     expect(init.method).toBe("POST");
     expect(init.headers["x-publishable-api-key"]).toBe(PUBLISHABLE_KEY);
@@ -165,8 +172,9 @@ describe("uploadArtwork", () => {
     });
 
     expect(putFile).toHaveBeenCalledTimes(1);
-    expect(putFile.mock.calls[0][0].url).toBe(presignBody.uploadUrl);
-    expect(putFile.mock.calls[0][0].file).toBe(file);
+    const put = putFile.mock.calls[0]![0];
+    expect(put.url).toBe(presignBody.uploadUrl);
+    expect(put.file).toBe(file);
 
     expect(reference).toEqual({
       uploadId: "upload-1",
@@ -192,7 +200,7 @@ describe("uploadArtwork", () => {
 
     await uploadArtwork({ file, fetchImpl, putFile });
 
-    expect(putFile.mock.calls[0][0].contentType).toBe("image/jpeg");
+    expect(putFile.mock.calls[0]![0].contentType).toBe("image/jpeg");
   });
 
   it.each<[number, unknown, ArtworkUploadErrorCode]>([
@@ -255,7 +263,9 @@ describe("uploadArtwork", () => {
     const code = await codeOf(
       uploadArtwork({
         file: makeFile(),
-        fetchImpl: jest.fn().mockRejectedValue(new TypeError("failed to fetch")),
+        fetchImpl: jest
+          .fn()
+          .mockRejectedValue(new TypeError("failed to fetch")),
         putFile,
       }),
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { ArtworkUpload } from "@/components";
 import { ArtworkUploadError } from "@/lib/artwork-upload";
@@ -63,17 +63,12 @@ function DemoCase({
   initialValue?: ArtworkReference | null;
 }) {
   const [value, setValue] = useState<ArtworkReference | null>(initialValue);
-  const uploadRef = useRef(upload);
 
   return (
     <div className="max-w-md">
       <h3 className="font-medium text-foreground">{title}</h3>
       <p className="mt-1 mb-3 text-sm text-foreground-muted">{description}</p>
-      <ArtworkUpload
-        value={value}
-        onChange={setValue}
-        upload={uploadRef.current}
-      />
+      <ArtworkUpload value={value} onChange={setValue} upload={upload} />
     </div>
   );
 }

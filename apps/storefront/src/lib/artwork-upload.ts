@@ -99,7 +99,8 @@ export function formatFileSize(bytes: number): string {
     unitIndex += 1;
   }
 
-  const rounded = value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+  const rounded =
+    value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
   return `${rounded} ${units[unitIndex]}`;
 }
 
@@ -114,7 +115,9 @@ const RETRYABLE_CODES: readonly ArtworkUploadErrorCode[] = [
   "put_rejected",
 ];
 
-export function isRetryableArtworkUpload(code: ArtworkUploadErrorCode): boolean {
+export function isRetryableArtworkUpload(
+  code: ArtworkUploadErrorCode,
+): boolean {
   return RETRYABLE_CODES.includes(code);
 }
 
