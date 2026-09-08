@@ -163,6 +163,62 @@ describe("toProductDetail", () => {
       },
     ]);
   });
+
+  it("takes a value's sub-label from its Medusa metadata, either key", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "keychain",
+      title: "Keychain",
+      options: [
+        {
+          id: "opt_color",
+          title: "Color",
+          values: [
+            {
+              id: "val_blush",
+              value: "Blush",
+              metadata: { subLabel: "  Matte finish  " },
+            },
+            {
+              id: "val_sage",
+              value: "Sage",
+              metadata: { sub_label: "Gloss finish" },
+            },
+          ],
+        },
+      ],
+      variants: [],
+    });
+
+    expect(detail.options[0]?.values).toEqual([
+      { id: "val_blush", value: "Blush", subLabel: "Matte finish" },
+      { id: "val_sage", value: "Sage", subLabel: "Gloss finish" },
+    ]);
+  });
+
+  it("leaves the sub-label off a value whose metadata does not define one", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "keychain",
+      title: "Keychain",
+      options: [
+        {
+          id: "opt_color",
+          title: "Color",
+          values: [
+            { id: "val_blush", value: "Blush", metadata: { subLabel: "   " } },
+            { id: "val_sage", value: "Sage", metadata: { subLabel: 12 } },
+            { id: "val_navy", value: "Navy", metadata: null },
+          ],
+        },
+      ],
+      variants: [],
+    });
+
+    for (const value of detail.options[0]?.values ?? []) {
+      expect(value.subLabel).toBeUndefined();
+    }
+  });
 });
 
 describe("fetchProductByHandle", () => {

@@ -125,6 +125,43 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   directly rather than only a server render. Every other import of the package
   is still `import type`.
 
+## Product configurator
+
+The product page is `ProductDetailView` → `ProductGallery` + `ProductPurchase` →
+`VariantSelector`. Option groups are built from whatever options Medusa returns;
+nothing here knows that a product might have a size or a material.
+
+- **Only a single-value option is chosen for the shopper.** Anything with a real
+  choice starts unselected, so add-to-cart stays shut until every group has an
+  answer and the "Choose … to continue" hint has something to name. Preselecting
+  the first value of every option, which is what this used to do, made that gate
+  unreachable. A lone value is exempt because an option-less Medusa product
+  still arrives with one synthetic option, and making someone click "Default
+  option" is not a choice.
+- **Until a variant resolves, the panel prices the product from its cheapest
+  variant** (`From …`). There is no selected variant to price yet, and a blank
+  where the price goes reads as broken.
+- **A value's sub-label comes from the Medusa option value's `metadata`**, under
+  `subLabel` or `sub_label` — Medusa has no native field for it. A blank or
+  non-string entry is ignored, so a half-filled metadata row renders nothing
+  rather than `[object Object]`.
+- **An unavailable value is disabled, struck through, and says why** — `sold out`
+  when nothing else narrows it, `unavailable with your current selection` once
+  another group does. `RadioButtonGroup` folds that reason into the radio's
+  accessible name, because a disabled radio cannot be focused and a `title`
+  would never be announced. Colour carries none of this on its own.
+- **`RadioButtonGroup` (`src/components/ui`) is the option control**, not
+  `RadioGroup`. It renders React Aria radios as buttons, so the selected state is
+  a real `aria-checked` rather than a border colour, and arrow-key operation is
+  the radio group's own. Its visible `Required` marker is `aria-hidden` so it
+  stays out of the group's accessible name; `isRequired` → `aria-required` is the
+  programmatic half.
+- **The add-to-cart block is `fixed` to the bottom of the viewport below `lg`**,
+  so it survives a long option panel, and `ProductDetailView`'s `max-lg:pb-28` is
+  what keeps it clear of the last of the page — change one and change the other.
+  It is one element positioned two ways, never a second button: a duplicate would
+  double every add-to-cart query in the tests.
+
 ## Artwork upload
 
 `ArtworkUpload` (`src/components/product/artwork-upload.tsx`) is the shopper's

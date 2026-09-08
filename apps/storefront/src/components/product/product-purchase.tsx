@@ -22,6 +22,13 @@ type ProductPurchaseProps = {
   onOptionChange: (optionId: string, valueId: string) => void;
 };
 
+function joinTitles(titles: readonly string[]): string {
+  const last = titles.at(-1);
+  if (last == null) return "";
+  if (titles.length === 1) return last;
+  return `${titles.slice(0, -1).join(", ")} and ${last}`;
+}
+
 export function ProductPurchase({
   title,
   href,
@@ -43,9 +50,27 @@ export function ProductPurchase({
     [options, variants, selected],
   );
 
+  const fromPrice = useMemo(() => {
+    const priced = variants.filter((variant) => variant.price !== "");
+    const first = priced[0];
+    if (!first) return undefined;
+    return formatMoney(
+      Math.min(...priced.map((variant) => variant.calculatedAmount)),
+      first.currencyCode,
+    );
+  }, [variants]);
+
+  const outstanding = options.filter((option) => selected[option.id] == null);
   const selectedVariant = findVariant(variants, selected, optionIds);
-  const isOutOfStock =
-    selectedVariant == null || selectedVariant.availability === "out_of_stock";
+  const canAddToCart =
+    selectedVariant != null && selectedVariant.availability !== "out_of_stock";
+
+  const hint =
+    outstanding.length > 0
+      ? `Choose ${joinTitles(outstanding.map((option) => option.title))} to continue.`
+      : selectedVariant == null
+        ? "That combination is not available."
+        : undefined;
 
   const totalPrice = selectedVariant?.price
     ? formatMoney(
@@ -94,11 +119,15 @@ export function ProductPurchase({
         <h1 className="font-display text-4xl">{title}</h1>
       </div>
 
-      <ProductPrice
-        price={selectedVariant?.price ?? ""}
-        originalPrice={selectedVariant?.originalPrice}
-        savingsLabel={selectedVariant?.savingsLabel}
-      />
+      {selectedVariant ? (
+        <ProductPrice
+          price={selectedVariant.price}
+          originalPrice={selectedVariant.originalPrice}
+          savingsLabel={selectedVariant.savingsLabel}
+        />
+      ) : fromPrice ? (
+        <ProductPrice price={fromPrice} prefix="From" />
+      ) : null}
 
       {selectedVariant ? (
         <StockStatus availability={selectedVariant.availability} />
@@ -124,14 +153,18 @@ export function ProductPurchase({
         />
       </div>
 
-      <Button
-        variant="primary"
-        size="lg"
-        isDisabled={isOutOfStock}
-        onPress={handleAddToCart}
-      >
-        Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
-      </Button>
+      <div className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4">
+        {hint ? <p className="text-sm text-foreground-muted">{hint}</p> : null}
+
+        <Button
+          variant="primary"
+          size="lg"
+          isDisabled={!canAddToCart}
+          onPress={handleAddToCart}
+        >
+          Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
+        </Button>
+      </div>
     </div>
   );
 }

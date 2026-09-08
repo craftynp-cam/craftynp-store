@@ -17,8 +17,9 @@ function defaultSelection(
 ): Record<string, string> {
   const selection: Record<string, string> = {};
   for (const option of options) {
-    const firstValue = option.values[0];
-    if (firstValue) selection[option.id] = firstValue.id;
+    if (option.values.length !== 1) continue;
+    const onlyValue = option.values[0];
+    if (onlyValue) selection[option.id] = onlyValue.id;
   }
   return selection;
 }
@@ -37,7 +38,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const variantImageUrl = selectedVariant?.thumbnail ?? undefined;
 
   return (
-    <div className="mt-6 grid gap-10 lg:grid-cols-2">
+    <div className="mt-6 grid gap-10 max-lg:pb-28 lg:grid-cols-2">
       <ProductGallery
         key={variantImageUrl ?? ""}
         images={product.images}
