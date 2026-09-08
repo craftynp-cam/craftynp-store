@@ -1,4 +1,14 @@
 export {
+  ARTWORK_EXTENSIONS,
+  ARTWORK_MIME_TYPES,
+  MAX_ARTWORK_BYTES,
+  artworkDownloadResponseSchema,
+  artworkExtension,
+  artworkMimeTypeSchema,
+  artworkUploadRequestSchema,
+  artworkUploadResponseSchema,
+} from "./artwork.js";
+export {
   MIN_ARTWORK_DPI,
   artworkReferenceSchema,
   customDimensionsSchema,
@@ -84,6 +94,12 @@ export {
   shipmentLabelSchema,
 } from "./fulfilment.js";
 
+export type {
+  ArtworkDownloadResponse,
+  ArtworkMimeType,
+  ArtworkUploadRequest,
+  ArtworkUploadResponse,
+} from "./artwork.js";
 export type {
   ArtworkReference,
   CustomDimensions,

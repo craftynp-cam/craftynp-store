@@ -1,7 +1,7 @@
 # DNS and infrastructure
 
 A record of what is configured in Cloudflare, Railway and Vercel, as of the
-CNP-16/17/18/73 provisioning.
+CNP-16/17/18/73 provisioning, plus the artwork bucket added in CNP-20.
 
 **This is a snapshot, not a source of truth.** The systems below are the
 authority; nothing here is applied by any code in this repo. It is written down
@@ -212,22 +212,84 @@ create the deployment through the API with a `gitSource` body.
 
 ## R2
 
-| Bucket            | Access      | Used by                                      |
-| ----------------- | ----------- | -------------------------------------------- |
-| `craftynp-media`  | **public**  | file module — site content, product images   |
-| `craftynp-labels` | **private** | `src/lib/label-storage.ts` — shipping labels |
+| Bucket             | Access      | Used by                                         |
+| ------------------ | ----------- | ----------------------------------------------- |
+| `craftynp-media`   | **public**  | file module — site content, product images      |
+| `craftynp-labels`  | **private** | `src/lib/label-storage.ts` — shipping labels    |
+| `craftynp-artwork` | **private** | `src/lib/artwork-storage.ts` — customer artwork |
 
-Both `r2.dev` managed endpoints are **disabled**. `craftynp-media` is served
-only through `media.thecraftynp.com`, because Cloudflare rate-limits `r2.dev`
-and documents it as unsuitable for production.
+All three are `ENAM`, `Standard`. Every `r2.dev` managed endpoint is
+**disabled**. `craftynp-media` is served only through `media.thecraftynp.com`,
+because Cloudflare rate-limits `r2.dev` and documents it as unsuitable for
+production. `craftynp-artwork` has no public route at all — no managed
+endpoint and no custom domain — which is what makes it non-listable; every read
+is a short-lived signed URL minted by Medusa.
 
 **Media is on the `.com` zone, not `.org`, on purpose.** Next's image optimizer
 fetches images server-side from Vercel, and Bot Fight Mode — on for `.org` —
 challenges server-side fetches, which fail silently. `.com` has it off.
 
-The two buckets must never be merged. R2 has no object-level ACLs and Medusa's
+The three buckets must never be merged. R2 has no object-level ACLs and Medusa's
 file module takes exactly one provider, which is what forces the split; see
 [apps/medusa/AGENTS.md](../apps/medusa/AGENTS.md).
+
+### `craftynp-artwork` lifecycle rules
+
+| Prefix     | Rule                                           | Why                             |
+| ---------- | ---------------------------------------------- | ------------------------------- |
+| (all)      | abort incomplete multipart uploads after 1 day | housekeeping                    |
+| `staging/` | delete after **7 days**                        | reaps abandoned uploads         |
+| `artwork/` | delete after **180 days**                      | **safety net only** — see below |
+
+**The 180-day rule is not the retention policy.** Retention is
+`ARTWORK_RETENTION_DAYS` (30), enforced by the `purge-artwork` job, and it runs
+from the _delivery_ date. R2 lifecycle can only age on the object's creation
+date, so it cannot express that window: a rule set at the 60-day upload
+fallback would silently delete artwork for an order delivered on day 55, which
+must survive to day 85. The 180-day rule exists only to bound storage if the
+job stops running, and is deliberately far past any window the job can produce.
+
+The `staging/` rule is the one place a native rule genuinely fits — an
+abandoned upload ages purely on upload date and needs no scheduler.
+
+The 7-day staging window must stay comfortably longer than the promotion retry
+horizon (`promote-pending-artwork`, every 15 minutes). Shortening it risks
+destroying artwork for an order that has already been paid for.
+
+**Changing this 7 means changing `STAGING_WINDOW_DAYS` in
+`apps/medusa/src/lib/artwork-retention.ts` to match.** The sweeper uses it to
+decide when a promotion is past saving and stops retrying; if the code's value
+is longer than the rule, it retries objects that no longer exist.
+
+### `craftynp-artwork` CORS
+
+Needed because the browser PUTs straight to R2 against a presigned URL.
+
+| Field   | Value                                                                             |
+| ------- | --------------------------------------------------------------------------------- |
+| Origins | `https://thecraftynp.org`, `https://www.thecraftynp.org`, `http://localhost:8000` |
+| Methods | `PUT`, `GET`, `HEAD`                                                              |
+| Headers | `content-type`                                                                    |
+| Max age | 3600                                                                              |
+
+### R2 credentials
+
+| Buckets                             | Token                                 |
+| ----------------------------------- | ------------------------------------- |
+| `craftynp-media`, `craftynp-labels` | one shared token                      |
+| `craftynp-artwork`                  | its own **Object Read & Write** token |
+
+`FILE_STORAGE_*` and `LABEL_STORAGE_*` carry **identical** access key and
+secret — the two buckets have always shared one credential. Artwork does not
+join them: it holds customer-supplied personal content on a deliberate 30-day
+clock, so a leaked media or labels key must not reach it, and a leaked artwork
+key must not reach product imagery or shipping labels.
+
+R2 tokens can only be created from the dashboard, so the values live on the
+Railway services and nowhere else. Both `medusa-server` and `medusa-worker`
+need them — the purge job runs only under worker duty, and a missing credential
+there means the job throws `ArtworkStorageNotConfiguredError` on every run with
+only the log tag to show for it.
 
 ## GitHub
 

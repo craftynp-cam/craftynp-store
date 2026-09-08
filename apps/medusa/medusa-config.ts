@@ -86,6 +86,14 @@ module.exports = defineConfig({
     ...redisModules,
     { resolve: "./src/modules/site-content" },
     {
+      // Customer artwork: the upload ledger, and what the purge job reads to
+      // find files whose retention window has closed. The bytes live in their
+      // own private R2 bucket via src/lib/artwork-storage.ts, not the file
+      // module — see AGENTS.md for why that cannot be shared.
+      resolve: "./src/modules/artwork",
+      dependencies: [ContainerRegistrationKeys.LOGGER],
+    },
+    {
       resolve: "./src/modules/order-status",
       dependencies: [
         ContainerRegistrationKeys.QUERY,

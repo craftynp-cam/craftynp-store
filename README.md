@@ -16,9 +16,9 @@ at `api.thecraftynp.com` on Railway. A clone still reaches a working dev
 environment — the storefront server-renders products fetched live from Medusa,
 checkout takes a real Stripe payment and places a Medusa order.
 
-The store has no products yet; the client adds those from the admin. Customer
-artwork upload is a later story (CNP-20). See [docs/dns.md](docs/dns.md) for the
-deployed configuration.
+The store has no products yet; the client adds those from the admin. Artwork
+storage and its retention window landed in CNP-20; the upload UI is CNP-39. See
+[docs/dns.md](docs/dns.md) for the deployed configuration.
 
 ## Stack
 
@@ -669,12 +669,13 @@ or ioredis resolves IPv4 only and fails at boot with `ENOTFOUND`.
 `seed-us-region.ts` throws on a missing `SHIP_FROM_*` or
 `SHIPPING_OPTION_DEFAULT_*` rather than half-configuring the store.
 
-**There are two R2 buckets, and they must stay two** (CNP-16). Site-content and
-product imagery goes to a **public** bucket through Medusa's file module
-(`FILE_STORAGE_*`); label PDFs go to a **private** one through
-`label-storage.ts`. A deployed container's filesystem is ephemeral, so
+**There are three R2 buckets, and they must stay three** (CNP-16, CNP-20).
+Site-content and product imagery goes to a **public** bucket through Medusa's
+file module (`FILE_STORAGE_*`); label PDFs go to a **private** one through
+`label-storage.ts`; customer artwork goes to a third **private** one through
+`artwork-storage.ts`. A deployed container's filesystem is ephemeral, so
 `file-local` would silently destroy every uploaded image on the next deploy —
-and R2 has no object-level ACLs, so one bucket cannot be both. See
+and R2 has no object-level ACLs, so one bucket cannot be all three. See
 [apps/medusa/AGENTS.md](apps/medusa/AGENTS.md).
 
 **The origin lock-down in step 2 is a shared-secret header.** Railway exposes a
