@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { CartCard, Container, ProductCard, ThemeToggle } from "@/components";
 
+import { ArtworkUploadDemo } from "./artwork-upload-demo";
 import { CartCardDemo } from "./cart-card-demo";
 
 export const metadata: Metadata = {
@@ -32,6 +33,7 @@ function Section({
 const componentNavEntries = [
   { id: "product-card", label: "Product Card" },
   { id: "cart-card", label: "Cart Card" },
+  { id: "artwork-upload", label: "Artwork Upload" },
 ];
 
 function ComponentNav() {
@@ -269,6 +271,15 @@ export default function ComponentsPage() {
                   <CartCard isLoading />
                   <CartCard isLoading />
                 </ul>
+              </Section>
+            </div>
+
+            <div id="artwork-upload">
+              <Section
+                title="Artwork upload"
+                description="Four states: idle, uploading with determinate progress, uploaded with filename, size and thumbnail, and error with retry. Uploads run against a simulated transport here, so every state is reachable without a backend. Keyboard operable — tab to the button and press Enter — and every transition is announced in a live region."
+              >
+                <ArtworkUploadDemo />
               </Section>
             </div>
           </div>
