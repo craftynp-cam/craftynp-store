@@ -68,3 +68,27 @@ export function sanitizeReturnTo(value: string | null | undefined): string {
   }
   return accountHref();
 }
+
+export function designHref(): string {
+  return "/design/tokens";
+}
+
+export function designLoginHref(options?: { returnTo?: string }): string {
+  const params = new URLSearchParams();
+  if (options?.returnTo) params.set("return_to", options.returnTo);
+  const query = params.toString();
+  return query ? `/auth/design/login?${query}` : "/auth/design/login";
+}
+
+export function designLogoutHref(): string {
+  return "/auth/design/logout";
+}
+
+export function sanitizeDesignReturnTo(
+  value: string | null | undefined,
+): string {
+  if (value && value.startsWith("/design/") && !value.includes("..")) {
+    return value;
+  }
+  return designHref();
+}

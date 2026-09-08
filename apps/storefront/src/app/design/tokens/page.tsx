@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Container, ThemeToggle } from "@/components";
 import { gradeContrast } from "@/lib/contrast";
+import { requireDesignAccess } from "@/lib/design-guard";
 import {
   brandColors,
   fontTokens,
@@ -153,7 +154,9 @@ function ContrastTable({ mode }: { mode: Mode }) {
   );
 }
 
-export default function DesignTokensPage() {
+export default async function DesignTokensPage() {
+  await requireDesignAccess("/design/tokens");
+
   return (
     <main id="main-content" tabIndex={-1} className="py-16">
       <Container>
