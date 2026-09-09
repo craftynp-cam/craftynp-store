@@ -96,7 +96,7 @@ describe("optionValueAvailability", () => {
     },
   ];
 
-  it("flags a value unavailable when it has no purchasable variant for the current selection", () => {
+  it("is available when a purchasable variant matches the current selection", () => {
     const variants = [
       {
         id: "var_s_black",
@@ -109,11 +109,31 @@ describe("optionValueAvailability", () => {
       opt_size: "val_s",
     });
 
-    expect(result.opt_color?.val_black).toBe(true);
-    expect(result.opt_color?.val_white).toBe(false);
+    expect(result.opt_color?.val_black).toBe("available");
   });
 
-  it("treats an out-of-stock variant as unavailable, not hidden (AC 4)", () => {
+  it("is incompatible when the value sells elsewhere but not with what is chosen", () => {
+    const variants = [
+      {
+        id: "var_s_black",
+        optionValueIds: ["val_s", "val_black"],
+        availability: "in_stock" as const,
+      },
+      {
+        id: "var_m_white",
+        optionValueIds: ["val_m", "val_white"],
+        availability: "in_stock" as const,
+      },
+    ];
+
+    const result = optionValueAvailability(options, variants, {
+      opt_size: "val_s",
+    });
+
+    expect(result.opt_color?.val_white).toBe("incompatible");
+  });
+
+  it("is sold_out when no purchasable variant carries the value at all (AC 4)", () => {
     const variants = [
       {
         id: "var_s_black",
@@ -124,7 +144,37 @@ describe("optionValueAvailability", () => {
 
     const result = optionValueAvailability(options, variants, {});
 
-    expect(result.opt_size?.val_s).toBe(false);
+    expect(result.opt_size?.val_s).toBe("sold_out");
     expect(Object.keys(result.opt_size ?? {})).toContain("val_s");
+  });
+
+  it("stays sold_out rather than blaming the selection, once another option is chosen", () => {
+    const variants = [
+      {
+        id: "var_s_black",
+        optionValueIds: ["val_s", "val_black"],
+        availability: "in_stock" as const,
+      },
+      {
+        id: "var_m_black",
+        optionValueIds: ["val_m", "val_black"],
+        availability: "in_stock" as const,
+      },
+      {
+        id: "var_s_white",
+        optionValueIds: ["val_s", "val_white"],
+        availability: "out_of_stock" as const,
+      },
+      {
+        id: "var_m_white",
+        optionValueIds: ["val_m", "val_white"],
+        availability: "out_of_stock" as const,
+      },
+    ];
+
+    expect(
+      optionValueAvailability(options, variants, { opt_size: "val_s" })
+        .opt_color?.val_white,
+    ).toBe("sold_out");
   });
 });

@@ -4,17 +4,26 @@ type ProductPriceProps = {
   price: string;
   originalPrice?: string;
   savingsLabel?: string;
+  prefix?: string;
 };
 
 export function ProductPrice({
   price,
   originalPrice,
   savingsLabel,
+  prefix,
 }: ProductPriceProps) {
   const isOnSale = originalPrice != null;
 
   if (!isOnSale) {
-    return <p className="text-2xl font-medium">{price}</p>;
+    return (
+      <p className="text-2xl font-medium">
+        {prefix ? (
+          <span className="mr-2 text-base text-foreground-muted">{prefix}</span>
+        ) : null}
+        <span>{price}</span>
+      </p>
+    );
   }
 
   return (

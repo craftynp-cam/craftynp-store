@@ -8,6 +8,7 @@ import {
   Button,
   Checkbox,
   Container,
+  RadioButtonGroup,
   RadioGroup,
   Select,
   Textarea,
@@ -76,9 +77,21 @@ const deliveryOptions = [
   { value: "collection", label: "Collect in person", isDisabled: true },
 ];
 
+const finishOptions = [
+  { value: "matte", label: "Matte", subLabel: "Soft-touch" },
+  { value: "gloss", label: "Gloss", subLabel: "High shine" },
+  {
+    value: "satin",
+    label: "Satin",
+    isDisabled: true,
+    disabledReason: "sold out",
+  },
+];
+
 export function PrimitivesView() {
   const [giftWrap, setGiftWrap] = useState(false);
   const [delivery, setDelivery] = useState("standard");
+  const [finish, setFinish] = useState("matte");
 
   return (
     <main id="main-content" tabIndex={-1} className="py-16">
@@ -244,6 +257,22 @@ export function PrimitivesView() {
               options={deliveryOptions}
               errorMessage="Choose a delivery method."
               isInvalid
+            />
+          </FieldRow>
+        </Section>
+
+        <Section
+          title="Radio button group"
+          description="The same radio semantics drawn as buttons, for choosing a product option. A value can carry a sub-label, and a disabled one folds the reason it is disabled into its accessible name."
+        >
+          <FieldRow label="States">
+            <RadioButtonGroup
+              label="Finish"
+              isRequired
+              options={finishOptions}
+              value={finish}
+              onChange={setFinish}
+              description="Struck-through choices are sold out."
             />
           </FieldRow>
         </Section>

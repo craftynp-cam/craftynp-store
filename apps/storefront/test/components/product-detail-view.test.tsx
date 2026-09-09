@@ -33,10 +33,10 @@ const variants: ProductDetailVariant[] = [
     sku: "KEYCHAIN-SAGE",
     thumbnail: "https://example.com/sage.png",
     optionValueIds: ["val_sage"],
-    availability: "out_of_stock" as const,
-    price: "$9.00",
+    availability: "in_stock" as const,
+    price: "$12.00",
     originalPrice: undefined,
-    calculatedAmount: 9,
+    calculatedAmount: 12,
     currencyCode: "usd",
   },
 ];
@@ -59,6 +59,10 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
   };
 }
 
+function chooseBlush() {
+  fireEvent.click(screen.getByRole("radio", { name: "Blush" }));
+}
+
 describe("ProductDetailView", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -66,11 +70,128 @@ describe("ProductDetailView", () => {
     setCartDrawerOpen(false);
   });
 
-  it("defaults to the first option value and shows its price", () => {
+  it("leaves a multi-value option unchosen and prices the product from its cheapest variant (AC 5)", () => {
     render(<ProductDetailView product={makeProduct()} />);
 
-    expect(screen.getByRole("radio", { name: "Blush" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Blush" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Sage" })).not.toBeChecked();
+    expect(screen.getByText("From")).toBeInTheDocument();
     expect(screen.getByText("$9.00")).toBeInTheDocument();
+  });
+
+  it("answers a no-choice option itself and draws no group for it", () => {
+    const singleValue = [
+      { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
+    ];
+
+    render(
+      <ProductDetailView
+        product={makeProduct({
+          options: singleValue,
+          variants: [variants[0]!],
+        })}
+      />,
+    );
+
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+  });
+
+  it("still carries a no-choice option through to the cart line", () => {
+    const singleValue = [
+      { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
+    ];
+
+    render(
+      <ProductDetailView
+        product={makeProduct({
+          options: singleValue,
+          variants: [variants[0]!],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(readCart().lines[0]?.details).toEqual([
+      { label: "Color", value: "Blush" },
+    ]);
+  });
+
+  it("holds add to cart shut until every option is chosen, naming what is left (AC 5)", () => {
+    const twoOptions = [
+      ...options,
+      {
+        id: "opt_size",
+        title: "Size",
+        values: [
+          { id: "val_small", value: "Small" },
+          { id: "val_large", value: "Large" },
+        ],
+      },
+    ];
+    const sized: ProductDetailVariant[] = [
+      { ...variants[0]!, optionValueIds: ["val_blush", "val_small"] },
+      { ...variants[1]!, optionValueIds: ["val_sage", "val_large"] },
+    ];
+
+    render(
+      <ProductDetailView
+        product={makeProduct({ options: twoOptions, variants: sized })}
+      />,
+    );
+
+    expect(
+      screen.getByText("Choose Color and Size to continue."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+
+    chooseBlush();
+
+    expect(screen.getByText("Choose Size to continue.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Small" }));
+
+    expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+  });
+
+  it("strikes through a value no in-stock variant can satisfy (AC 4)", () => {
+    const soldOutSage = [
+      variants[0]!,
+      { ...variants[1]!, availability: "out_of_stock" as const },
+    ];
+
+    render(
+      <ProductDetailView product={makeProduct({ variants: soldOutSage })} />,
+    );
+
+    expect(
+      screen.getByRole("radio", { name: "Sage, sold out" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Blush" })).toBeEnabled();
+  });
+
+  it("disables add to cart when the only variant is out of stock", () => {
+    const singleValue = [
+      { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
+    ];
+
+    render(
+      <ProductDetailView
+        product={makeProduct({
+          options: singleValue,
+          variants: [
+            { ...variants[0]!, availability: "out_of_stock" as const },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
   });
 
   it("shows the ready-to-ship badge", () => {
@@ -79,18 +200,10 @@ describe("ProductDetailView", () => {
     expect(screen.getByText(/ready to ship/i)).toBeInTheDocument();
   });
 
-  it("disables add to cart when the selected variant is out of stock (AC 3)", () => {
-    render(<ProductDetailView product={makeProduct()} />);
-
-    fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
-
-    expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
-  });
-
   it("adds the selected variant to the cart and opens the drawer", () => {
     render(<ProductDetailView product={makeProduct()} />);
 
+    chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
 
     const cart = readCart();
@@ -100,6 +213,7 @@ describe("ProductDetailView", () => {
       title: "Wildflower Acrylic Keychain",
       unitPrice: 9,
       quantity: 1,
+      details: [{ label: "Color", value: "Blush" }],
     });
     expect(readCartDrawerOpen()).toBe(true);
   });
@@ -107,22 +221,17 @@ describe("ProductDetailView", () => {
   it("shows the savings badge for a variant on sale (AC 2)", () => {
     const saleVariants: ProductDetailVariant[] = [
       {
-        id: "var_blush",
-        sku: "KEYCHAIN-BLUSH",
-        thumbnail: null,
-        optionValueIds: ["val_blush"],
-        availability: "in_stock" as const,
-        price: "$9.00",
+        ...variants[0]!,
         originalPrice: "$12.00",
         savingsLabel: "Save 25%",
-        calculatedAmount: 9,
-        currencyCode: "usd",
       },
     ];
 
     render(
       <ProductDetailView product={makeProduct({ variants: saleVariants })} />,
     );
+
+    chooseBlush();
 
     expect(screen.getByText("Save 25%")).toBeInTheDocument();
     expect(screen.getByText("$12.00")).toBeInTheDocument();
@@ -131,6 +240,7 @@ describe("ProductDetailView", () => {
   it("adds the quantity selected in the stepper", () => {
     render(<ProductDetailView product={makeProduct()} />);
 
+    chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
 
@@ -140,6 +250,8 @@ describe("ProductDetailView", () => {
   it("shows the unit price on the add to cart button at quantity 1", () => {
     render(<ProductDetailView product={makeProduct()} />);
 
+    chooseBlush();
+
     expect(
       screen.getByRole("button", { name: "Add to cart · $9.00" }),
     ).toBeInTheDocument();
@@ -148,6 +260,7 @@ describe("ProductDetailView", () => {
   it("multiplies the add to cart button's price by the selected quantity", () => {
     render(<ProductDetailView product={makeProduct()} />);
 
+    chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
 
@@ -159,6 +272,7 @@ describe("ProductDetailView", () => {
   it("shows the selected variant's image as the main image", () => {
     render(<ProductDetailView product={makeProduct()} />);
 
+    chooseBlush();
     expect(screen.getByAltText("Keychain, blush")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
@@ -182,13 +296,7 @@ describe("ProductDetailView", () => {
   });
 
   it("adds the selected variant's image to the cart line", () => {
-    const inStock = variants.map((variant) =>
-      variant.id === "var_sage"
-        ? { ...variant, availability: "in_stock" as const }
-        : variant,
-    );
-
-    render(<ProductDetailView product={makeProduct({ variants: inStock })} />);
+    render(<ProductDetailView product={makeProduct()} />);
 
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));

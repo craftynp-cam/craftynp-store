@@ -125,6 +125,64 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   directly rather than only a server render. Every other import of the package
   is still `import type`.
 
+## Product configurator
+
+The product page is `ProductDetailView` → `ProductGallery` + `ProductPurchase` →
+`VariantSelector`. Option groups are built from whatever options Medusa returns;
+nothing here knows that a product might have a size or a material.
+
+- **Only a single-value option is chosen for the shopper, and it is not drawn.**
+  Anything with a real choice starts unselected, so add-to-cart stays shut until
+  every group has an answer and the "Choose … to continue" hint has something to
+  name. Preselecting the first value of every option, which is what this used to
+  do, made that gate unreachable. A lone value is exempt because an option-less
+  Medusa product still arrives with one synthetic option, and a required
+  radiogroup holding one radio called "Default option value" is not a choice —
+  `VariantSelector` drops any group with fewer than two values, and returns null
+  when that leaves none. The auto-chosen value still reaches the cart line's
+  `details`, so nothing is lost by hiding it.
+- **`optionValueAvailability` reports a status per value, not per group.** A
+  value is `sold_out` when no purchasable variant carries it _at all_, and only
+  `incompatible` when it sells elsewhere but not alongside what is currently
+  chosen. Deriving one reason per group from "has any other group been
+  answered", which is what this used to do, told a shopper to try a different
+  size when no size would have helped.
+- **Until a variant resolves, the panel prices the product from its cheapest
+  _purchasable_ variant** (`From …`), falling back to the cheapest priced one
+  only when every variant is out of stock. Taking the minimum over all priced
+  variants advertises a number no reachable combination can match. A blank where
+  the price goes reads as broken, which is why there is a `From` at all.
+- **A value's sub-label comes from the Medusa option value's `metadata`**, under
+  `subLabel` or `sub_label` — Medusa has no native field for it. A blank or
+  non-string entry is ignored, so a half-filled metadata row renders nothing
+  rather than `[object Object]`.
+- **`RadioButtonGroup` (`src/components/ui`) is the option control**, not
+  `RadioGroup`, which still serves every ordinary form. It renders React Aria
+  radios as buttons, so the selected state is a real `aria-checked` rather than a
+  border colour, and arrow-key operation is the radio group's own. It folds a
+  value's sub-label and, when it is disabled, the reason into the radio's
+  accessible name, because a disabled radio cannot be focused and a `title`
+  would never be announced. Its visible `Required` marker is `aria-hidden` so it
+  stays out of the group's accessible name; `isRequired` → `aria-required` is the
+  programmatic half.
+- **It must paint its own focus ring, and that is not decoration.** HeroUI hangs
+  the radio ring off `.radio__control` — `<Radio.Control>` — which this component
+  deliberately does not render, there being no dot to draw. Without the
+  `has-[[data-focus-visible]]` ring on the button box there is no focus
+  indicator at all, not merely a misplaced one. `data-focus-visible` lands on
+  `Radio.Content`, which is why the ring is matched with `has-` from the outer
+  `Radio` that carries the border.
+- **The add-to-cart block is `fixed` to the bottom of the viewport below `lg`**
+  so it survives a long option panel, and it reports its measured height to
+  `ProductDetailView`, which reserves exactly that much bottom padding through
+  the `--cta-bar-height` custom property. The bar's height is not a constant —
+  the outstanding-choices hint wraps to two lines on a narrow phone — so the
+  hand-tuned `pb-28` it replaced covered the very content it was added to clear.
+  The `7rem` in the fallback is only what applies before the first measurement,
+  and where there is no `ResizeObserver`. It is one element positioned two ways,
+  never a second button: a duplicate would double every add-to-cart query in the
+  tests.
+
 ## Artwork upload
 
 `ArtworkUpload` (`src/components/product/artwork-upload.tsx`) is the shopper's

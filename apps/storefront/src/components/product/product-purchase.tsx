@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge, Button, QuantityStepper } from "../ui";
 import { ProductPrice } from "./product-price";
@@ -20,7 +20,15 @@ type ProductPurchaseProps = {
   variants: readonly ProductDetailVariant[];
   selected: Record<string, string>;
   onOptionChange: (optionId: string, valueId: string) => void;
+  onCtaHeightChange?: (height: number) => void;
 };
+
+function joinTitles(titles: readonly string[]): string {
+  const last = titles.at(-1);
+  if (last == null) return "";
+  if (titles.length === 1) return last;
+  return `${titles.slice(0, -1).join(", ")} and ${last}`;
+}
 
 export function ProductPurchase({
   title,
@@ -30,8 +38,28 @@ export function ProductPurchase({
   variants,
   selected,
   onOptionChange,
+  onCtaHeightChange,
 }: ProductPurchaseProps) {
   const [quantity, setQuantity] = useState(1);
+  const ctaRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = ctaRef.current;
+    if (!node || !onCtaHeightChange) return;
+
+    const report = () => {
+      if (node.offsetHeight > 0) onCtaHeightChange(node.offsetHeight);
+    };
+
+    if (typeof ResizeObserver === "undefined") {
+      report();
+      return;
+    }
+
+    const observer = new ResizeObserver(report);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onCtaHeightChange]);
 
   const optionIds = useMemo(
     () => options.map((option) => option.id),
@@ -43,9 +71,32 @@ export function ProductPurchase({
     [options, variants, selected],
   );
 
+  const fromPrice = useMemo(() => {
+    const priced = variants.filter((variant) => variant.price !== "");
+    const purchasable = priced.filter(
+      (variant) => variant.availability !== "out_of_stock",
+    );
+    const pool = purchasable.length > 0 ? purchasable : priced;
+
+    const first = pool[0];
+    if (!first) return undefined;
+    return formatMoney(
+      Math.min(...pool.map((variant) => variant.calculatedAmount)),
+      first.currencyCode,
+    );
+  }, [variants]);
+
+  const outstanding = options.filter((option) => selected[option.id] == null);
   const selectedVariant = findVariant(variants, selected, optionIds);
-  const isOutOfStock =
-    selectedVariant == null || selectedVariant.availability === "out_of_stock";
+  const canAddToCart =
+    selectedVariant != null && selectedVariant.availability !== "out_of_stock";
+
+  const hint =
+    outstanding.length > 0
+      ? `Choose ${joinTitles(outstanding.map((option) => option.title))} to continue.`
+      : selectedVariant == null
+        ? "That combination is not available."
+        : undefined;
 
   const totalPrice = selectedVariant?.price
     ? formatMoney(
@@ -94,24 +145,26 @@ export function ProductPurchase({
         <h1 className="font-display text-4xl">{title}</h1>
       </div>
 
-      <ProductPrice
-        price={selectedVariant?.price ?? ""}
-        originalPrice={selectedVariant?.originalPrice}
-        savingsLabel={selectedVariant?.savingsLabel}
-      />
+      {selectedVariant ? (
+        <ProductPrice
+          price={selectedVariant.price}
+          originalPrice={selectedVariant.originalPrice}
+          savingsLabel={selectedVariant.savingsLabel}
+        />
+      ) : fromPrice ? (
+        <ProductPrice price={fromPrice} prefix="From" />
+      ) : null}
 
       {selectedVariant ? (
         <StockStatus availability={selectedVariant.availability} />
       ) : null}
 
-      {options.length > 0 ? (
-        <VariantSelector
-          options={options}
-          selected={selected}
-          onChange={onOptionChange}
-          availability={availability}
-        />
-      ) : null}
+      <VariantSelector
+        options={options}
+        selected={selected}
+        onChange={onOptionChange}
+        availability={availability}
+      />
 
       <div>
         <p className="mb-2 text-sm font-medium text-foreground-muted uppercase tracking-wide">
@@ -124,14 +177,21 @@ export function ProductPurchase({
         />
       </div>
 
-      <Button
-        variant="primary"
-        size="lg"
-        isDisabled={isOutOfStock}
-        onPress={handleAddToCart}
+      <div
+        ref={ctaRef}
+        className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4"
       >
-        Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
-      </Button>
+        {hint ? <p className="text-sm text-foreground-muted">{hint}</p> : null}
+
+        <Button
+          variant="primary"
+          size="lg"
+          isDisabled={!canAddToCart}
+          onPress={handleAddToCart}
+        >
+          Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
+        </Button>
+      </div>
     </div>
   );
 }
