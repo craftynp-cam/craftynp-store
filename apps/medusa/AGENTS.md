@@ -24,6 +24,15 @@ tax provider), `notification-resend`, `auth-auth0`, and
   a category list the client edits freely. **The widget must spread the existing
   metadata into its update** — Medusa replaces the jsonb column wholesale, so an
   unspread write silently destroys every other key on the category.
+- **A product's customization declaration lives on `product.metadata`**, in the
+  flat keys the `CUSTOMIZATION_INPUTS` registry in `@craftynp/types` names —
+  `customizable` plus one `customization_*` key per configurator input, every
+  value a string. Flat strings, not a nested object, so a CSV import and the
+  admin's raw metadata editor can both write them. The widget in
+  `src/admin/widgets/product-customization.tsx` (zone
+  `product.details.side.after`) writes them, and **must spread the product's
+  existing metadata into its update** for the same reason the category-image
+  widget must.
 - **`tsconfig.json` must keep `medusa-config.ts` in `include`, with `rootDir`
   at `./`.** `medusa build` emits exactly `tsConfig.fileNames`, so scoping the
   root to `src` leaves the built `.medusa/server` with no `medusa-config.js` and
@@ -646,10 +655,20 @@ CNP-79.
   environment fails the migration rather than half-configuring the store.
 - **The ship-from address comes from `SHIP_FROM_*` env**, never hard-coded into
   a migration script, so the client's real address stays out of git.
-- **Shipping-dimension validation for publishable products is a workflow hook**
-  on `createProductsWorkflow` / `updateProductsWorkflow`, not route middleware —
-  a status-only publish, `/admin/products/batch`, CSV import, and custom
-  workflows all bypass HTTP. Add any similar guard there.
+- **Product validation is a workflow hook** on `createProductsWorkflow` /
+  `updateProductsWorkflow`, not route middleware — a status-only publish,
+  `/admin/products/batch`, CSV import, and custom workflows all bypass HTTP.
+  Add any similar guard to `src/workflows/hooks/validate-products.ts`, which is
+  where the shipping-dimension and customization guards both run. **It has to be
+  that one file:** Medusa throws on a second handler for a hook it has already
+  registered, so a new guard is a call added inside the existing handler, never
+  a new hook file.
+- **A malformed customization declaration is rejected at any status; an
+  incomplete one only on publish.** A contradictory record — the flag off with
+  an input still on — or a value outside the registry's vocabulary is wrong
+  whatever the status. A product that is customizable but asks for nothing is a
+  draft mid-setup, and is refused only when it is published, the same line the
+  shipping-dimension guard draws.
 
 ## Testing
 

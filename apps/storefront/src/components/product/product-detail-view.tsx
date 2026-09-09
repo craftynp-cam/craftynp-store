@@ -62,6 +62,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           imageUrl={variantImageUrl ?? product.images[0]?.url}
           options={product.options}
           variants={product.variants}
+          customization={product.customization}
           selected={selected}
           onOptionChange={(optionId, valueId) =>
             setSelected((current) => ({ ...current, [optionId]: valueId }))

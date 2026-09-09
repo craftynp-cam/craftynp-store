@@ -55,8 +55,8 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   why the gallery and the purchase panel are wrapped rather than rendered
   side by side from the page. The selected variant's `thumbnail` drives the
   gallery's main image, so the state has to sit above both. `ProductPurchase`
-  is controlled — it takes `selected` and `onOptionChange` and keeps only its
-  own quantity.
+  is controlled — it takes `selected` and `onOptionChange` and keeps only the
+  state nothing above it needs: the quantity and the customization draft.
 - **Import icons only through `src/components/icons`** — the sole place
   `@phosphor-icons/react` is imported, and from its `/dist/ssr` subpath so
   glyphs render in server components too. Every glyph is decorative:
@@ -182,6 +182,42 @@ nothing here knows that a product might have a size or a material.
   and where there is no `ResizeObserver`. It is one element positioned two ways,
   never a second button: a duplicate would double every add-to-cart query in the
   tests.
+
+## Product customization
+
+Whether a product is made to order, and which configurator inputs it asks for,
+is declared by the shop owner on the product's metadata in Medusa and read back
+through `resolveProductCustomization` in `@craftynp/types` (see
+[apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the metadata keys and the
+guard that validates them).
+
+- **The declaration arrives on the product payload itself**, which is why
+  `fetchProductByHandle` and `fetchCatalogProducts` both ask for `+metadata`.
+  Drop it and every product silently reads as ready-made — a 200 with no error
+  anywhere, exactly the failure mode CNP-17 was about.
+- **Read it only through `resolveProductCustomization`**, never off `metadata`
+  directly. The owner can type anything into the admin's raw metadata editor or
+  a CSV column, so the resolver treats a value it does not recognise as off
+  rather than rendering an input nobody declared.
+- **`ProductPurchase` owns the configurator draft**, alongside its quantity. The
+  draft is deliberately
+  storefront-shaped strings, not a `LineItemCustomization` — the shopper's width
+  is `"8"` while they are still typing, and an `ArtworkReference` here has no
+  `dpi` yet, so it cannot become one. The text, size and notes reach the cart as
+  `details` entries alongside the variant options; **artwork does not**, because
+  a filename in `details` would show an attachment the cart cannot actually
+  carry. CNP-45 threads the real payload through.
+- **There is one add-to-cart gate and one hint, not two.** `canAddToCart` is
+  false while an option is outstanding, while the variant is sold out, _or_
+  while a required configurator input is empty; the hint names whatever is
+  outstanding in one sentence — "Choose Size, then add your artwork to
+  continue." A second gate beside it is how a shopper ends up with a disabled
+  button and no explanation, so CNP-37, CNP-38 and CNP-41 extend this one rather
+  than adding their own.
+- `ProductConfigurator` renders one input per declared key and nothing else.
+  Adding an input means adding it to `CUSTOMIZATION_INPUTS` in `@craftynp/types`
+  first — the registry is what the admin widget, the backend guard and the gate
+  all walk.
 
 ## Artwork upload
 

@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import type { ProductCustomization } from "@craftynp/types";
+
 import { Badge, Button, QuantityStepper } from "../ui";
+import { ProductConfigurator } from "./product-configurator";
 import { ProductPrice } from "./product-price";
 import { StockStatus } from "./stock-status";
 import { VariantSelector } from "./variant-selector";
@@ -10,6 +13,13 @@ import { addCartLine } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
 import { formatMoney } from "@/lib/money";
 import type { ProductDetailOption, ProductDetailVariant } from "@/lib/product";
+import {
+  EMPTY_CUSTOMIZATION_DRAFT,
+  customizationDetails,
+  missingInputLabels,
+  missingRequiredInputs,
+  type CustomizationDraft,
+} from "@/lib/product-customization";
 import { findVariant, optionValueAvailability } from "@/lib/variant";
 
 type ProductPurchaseProps = {
@@ -18,6 +28,7 @@ type ProductPurchaseProps = {
   imageUrl?: string;
   options: readonly ProductDetailOption[];
   variants: readonly ProductDetailVariant[];
+  customization: ProductCustomization;
   selected: Record<string, string>;
   onOptionChange: (optionId: string, valueId: string) => void;
   onCtaHeightChange?: (height: number) => void;
@@ -30,17 +41,26 @@ function joinTitles(titles: readonly string[]): string {
   return `${titles.slice(0, -1).join(", ")} and ${last}`;
 }
 
+function asSentence(clauses: readonly string[]): string {
+  const joined = clauses.join(", then ");
+  return `${joined.charAt(0).toUpperCase()}${joined.slice(1)} to continue.`;
+}
+
 export function ProductPurchase({
   title,
   href,
   imageUrl,
   options,
   variants,
+  customization,
   selected,
   onOptionChange,
   onCtaHeightChange,
 }: ProductPurchaseProps) {
   const [quantity, setQuantity] = useState(1);
+  const [draft, setDraft] = useState<CustomizationDraft>(
+    EMPTY_CUSTOMIZATION_DRAFT,
+  );
   const ctaRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -87,15 +107,28 @@ export function ProductPurchase({
   }, [variants]);
 
   const outstanding = options.filter((option) => selected[option.id] == null);
+  const missingInputs = missingRequiredInputs(customization, draft);
   const selectedVariant = findVariant(variants, selected, optionIds);
+  const isSoldOut = selectedVariant?.availability === "out_of_stock";
   const canAddToCart =
-    selectedVariant != null && selectedVariant.availability !== "out_of_stock";
+    selectedVariant != null && !isSoldOut && missingInputs.length === 0;
 
-  const hint =
-    outstanding.length > 0
-      ? `Choose ${joinTitles(outstanding.map((option) => option.title))} to continue.`
-      : selectedVariant == null
-        ? "That combination is not available."
+  const clauses: string[] = [];
+  if (outstanding.length > 0) {
+    clauses.push(
+      `choose ${joinTitles(outstanding.map((option) => option.title))}`,
+    );
+  }
+  if (missingInputs.length > 0) {
+    clauses.push(`add ${joinTitles(missingInputLabels(missingInputs))}`);
+  }
+
+  const hint = isSoldOut
+    ? undefined
+    : outstanding.length === 0 && selectedVariant == null
+      ? "That combination is not available."
+      : clauses.length > 0
+        ? asSentence(clauses)
         : undefined;
 
   const totalPrice = selectedVariant?.price
@@ -105,16 +138,21 @@ export function ProductPurchase({
       )
     : undefined;
 
-  const detailsForCart = options
-    .map((option) => {
-      const valueId = selected[option.id];
-      const value = option.values.find((candidate) => candidate.id === valueId);
-      return value ? { label: option.title, value: value.value } : undefined;
-    })
-    .filter((detail) => detail != null);
+  const detailsForCart = [
+    ...options
+      .map((option) => {
+        const valueId = selected[option.id];
+        const value = option.values.find(
+          (candidate) => candidate.id === valueId,
+        );
+        return value ? { label: option.title, value: value.value } : undefined;
+      })
+      .filter((detail) => detail != null),
+    ...customizationDetails(customization, draft),
+  ];
 
   function handleAddToCart() {
-    if (!selectedVariant) return;
+    if (!selectedVariant || !canAddToCart) return;
 
     addCartLine({
       id: selectedVariant.id,
@@ -125,7 +163,7 @@ export function ProductPurchase({
       unitPrice: selectedVariant.calculatedAmount,
       currencyCode: selectedVariant.currencyCode,
       quantity,
-      isCustomizable: false,
+      isCustomizable: customization.isCustomizable,
       details: detailsForCart,
     });
     openCartDrawer();
@@ -134,11 +172,11 @@ export function ProductPurchase({
   return (
     <div className="flex flex-col gap-6">
       <Badge
-        tone="success"
+        tone={customization.isCustomizable ? "accent" : "success"}
         variant="primary"
         className="w-fit uppercase tracking-wide"
       >
-        Ready to ship
+        {customization.isCustomizable ? "Made to order" : "Ready to ship"}
       </Badge>
 
       <div>
@@ -165,6 +203,14 @@ export function ProductPurchase({
         onChange={onOptionChange}
         availability={availability}
       />
+
+      {customization.isCustomizable ? (
+        <ProductConfigurator
+          customization={customization}
+          value={draft}
+          onChange={setDraft}
+        />
+      ) : null}
 
       <div>
         <p className="mb-2 text-sm font-medium text-foreground-muted uppercase tracking-wide">

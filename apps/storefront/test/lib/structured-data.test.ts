@@ -1,4 +1,5 @@
 import { serializeJsonLd, toProductJsonLd } from "@/lib/structured-data";
+import { READY_MADE_PRODUCT } from "@craftynp/types";
 import type { ProductDetail } from "@/lib/product";
 
 function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
@@ -25,6 +26,7 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
         currencyCode: "usd",
       },
     ],
+    customization: READY_MADE_PRODUCT,
     ...overrides,
   };
 }
