@@ -55,8 +55,8 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   why the gallery and the purchase panel are wrapped rather than rendered
   side by side from the page. The selected variant's `thumbnail` drives the
   gallery's main image, so the state has to sit above both. `ProductPurchase`
-  is controlled — it takes `selected` and `onOptionChange` and keeps only its
-  own quantity.
+  is controlled — it takes `selected` and `onOptionChange` and keeps only the
+  state nothing above it needs: the quantity and the customization draft.
 - **Import icons only through `src/components/icons`** — the sole place
   `@phosphor-icons/react` is imported, and from its `/dist/ssr` subpath so
   glyphs render in server components too. Every glyph is decorative:
@@ -124,6 +124,34 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   (`(void 0)(…)` at runtime, a green `tsc`, a green Jest) would reach shoppers
   directly rather than only a server render. Every other import of the package
   is still `import type`.
+
+## Product customization
+
+Whether a product is made to order, and which configurator inputs it asks for,
+is declared by the shop owner on the product's metadata in Medusa and read back
+through `resolveProductCustomization` in `@craftynp/types` (see
+[apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the metadata keys and the
+guard that validates them).
+
+- **The declaration arrives on the product payload itself**, which is why
+  `fetchProductByHandle` and `fetchCatalogProducts` both ask for `+metadata`.
+  Drop it and every product silently reads as ready-made — a 200 with no error
+  anywhere, exactly the failure mode CNP-17 was about.
+- **Read it only through `resolveProductCustomization`**, never off `metadata`
+  directly. The owner can type anything into the admin's raw metadata editor or
+  a CSV column, so the resolver treats a value it does not recognise as off
+  rather than rendering an input nobody declared.
+- **`ProductPurchase` owns the configurator draft**, alongside its quantity, and
+  gates add-to-cart on `missingRequiredInputs`. The draft is deliberately
+  storefront-shaped strings, not a `LineItemCustomization` — the shopper's width
+  is `"8"` while they are still typing, and an `ArtworkReference` here has no
+  `dpi` yet, so it cannot become one. **The draft is not yet carried onto the
+  cart line**: CNP-45 threads it through, and until then the cart records only
+  `isCustomizable`.
+- `ProductConfigurator` renders one input per declared key and nothing else.
+  Adding an input means adding it to `CUSTOMIZATION_INPUTS` in `@craftynp/types`
+  first — the registry is what the admin widget, the backend guard and the gate
+  all walk.
 
 ## Artwork upload
 

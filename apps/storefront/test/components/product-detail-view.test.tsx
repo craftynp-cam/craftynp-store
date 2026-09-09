@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
+import {
+  READY_MADE_PRODUCT,
+  resolveProductCustomization,
+} from "@craftynp/types";
 import type { ProductDetail, ProductDetailVariant } from "@/lib/product";
 import { clearCart, readCart } from "@/lib/cart";
 import { readCartDrawerOpen, setCartDrawerOpen } from "@/lib/cart-drawer";
@@ -55,6 +59,7 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
     ],
     options,
     variants,
+    customization: READY_MADE_PRODUCT,
     ...overrides,
   };
 }
@@ -194,5 +199,84 @@ describe("ProductDetailView", () => {
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
 
     expect(readCart().lines[0]?.imageUrl).toBe("https://example.com/sage.png");
+  });
+
+  describe("a customizable product", () => {
+    const textOnly = resolveProductCustomization({
+      customizable: "true",
+      customization_text: "required",
+    });
+
+    it("renders only the inputs the product declares", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({
+            customization: resolveProductCustomization({
+              customizable: "true",
+              customization_artwork: "optional",
+              customization_notes: "optional",
+            }),
+          })}
+        />,
+      );
+
+      expect(screen.getByText(/your artwork/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/order notes/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/custom text/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/width/i)).not.toBeInTheDocument();
+    });
+
+    it("renders nothing extra for a product that declares nothing (AC 6)", () => {
+      render(<ProductDetailView product={makeProduct()} />);
+
+      expect(screen.queryByText(/make it yours/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeEnabled();
+    });
+
+    it("holds add to cart until every required input is satisfied", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      const addToCart = screen.getByRole("button", { name: /add to cart/i });
+      expect(addToCart).toBeDisabled();
+      expect(screen.getByText(/add your custom text/i)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "Ellie" },
+      });
+
+      expect(addToCart).toBeEnabled();
+    });
+
+    it("marks the cart line customizable", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "Ellie" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+      expect(readCart().lines[0]?.isCustomizable).toBe(true);
+    });
+
+    it("shows the made-to-order badge in place of ready to ship", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      expect(screen.getByText(/made to order/i)).toBeInTheDocument();
+      expect(screen.queryByText(/ready to ship/i)).not.toBeInTheDocument();
+    });
   });
 });

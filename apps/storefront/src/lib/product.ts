@@ -1,5 +1,10 @@
 import { cache } from "react";
 
+import {
+  resolveProductCustomization,
+  type ProductCustomization,
+} from "@craftynp/types";
+
 import { formatMoney } from "./money";
 import { productHref } from "./routes";
 import { sdk } from "./medusa";
@@ -28,6 +33,7 @@ export type ProductDetailSourceProduct = {
   title: string;
   description?: string | null;
   thumbnail?: string | null;
+  metadata?: Record<string, unknown> | null;
   categories?: readonly { name: string; handle: string }[] | null;
   images?: readonly { url: string }[] | null;
   options?:
@@ -73,6 +79,7 @@ export type ProductDetail = {
   images: ProductDetailImage[];
   options: ProductDetailOption[];
   variants: ProductDetailVariant[];
+  customization: ProductCustomization;
 };
 
 export function toProductDetail(
@@ -146,6 +153,7 @@ export function toProductDetail(
     images,
     options,
     variants,
+    customization: resolveProductCustomization(product.metadata),
   };
 }
 
@@ -160,7 +168,7 @@ export const fetchProductByHandle = cache(
         region_id: regionId,
         limit: 1,
         fields:
-          "*variants.calculated_price,+variants.inventory_quantity,+variants.thumbnail,*variants.options,*options.values,*images,*categories",
+          "*variants.calculated_price,+variants.inventory_quantity,+variants.thumbnail,*variants.options,*options.values,*images,*categories,+metadata",
       });
 
       const product = products[0];

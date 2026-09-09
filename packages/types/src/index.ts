@@ -15,6 +15,18 @@ export {
   customTextSchema,
   lineItemCustomizationSchema,
 } from "./customization.js";
+export {
+  CUSTOMIZABLE_METADATA_KEY,
+  CUSTOMIZATION_INPUTS,
+  CUSTOMIZATION_INPUT_MODES,
+  READY_MADE_PRODUCT,
+  activeCustomizationInputs,
+  customizationInputModeSchema,
+  customizationMetadataPatch,
+  requiredCustomizationInputs,
+  resolveProductCustomization,
+  validateProductCustomization,
+} from "./product-customization.js";
 export { SITE_NAME, SITE_TAGLINE } from "./site.js";
 export {
   SITE_CONTENT_FIELDS,
@@ -106,6 +118,13 @@ export type {
   CustomText,
   LineItemCustomization,
 } from "./customization.js";
+export type {
+  CustomizationInput,
+  CustomizationInputKey,
+  CustomizationInputMode,
+  ProductCustomization,
+  ProductCustomizationProblem,
+} from "./product-customization.js";
 export type {
   SiteContent,
   SiteContentEntry,
