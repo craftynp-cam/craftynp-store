@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ProductCustomization } from "@craftynp/types";
 
@@ -16,7 +16,7 @@ import type { ProductDetailOption, ProductDetailVariant } from "@/lib/product";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
   customizationDetails,
-  missingInputsMessage,
+  missingInputLabels,
   missingRequiredInputs,
   type CustomizationDraft,
 } from "@/lib/product-customization";
@@ -31,7 +31,20 @@ type ProductPurchaseProps = {
   customization: ProductCustomization;
   selected: Record<string, string>;
   onOptionChange: (optionId: string, valueId: string) => void;
+  onCtaHeightChange?: (height: number) => void;
 };
+
+function joinTitles(titles: readonly string[]): string {
+  const last = titles.at(-1);
+  if (last == null) return "";
+  if (titles.length === 1) return last;
+  return `${titles.slice(0, -1).join(", ")} and ${last}`;
+}
+
+function asSentence(clauses: readonly string[]): string {
+  const joined = clauses.join(", then ");
+  return `${joined.charAt(0).toUpperCase()}${joined.slice(1)} to continue.`;
+}
 
 export function ProductPurchase({
   title,
@@ -42,11 +55,31 @@ export function ProductPurchase({
   customization,
   selected,
   onOptionChange,
+  onCtaHeightChange,
 }: ProductPurchaseProps) {
   const [quantity, setQuantity] = useState(1);
   const [draft, setDraft] = useState<CustomizationDraft>(
     EMPTY_CUSTOMIZATION_DRAFT,
   );
+  const ctaRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = ctaRef.current;
+    if (!node || !onCtaHeightChange) return;
+
+    const report = () => {
+      if (node.offsetHeight > 0) onCtaHeightChange(node.offsetHeight);
+    };
+
+    if (typeof ResizeObserver === "undefined") {
+      report();
+      return;
+    }
+
+    const observer = new ResizeObserver(report);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onCtaHeightChange]);
 
   const optionIds = useMemo(
     () => options.map((option) => option.id),
@@ -58,12 +91,45 @@ export function ProductPurchase({
     [options, variants, selected],
   );
 
+  const fromPrice = useMemo(() => {
+    const priced = variants.filter((variant) => variant.price !== "");
+    const purchasable = priced.filter(
+      (variant) => variant.availability !== "out_of_stock",
+    );
+    const pool = purchasable.length > 0 ? purchasable : priced;
+
+    const first = pool[0];
+    if (!first) return undefined;
+    return formatMoney(
+      Math.min(...pool.map((variant) => variant.calculatedAmount)),
+      first.currencyCode,
+    );
+  }, [variants]);
+
+  const outstanding = options.filter((option) => selected[option.id] == null);
+  const missingInputs = missingRequiredInputs(customization, draft);
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isSoldOut = selectedVariant?.availability === "out_of_stock";
-  const isOutOfStock = selectedVariant == null || isSoldOut;
+  const canAddToCart =
+    selectedVariant != null && !isSoldOut && missingInputs.length === 0;
 
-  const missingInputs = missingRequiredInputs(customization, draft);
-  const missingMessage = missingInputsMessage(missingInputs);
+  const clauses: string[] = [];
+  if (outstanding.length > 0) {
+    clauses.push(
+      `choose ${joinTitles(outstanding.map((option) => option.title))}`,
+    );
+  }
+  if (missingInputs.length > 0) {
+    clauses.push(`add ${joinTitles(missingInputLabels(missingInputs))}`);
+  }
+
+  const hint = isSoldOut
+    ? undefined
+    : outstanding.length === 0 && selectedVariant == null
+      ? "That combination is not available."
+      : clauses.length > 0
+        ? asSentence(clauses)
+        : undefined;
 
   const totalPrice = selectedVariant?.price
     ? formatMoney(
@@ -86,7 +152,7 @@ export function ProductPurchase({
   ];
 
   function handleAddToCart() {
-    if (!selectedVariant || missingInputs.length > 0) return;
+    if (!selectedVariant || !canAddToCart) return;
 
     addCartLine({
       id: selectedVariant.id,
@@ -117,24 +183,26 @@ export function ProductPurchase({
         <h1 className="font-display text-4xl">{title}</h1>
       </div>
 
-      <ProductPrice
-        price={selectedVariant?.price ?? ""}
-        originalPrice={selectedVariant?.originalPrice}
-        savingsLabel={selectedVariant?.savingsLabel}
-      />
+      {selectedVariant ? (
+        <ProductPrice
+          price={selectedVariant.price}
+          originalPrice={selectedVariant.originalPrice}
+          savingsLabel={selectedVariant.savingsLabel}
+        />
+      ) : fromPrice ? (
+        <ProductPrice price={fromPrice} prefix="From" />
+      ) : null}
 
       {selectedVariant ? (
         <StockStatus availability={selectedVariant.availability} />
       ) : null}
 
-      {options.length > 0 ? (
-        <VariantSelector
-          options={options}
-          selected={selected}
-          onChange={onOptionChange}
-          availability={availability}
-        />
-      ) : null}
+      <VariantSelector
+        options={options}
+        selected={selected}
+        onChange={onOptionChange}
+        availability={availability}
+      />
 
       {customization.isCustomizable ? (
         <ProductConfigurator
@@ -155,19 +223,20 @@ export function ProductPurchase({
         />
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div
+        ref={ctaRef}
+        className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4"
+      >
+        {hint ? <p className="text-sm text-foreground-muted">{hint}</p> : null}
+
         <Button
           variant="primary"
           size="lg"
-          isDisabled={isOutOfStock || missingInputs.length > 0}
+          isDisabled={!canAddToCart}
           onPress={handleAddToCart}
         >
           Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
         </Button>
-
-        {missingMessage && !isSoldOut ? (
-          <p className="text-sm text-foreground-muted">{missingMessage}</p>
-        ) : null}
       </div>
     </div>
   );

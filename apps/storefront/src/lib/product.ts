@@ -40,7 +40,13 @@ export type ProductDetailSourceProduct = {
     | readonly {
         id: string;
         title: string;
-        values?: readonly { id: string; value: string }[] | null;
+        values?:
+          | readonly {
+              id: string;
+              value: string;
+              metadata?: Record<string, unknown> | null;
+            }[]
+          | null;
       }[]
     | null;
   variants?: readonly ProductDetailSourceVariant[] | null;
@@ -48,7 +54,11 @@ export type ProductDetailSourceProduct = {
 
 export type ProductDetailImage = { url: string; alt: string };
 
-export type ProductDetailOptionValue = { id: string; value: string };
+export type ProductDetailOptionValue = {
+  id: string;
+  value: string;
+  subLabel?: string;
+};
 
 export type ProductDetailOption = {
   id: string;
@@ -82,6 +92,23 @@ export type ProductDetail = {
   customization: ProductCustomization;
 };
 
+const SUB_LABEL_KEYS = ["subLabel", "sub_label"] as const;
+
+function optionValueSubLabel(
+  metadata: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!metadata) return undefined;
+
+  for (const key of SUB_LABEL_KEYS) {
+    const candidate = metadata[key];
+    if (typeof candidate === "string" && candidate.trim() !== "") {
+      return candidate.trim();
+    }
+  }
+
+  return undefined;
+}
+
 export function toProductDetail(
   product: ProductDetailSourceProduct,
 ): ProductDetail {
@@ -104,6 +131,7 @@ export function toProductDetail(
       values: (option.values ?? []).map((value) => ({
         id: value.id,
         value: value.value,
+        subLabel: optionValueSubLabel(value.metadata),
       })),
     }),
   );

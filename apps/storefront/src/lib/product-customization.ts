@@ -62,19 +62,10 @@ const MISSING_LABELS: Record<CustomizationInputKey, string> = {
   orderNotes: "your order notes",
 };
 
-export function missingInputsMessage(
+export function missingInputLabels(
   missing: readonly CustomizationInputKey[],
-): string | null {
-  if (missing.length === 0) return null;
-
-  const labels = missing.map((key) => MISSING_LABELS[key]);
-  const last = labels[labels.length - 1];
-  const listed =
-    labels.length === 1
-      ? last
-      : `${labels.slice(0, -1).join(", ")} and ${last}`;
-
-  return `Add ${listed} to continue.`;
+): string[] {
+  return missing.map((key) => MISSING_LABELS[key]);
 }
 
 export function customizationDetails(

@@ -3,7 +3,7 @@ import { resolveProductCustomization } from "@craftynp/types";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
   customizationDetails,
-  missingInputsMessage,
+  missingInputLabels,
   missingRequiredInputs,
   type CustomizationDraft,
 } from "@/lib/product-customization";
@@ -87,21 +87,12 @@ describe("missingRequiredInputs", () => {
   });
 });
 
-describe("missingInputsMessage", () => {
-  it("says nothing when nothing is missing", () => {
-    expect(missingInputsMessage([])).toBeNull();
-  });
-
-  it("names a single missing input", () => {
-    expect(missingInputsMessage(["artwork"])).toBe(
-      "Add your artwork to continue.",
-    );
-  });
-
-  it("joins several with commas and a final and", () => {
-    expect(missingInputsMessage(["artwork", "customText", "dimensions"])).toBe(
-      "Add your artwork, your custom text and a width and height to continue.",
-    );
+describe("missingInputLabels", () => {
+  it("names each missing input in shopper words", () => {
+    expect(missingInputLabels(["artwork", "dimensions"])).toEqual([
+      "your artwork",
+      "a width and height",
+    ]);
   });
 });
 
