@@ -253,6 +253,47 @@ describe("ProductDetailView", () => {
       expect(addToCart).toBeEnabled();
     });
 
+    it("carries the shopper's answers onto the cart line", () => {
+      const everything = resolveProductCustomization({
+        customizable: "true",
+        customization_text: "required",
+        customization_notes: "optional",
+      });
+
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: everything })}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "Ellie" },
+      });
+      fireEvent.change(screen.getByLabelText(/order notes/i), {
+        target: { value: "Matte finish" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+      expect(readCart().lines[0]?.details).toEqual([
+        { label: "Color", value: "Blush" },
+        { label: "Custom text", value: "Ellie" },
+        { label: "Order notes", value: "Matte finish" },
+      ]);
+    });
+
+    it("still says what is missing when no variant is resolved", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly, variants: [] })}
+        />,
+      );
+
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+      expect(screen.getByText(/add your custom text/i)).toBeInTheDocument();
+    });
+
     it("marks the cart line customizable", () => {
       render(
         <ProductDetailView

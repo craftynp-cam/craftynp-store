@@ -2,6 +2,7 @@ import { resolveProductCustomization } from "@craftynp/types";
 
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
+  customizationDetails,
   missingInputsMessage,
   missingRequiredInputs,
   type CustomizationDraft,
@@ -101,5 +102,64 @@ describe("missingInputsMessage", () => {
     expect(missingInputsMessage(["artwork", "customText", "dimensions"])).toBe(
       "Add your artwork, your custom text and a width and height to continue.",
     );
+  });
+});
+
+describe("customizationDetails", () => {
+  it("carries the text, size and notes the shopper filled in", () => {
+    expect(
+      customizationDetails(
+        ALL_REQUIRED,
+        draft({
+          artwork: ARTWORK,
+          customText: "  Ellie  ",
+          widthInches: "8",
+          heightInches: "10",
+          orderNotes: "  Matte finish  ",
+        }),
+      ),
+    ).toEqual([
+      { label: "Custom text", value: "Ellie" },
+      { label: "Size", value: "8\u2033 \u00d7 10\u2033" },
+      { label: "Order notes", value: "Matte finish" },
+    ]);
+  });
+
+  it("leaves artwork out — the cart cannot carry the file until CNP-45", () => {
+    const details = customizationDetails(
+      ALL_REQUIRED,
+      draft({ artwork: ARTWORK }),
+    );
+
+    expect(details).toEqual([]);
+  });
+
+  it("skips an input the shopper left empty", () => {
+    expect(
+      customizationDetails(ALL_REQUIRED, draft({ customText: "Ellie" })),
+    ).toEqual([{ label: "Custom text", value: "Ellie" }]);
+  });
+
+  it("skips an input the product never declared", () => {
+    const notesOnly = resolveProductCustomization({
+      customizable: "true",
+      customization_notes: "optional",
+    });
+
+    expect(
+      customizationDetails(
+        notesOnly,
+        draft({ customText: "Ellie", orderNotes: "Matte finish" }),
+      ),
+    ).toEqual([{ label: "Order notes", value: "Matte finish" }]);
+  });
+
+  it("carries nothing for a ready-made product", () => {
+    expect(
+      customizationDetails(
+        resolveProductCustomization(null),
+        draft({ customText: "Ellie" }),
+      ),
+    ).toEqual([]);
   });
 });

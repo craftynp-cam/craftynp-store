@@ -145,9 +145,10 @@ guard that validates them).
   gates add-to-cart on `missingRequiredInputs`. The draft is deliberately
   storefront-shaped strings, not a `LineItemCustomization` — the shopper's width
   is `"8"` while they are still typing, and an `ArtworkReference` here has no
-  `dpi` yet, so it cannot become one. **The draft is not yet carried onto the
-  cart line**: CNP-45 threads it through, and until then the cart records only
-  `isCustomizable`.
+  `dpi` yet, so it cannot become one. The text, size and notes reach the cart as
+  `details` entries alongside the variant options; **artwork does not**, because
+  a filename in `details` would show an attachment the cart cannot actually
+  carry. CNP-45 threads the real payload through.
 - `ProductConfigurator` renders one input per declared key and nothing else.
   Adding an input means adding it to `CUSTOMIZATION_INPUTS` in `@craftynp/types`
   first — the registry is what the admin widget, the backend guard and the gate

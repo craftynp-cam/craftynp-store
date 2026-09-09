@@ -660,9 +660,9 @@ CNP-79.
   `/admin/products/batch`, CSV import, and custom workflows all bypass HTTP.
   Add any similar guard to `src/workflows/hooks/validate-products.ts`, which is
   where the shipping-dimension and customization guards both run. **It has to be
-  that one file:** Medusa throws `Cannot define multiple hook handlers for the
-productsUpdated hook` if a second module registers the same hook, so a new
-  guard is a call added inside the existing handler, never a new hook file.
+  that one file:** Medusa throws on a second handler for a hook it has already
+  registered, so a new guard is a call added inside the existing handler, never
+  a new hook file.
 - **A malformed customization declaration is rejected at any status; an
   incomplete one only on publish.** A contradictory record — the flag off with
   an input still on — or a value outside the registry's vocabulary is wrong

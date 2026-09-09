@@ -15,6 +15,7 @@ import { formatMoney } from "@/lib/money";
 import type { ProductDetailOption, ProductDetailVariant } from "@/lib/product";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
+  customizationDetails,
   missingInputsMessage,
   missingRequiredInputs,
   type CustomizationDraft,
@@ -58,8 +59,8 @@ export function ProductPurchase({
   );
 
   const selectedVariant = findVariant(variants, selected, optionIds);
-  const isOutOfStock =
-    selectedVariant == null || selectedVariant.availability === "out_of_stock";
+  const isSoldOut = selectedVariant?.availability === "out_of_stock";
+  const isOutOfStock = selectedVariant == null || isSoldOut;
 
   const missingInputs = missingRequiredInputs(customization, draft);
   const missingMessage = missingInputsMessage(missingInputs);
@@ -71,13 +72,18 @@ export function ProductPurchase({
       )
     : undefined;
 
-  const detailsForCart = options
-    .map((option) => {
-      const valueId = selected[option.id];
-      const value = option.values.find((candidate) => candidate.id === valueId);
-      return value ? { label: option.title, value: value.value } : undefined;
-    })
-    .filter((detail) => detail != null);
+  const detailsForCart = [
+    ...options
+      .map((option) => {
+        const valueId = selected[option.id];
+        const value = option.values.find(
+          (candidate) => candidate.id === valueId,
+        );
+        return value ? { label: option.title, value: value.value } : undefined;
+      })
+      .filter((detail) => detail != null),
+    ...customizationDetails(customization, draft),
+  ];
 
   function handleAddToCart() {
     if (!selectedVariant || missingInputs.length > 0) return;
@@ -159,7 +165,7 @@ export function ProductPurchase({
           Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
         </Button>
 
-        {missingMessage && !isOutOfStock ? (
+        {missingMessage && !isSoldOut ? (
           <p className="text-sm text-foreground-muted">{missingMessage}</p>
         ) : null}
       </div>

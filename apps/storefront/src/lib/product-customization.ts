@@ -1,10 +1,11 @@
-import { CUSTOMIZATION_INPUTS } from "@craftynp/types";
+import { requiredCustomizationInputs } from "@craftynp/types";
 import type {
   CustomizationInputKey,
   ProductCustomization,
 } from "@craftynp/types";
 
 import type { ArtworkReference } from "./artwork-upload";
+import type { CartLineDetail } from "./cart";
 
 export type CustomizationDraft = {
   artwork: ArtworkReference | null;
@@ -49,13 +50,9 @@ export function missingRequiredInputs(
   customization: ProductCustomization,
   draft: CustomizationDraft,
 ): CustomizationInputKey[] {
-  if (!customization.isCustomizable) return [];
-
-  return CUSTOMIZATION_INPUTS.filter(
-    (input) =>
-      customization.inputs[input.key] === "required" &&
-      !isSatisfied(input.key, draft),
-  ).map((input) => input.key);
+  return requiredCustomizationInputs(customization).filter(
+    (key) => !isSatisfied(key, draft),
+  );
 }
 
 const MISSING_LABELS: Record<CustomizationInputKey, string> = {
@@ -78,4 +75,38 @@ export function missingInputsMessage(
       : `${labels.slice(0, -1).join(", ")} and ${last}`;
 
   return `Add ${listed} to continue.`;
+}
+
+export function customizationDetails(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+): CartLineDetail[] {
+  const details: CartLineDetail[] = [];
+  if (!customization.isCustomizable) return details;
+
+  if (
+    customization.inputs.customText !== "off" &&
+    isSatisfied("customText", draft)
+  ) {
+    details.push({ label: "Custom text", value: draft.customText.trim() });
+  }
+
+  if (
+    customization.inputs.dimensions !== "off" &&
+    isSatisfied("dimensions", draft)
+  ) {
+    details.push({
+      label: "Size",
+      value: `${draft.widthInches.trim()}\u2033 \u00d7 ${draft.heightInches.trim()}\u2033`,
+    });
+  }
+
+  if (
+    customization.inputs.orderNotes !== "off" &&
+    isSatisfied("orderNotes", draft)
+  ) {
+    details.push({ label: "Order notes", value: draft.orderNotes.trim() });
+  }
+
+  return details;
 }
