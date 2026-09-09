@@ -18,6 +18,7 @@ import type {
 } from "@medusajs/framework/types";
 import {
   CUSTOMIZATION_INPUTS,
+  CUSTOMIZATION_INPUT_MODES,
   READY_MADE_PRODUCT,
   activeCustomizationInputs,
   customizationMetadataPatch,
@@ -141,11 +142,7 @@ const ProductCustomizationWidget = ({
                     <Select.Value />
                   </Select.Trigger>
                   <Select.Content>
-                    {(
-                      Object.keys(
-                        MODE_LABELS,
-                      ) as readonly CustomizationInputMode[]
-                    ).map((mode) => (
+                    {CUSTOMIZATION_INPUT_MODES.map((mode) => (
                       <Select.Item key={mode} value={mode}>
                         {MODE_LABELS[mode]}
                       </Select.Item>
