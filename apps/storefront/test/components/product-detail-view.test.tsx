@@ -79,7 +79,7 @@ describe("ProductDetailView", () => {
     expect(screen.getByText("$9.00")).toBeInTheDocument();
   });
 
-  it("chooses for the shopper only where an option has a single value", () => {
+  it("answers a no-choice option itself and draws no group for it", () => {
     const singleValue = [
       { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
     ];
@@ -93,8 +93,30 @@ describe("ProductDetailView", () => {
       />,
     );
 
-    expect(screen.getByRole("radio", { name: "Blush" })).toBeChecked();
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+  });
+
+  it("still carries a no-choice option through to the cart line", () => {
+    const singleValue = [
+      { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
+    ];
+
+    render(
+      <ProductDetailView
+        product={makeProduct({
+          options: singleValue,
+          variants: [variants[0]!],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(readCart().lines[0]?.details).toEqual([
+      { label: "Color", value: "Blush" },
+    ]);
   });
 
   it("holds add to cart shut until every option is chosen, naming what is left (AC 5)", () => {

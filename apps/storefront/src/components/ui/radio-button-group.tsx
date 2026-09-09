@@ -61,7 +61,7 @@ export function RadioButtonGroup({
             value={option.value}
             isDisabled={option.isDisabled}
             aria-label={accessibleName(option)}
-            className="mt-0 min-w-16 rounded-lg border border-border bg-surface px-4 py-2 text-left transition data-[disabled]:opacity-60 data-[hovered]:border-border-strong data-[selected]:border-2 data-[selected]:border-primary data-[selected]:bg-surface-soft data-[selected]:px-[15px] data-[selected]:py-[7px]"
+            className="mt-0 min-w-16 rounded-lg border border-border bg-surface px-4 py-2 text-left outline-none transition has-[[data-focus-visible]]:ring-2 has-[[data-focus-visible]]:ring-primary has-[[data-focus-visible]]:ring-offset-2 has-[[data-focus-visible]]:ring-offset-background data-[disabled]:opacity-60 data-[hovered]:border-border-strong data-[selected]:border-2 data-[selected]:border-primary data-[selected]:bg-surface-soft data-[selected]:px-[15px] data-[selected]:py-[7px]"
           >
             <Radio.Content className="flex flex-col items-start gap-0.5">
               <span

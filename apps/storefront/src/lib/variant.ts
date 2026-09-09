@@ -43,28 +43,46 @@ export function findVariant<T extends VariantSelection>(
   });
 }
 
+export type OptionValueStatus = "available" | "sold_out" | "incompatible";
+
+function hasPurchasableVariant<T extends VariantSelection>(
+  variants: readonly T[],
+  selection: Record<string, string>,
+): boolean {
+  const valueIds = Object.values(selection);
+
+  return variants.some((variant) => {
+    const variantValueIds = new Set(variant.optionValueIds);
+    return (
+      valueIds.every((valueId) => variantValueIds.has(valueId)) &&
+      variant.availability !== "out_of_stock"
+    );
+  });
+}
+
 export function optionValueAvailability<T extends VariantSelection>(
   options: readonly { id: string; values: readonly { id: string }[] }[],
   variants: readonly T[],
   selected: Record<string, string>,
-): Record<string, Record<string, boolean>> {
-  const result: Record<string, Record<string, boolean>> = {};
+): Record<string, Record<string, OptionValueStatus>> {
+  const result: Record<string, Record<string, OptionValueStatus>> = {};
 
   for (const option of options) {
-    const forOption: Record<string, boolean> = {};
+    const forOption: Record<string, OptionValueStatus> = {};
     result[option.id] = forOption;
 
     for (const value of option.values) {
-      const candidate = { ...selected, [option.id]: value.id };
-      const candidateValueIds = Object.values(candidate);
+      if (!hasPurchasableVariant(variants, { [option.id]: value.id })) {
+        forOption[value.id] = "sold_out";
+        continue;
+      }
 
-      forOption[value.id] = variants.some((variant) => {
-        const variantValueIds = new Set(variant.optionValueIds);
-        const matches = candidateValueIds.every((valueId) =>
-          variantValueIds.has(valueId),
-        );
-        return matches && variant.availability !== "out_of_stock";
-      });
+      forOption[value.id] = hasPurchasableVariant(variants, {
+        ...selected,
+        [option.id]: value.id,
+      })
+        ? "available"
+        : "incompatible";
     }
   }
 

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { VariantSelector } from "@/components";
+import type { OptionValueStatus } from "@/lib/variant";
 
 const options = [
   {
@@ -14,10 +15,6 @@ const options = [
   },
 ];
 
-const allAvailable = {
-  opt_color: { val_blush: true, val_sage: true, val_navy: true },
-};
-
 const twoOptions = [
   ...options,
   {
@@ -29,6 +26,14 @@ const twoOptions = [
     ],
   },
 ];
+
+const allAvailable: Record<string, Record<string, OptionValueStatus>> = {
+  opt_color: {
+    val_blush: "available",
+    val_sage: "available",
+    val_navy: "available",
+  },
+};
 
 describe("VariantSelector", () => {
   it("renders a labelled radio group per option, with a radio per value", () => {
@@ -54,7 +59,7 @@ describe("VariantSelector", () => {
         options={twoOptions}
         selected={{}}
         onChange={jest.fn()}
-        availability={{ ...allAvailable, opt_size: {} }}
+        availability={allAvailable}
       />,
     );
 
@@ -81,14 +86,18 @@ describe("VariantSelector", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables an unavailable value and calls it sold out, rather than hiding it (AC 4)", () => {
+  it("calls a value with no purchasable variant anywhere sold out (AC 4)", () => {
     render(
       <VariantSelector
-        options={options}
-        selected={{}}
+        options={twoOptions}
+        selected={{ opt_size: "val_large" }}
         onChange={jest.fn()}
         availability={{
-          opt_color: { val_blush: true, val_sage: false, val_navy: true },
+          opt_color: {
+            val_blush: "available",
+            val_sage: "sold_out",
+            val_navy: "available",
+          },
         }}
       />,
     );
@@ -101,15 +110,18 @@ describe("VariantSelector", () => {
     ).toBeInTheDocument();
   });
 
-  it("blames another option once one narrows the choice (AC 4)", () => {
+  it("blames the current selection only where another choice is the cause (AC 4)", () => {
     render(
       <VariantSelector
         options={twoOptions}
         selected={{ opt_size: "val_large" }}
         onChange={jest.fn()}
         availability={{
-          opt_color: { val_blush: true, val_sage: false, val_navy: true },
-          opt_size: { val_small: true, val_large: true },
+          opt_color: {
+            val_blush: "available",
+            val_sage: "incompatible",
+            val_navy: "available",
+          },
         }}
       />,
     );
@@ -124,6 +136,81 @@ describe("VariantSelector", () => {
         "Struck-through choices are unavailable with your current selection.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("names both causes when a group carries each (AC 4)", () => {
+    render(
+      <VariantSelector
+        options={options}
+        selected={{}}
+        onChange={jest.fn()}
+        availability={{
+          opt_color: {
+            val_blush: "available",
+            val_sage: "sold_out",
+            val_navy: "incompatible",
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Struck-through choices are sold out or unavailable with your current selection.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: "Sage, Matte finish, sold out" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("radio", {
+        name: "Navy, unavailable with your current selection",
+      }),
+    ).toBeDisabled();
+  });
+
+  it("still renders a group whose every value is unavailable", () => {
+    render(
+      <VariantSelector
+        options={options}
+        selected={{}}
+        onChange={jest.fn()}
+        availability={{
+          opt_color: {
+            val_blush: "sold_out",
+            val_sage: "sold_out",
+            val_navy: "sold_out",
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("radiogroup", { name: "Color" }),
+    ).toBeInTheDocument();
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio).toBeDisabled();
+    }
+  });
+
+  it("draws no group for an option that offers no choice", () => {
+    const { container } = render(
+      <VariantSelector
+        options={[
+          {
+            id: "opt_default",
+            title: "Default option",
+            values: [{ id: "val_default", value: "Default option value" }],
+          },
+        ]}
+        selected={{ opt_default: "val_default" }}
+        onChange={jest.fn()}
+        availability={{ opt_default: { val_default: "available" } }}
+      />,
+    );
+
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("leaves a group unchecked while its option is unchosen (AC 5)", () => {

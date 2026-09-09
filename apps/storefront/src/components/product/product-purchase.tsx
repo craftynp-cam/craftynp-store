@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge, Button, QuantityStepper } from "../ui";
 import { ProductPrice } from "./product-price";
@@ -20,6 +20,7 @@ type ProductPurchaseProps = {
   variants: readonly ProductDetailVariant[];
   selected: Record<string, string>;
   onOptionChange: (optionId: string, valueId: string) => void;
+  onCtaHeightChange?: (height: number) => void;
 };
 
 function joinTitles(titles: readonly string[]): string {
@@ -37,8 +38,28 @@ export function ProductPurchase({
   variants,
   selected,
   onOptionChange,
+  onCtaHeightChange,
 }: ProductPurchaseProps) {
   const [quantity, setQuantity] = useState(1);
+  const ctaRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = ctaRef.current;
+    if (!node || !onCtaHeightChange) return;
+
+    const report = () => {
+      if (node.offsetHeight > 0) onCtaHeightChange(node.offsetHeight);
+    };
+
+    if (typeof ResizeObserver === "undefined") {
+      report();
+      return;
+    }
+
+    const observer = new ResizeObserver(report);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onCtaHeightChange]);
 
   const optionIds = useMemo(
     () => options.map((option) => option.id),
@@ -52,10 +73,15 @@ export function ProductPurchase({
 
   const fromPrice = useMemo(() => {
     const priced = variants.filter((variant) => variant.price !== "");
-    const first = priced[0];
+    const purchasable = priced.filter(
+      (variant) => variant.availability !== "out_of_stock",
+    );
+    const pool = purchasable.length > 0 ? purchasable : priced;
+
+    const first = pool[0];
     if (!first) return undefined;
     return formatMoney(
-      Math.min(...priced.map((variant) => variant.calculatedAmount)),
+      Math.min(...pool.map((variant) => variant.calculatedAmount)),
       first.currencyCode,
     );
   }, [variants]);
@@ -133,14 +159,12 @@ export function ProductPurchase({
         <StockStatus availability={selectedVariant.availability} />
       ) : null}
 
-      {options.length > 0 ? (
-        <VariantSelector
-          options={options}
-          selected={selected}
-          onChange={onOptionChange}
-          availability={availability}
-        />
-      ) : null}
+      <VariantSelector
+        options={options}
+        selected={selected}
+        onChange={onOptionChange}
+        availability={availability}
+      />
 
       <div>
         <p className="mb-2 text-sm font-medium text-foreground-muted uppercase tracking-wide">
@@ -153,7 +177,10 @@ export function ProductPurchase({
         />
       </div>
 
-      <div className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4">
+      <div
+        ref={ctaRef}
+        className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4"
+      >
         {hint ? <p className="text-sm text-foreground-muted">{hint}</p> : null}
 
         <Button

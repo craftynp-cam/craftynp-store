@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { ProductDetails } from "./product-details";
 import { ProductGallery } from "./product-gallery";
@@ -28,6 +29,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const [selected, setSelected] = useState<Record<string, string>>(() =>
     defaultSelection(product.options),
   );
+  const [ctaHeight, setCtaHeight] = useState<number | null>(null);
 
   const optionIds = useMemo(
     () => product.options.map((option) => option.id),
@@ -38,7 +40,14 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const variantImageUrl = selectedVariant?.thumbnail ?? undefined;
 
   return (
-    <div className="mt-6 grid gap-10 max-lg:pb-28 lg:grid-cols-2">
+    <div
+      className="mt-6 grid gap-10 max-lg:pb-[calc(var(--cta-bar-height,7rem)+1rem)] lg:grid-cols-2"
+      style={
+        ctaHeight == null
+          ? undefined
+          : ({ "--cta-bar-height": `${ctaHeight}px` } as CSSProperties)
+      }
+    >
       <ProductGallery
         key={variantImageUrl ?? ""}
         images={product.images}
@@ -57,6 +66,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           onOptionChange={(optionId, valueId) =>
             setSelected((current) => ({ ...current, [optionId]: valueId }))
           }
+          onCtaHeightChange={setCtaHeight}
         />
         <ProductDetails description={product.description} />
       </div>

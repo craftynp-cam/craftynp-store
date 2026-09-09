@@ -2,13 +2,34 @@
 
 import { RadioButtonGroup } from "../ui";
 import type { ProductDetailOption } from "@/lib/product";
+import type { OptionValueStatus } from "@/lib/variant";
 
 type VariantSelectorProps = {
   options: readonly ProductDetailOption[];
   selected: Record<string, string>;
   onChange: (optionId: string, valueId: string) => void;
-  availability: Record<string, Record<string, boolean>>;
+  availability: Record<string, Record<string, OptionValueStatus>>;
 };
+
+const REASONS = {
+  sold_out: "sold out",
+  incompatible: "unavailable with your current selection",
+} as const;
+
+function describeUnavailable(
+  statuses: readonly OptionValueStatus[],
+): string | undefined {
+  const soldOut = statuses.includes("sold_out");
+  const incompatible = statuses.includes("incompatible");
+
+  if (soldOut && incompatible) {
+    return `Struck-through choices are ${REASONS.sold_out} or ${REASONS.incompatible}.`;
+  }
+  if (soldOut) return `Struck-through choices are ${REASONS.sold_out}.`;
+  if (incompatible)
+    return `Struck-through choices are ${REASONS.incompatible}.`;
+  return undefined;
+}
 
 export function VariantSelector({
   options,
@@ -16,38 +37,36 @@ export function VariantSelector({
   onChange,
   availability,
 }: VariantSelectorProps) {
+  const choices = options.filter((option) => option.values.length > 1);
+  if (choices.length === 0) return null;
+
   return (
     <div className="flex flex-col gap-6">
-      {options.map((option) => {
-        const narrowedByAnotherOption = options.some(
-          (other) => other.id !== option.id && selected[other.id] != null,
-        );
-        const reason = narrowedByAnotherOption
-          ? "unavailable with your current selection"
-          : "sold out";
-        const hasUnavailable = option.values.some(
-          (value) => availability[option.id]?.[value.id] === false,
-        );
+      {choices.map((option) => {
+        const statusOf = (valueId: string): OptionValueStatus =>
+          availability[option.id]?.[valueId] ?? "available";
 
         return (
           <RadioButtonGroup
             key={option.id}
             label={option.title}
             isRequired
-            description={
-              hasUnavailable
-                ? `Struck-through choices are ${reason}.`
-                : undefined
-            }
+            description={describeUnavailable(
+              option.values.map((value) => statusOf(value.id)),
+            )}
             value={selected[option.id] ?? ""}
             onChange={(value) => onChange(option.id, value)}
-            options={option.values.map((value) => ({
-              value: value.id,
-              label: value.value,
-              subLabel: value.subLabel,
-              isDisabled: availability[option.id]?.[value.id] === false,
-              disabledReason: reason,
-            }))}
+            options={option.values.map((value) => {
+              const status = statusOf(value.id);
+              return {
+                value: value.id,
+                label: value.value,
+                subLabel: value.subLabel,
+                isDisabled: status !== "available",
+                disabledReason:
+                  status === "available" ? undefined : REASONS[status],
+              };
+            })}
           />
         );
       })}
