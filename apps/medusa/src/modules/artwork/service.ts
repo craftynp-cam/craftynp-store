@@ -16,6 +16,8 @@ export type ArtworkAssetRow = {
   promoted_at: Date | null;
   purged_at: Date | null;
   purge_reason: string | null;
+  width_px: number | null;
+  height_px: number | null;
 };
 
 export type RecordUploadInput = {
@@ -111,6 +113,17 @@ class ArtworkModuleService extends MedusaService({ ArtworkAsset }) {
       line_item_id: input.lineItemId,
       storage_key: input.storageKey,
       promoted_at: new Date(),
+    });
+  }
+
+  async recordDimensions(
+    id: string,
+    dimensions: { widthPx: number | null; heightPx: number | null },
+  ): Promise<void> {
+    await this.updateArtworkAssets({
+      id,
+      width_px: dimensions.widthPx,
+      height_px: dimensions.heightPx,
     });
   }
 
