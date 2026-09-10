@@ -1,7 +1,11 @@
 import { MedusaError } from "@medusajs/framework/utils";
 import { validateCustomization } from "./validate-customization.js";
 
-const RULES = { bounds: { minInches: 2, maxInches: 48 }, minDpi: 300 };
+const RULES = {
+  bounds: { minInches: 2, maxInches: 48 },
+  textMaxLength: 120,
+  minDpi: 300,
+};
 
 const lowResArtwork = {
   artwork: {
@@ -56,6 +60,33 @@ describe("validateCustomization", () => {
     expect(() =>
       validateCustomization({ customText: { value: "" } }, RULES),
     ).toThrow(/customText\.value/);
+  });
+
+  it("holds custom text to the product's own limit, not the schema ceiling", () => {
+    const overLimit = { customText: { value: "a".repeat(121) } };
+
+    expect(() => validateCustomization(overLimit, RULES)).toThrow(
+      /customText: Shorten this to 120 characters or fewer/,
+    );
+    // The same payload passes for a product whose owner allows more.
+    expect(
+      validateCustomization(overLimit, { ...RULES, textMaxLength: 200 })
+        .customText?.value,
+    ).toHaveLength(121);
+  });
+
+  it("counts an emoji the way the storefront counted it", () => {
+    const threeEmoji = {
+      customText: { value: "\u{1F44D}\u{1F3FD}".repeat(3) },
+    };
+
+    expect(
+      validateCustomization(threeEmoji, { ...RULES, textMaxLength: 3 })
+        .customText?.value,
+    ).toBeTruthy();
+    expect(() =>
+      validateCustomization(threeEmoji, { ...RULES, textMaxLength: 2 }),
+    ).toThrow(/customText: Shorten this/);
   });
 
   it("throws on a non-object payload", () => {
