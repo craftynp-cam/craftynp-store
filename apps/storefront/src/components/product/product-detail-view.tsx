@@ -65,7 +65,13 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           customization={product.customization}
           selected={selected}
           onOptionChange={(optionId, valueId) =>
-            setSelected((current) => ({ ...current, [optionId]: valueId }))
+            setSelected((current) => {
+              if (valueId === null) {
+                const { [optionId]: _removed, ...rest } = current;
+                return rest;
+              }
+              return { ...current, [optionId]: valueId };
+            })
           }
           onCtaHeightChange={setCtaHeight}
         />

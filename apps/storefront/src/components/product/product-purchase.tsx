@@ -15,9 +15,11 @@ import { formatMoney } from "@/lib/money";
 import type { ProductDetailOption, ProductDetailVariant } from "@/lib/product";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
+  customSizeErrors,
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
+  resolveCustomSizeOption,
   type CustomizationDraft,
 } from "@/lib/product-customization";
 import { findVariant, optionValueAvailability } from "@/lib/variant";
@@ -30,7 +32,7 @@ type ProductPurchaseProps = {
   variants: readonly ProductDetailVariant[];
   customization: ProductCustomization;
   selected: Record<string, string>;
-  onOptionChange: (optionId: string, valueId: string) => void;
+  onOptionChange: (optionId: string, valueId: string | null) => void;
   onCtaHeightChange?: (height: number) => void;
 };
 
@@ -61,6 +63,7 @@ export function ProductPurchase({
   const [draft, setDraft] = useState<CustomizationDraft>(
     EMPTY_CUSTOMIZATION_DRAFT,
   );
+  const presetSizeRef = useRef<string | null>(null);
   const ctaRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -106,12 +109,35 @@ export function ProductPurchase({
     );
   }, [variants]);
 
+  const customSizeOption = useMemo(
+    () => resolveCustomSizeOption(options, customization),
+    [options, customization],
+  );
+
+  function handleCustomSizeChange(useCustomSize: boolean) {
+    setDraft((current) => ({ ...current, useCustomSize }));
+    if (!customSizeOption) return;
+
+    const { option, customValue } = customSizeOption;
+    if (useCustomSize) {
+      presetSizeRef.current = selected[option.id] ?? null;
+      onOptionChange(option.id, customValue.id);
+      return;
+    }
+    onOptionChange(option.id, presetSizeRef.current);
+  }
+
   const outstanding = options.filter((option) => selected[option.id] == null);
   const missingInputs = missingRequiredInputs(customization, draft);
+  const sizeErrors = customSizeErrors(customization, draft);
+  const hasSizeErrors = Object.keys(sizeErrors).length > 0;
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isSoldOut = selectedVariant?.availability === "out_of_stock";
   const canAddToCart =
-    selectedVariant != null && !isSoldOut && missingInputs.length === 0;
+    selectedVariant != null &&
+    !isSoldOut &&
+    missingInputs.length === 0 &&
+    !hasSizeErrors;
 
   const clauses: string[] = [];
   if (outstanding.length > 0) {
@@ -121,6 +147,9 @@ export function ProductPurchase({
   }
   if (missingInputs.length > 0) {
     clauses.push(`add ${joinTitles(missingInputLabels(missingInputs))}`);
+  }
+  if (hasSizeErrors) {
+    clauses.push("check the size you entered");
   }
 
   const hint = isSoldOut
@@ -202,6 +231,16 @@ export function ProductPurchase({
         selected={selected}
         onChange={onOptionChange}
         availability={availability}
+        hiddenValueIds={
+          customSizeOption
+            ? new Set([customSizeOption.customValue.id])
+            : undefined
+        }
+        disabledOptionIds={
+          customSizeOption && draft.useCustomSize
+            ? new Set([customSizeOption.option.id])
+            : undefined
+        }
       />
 
       {customization.isCustomizable ? (
@@ -209,6 +248,8 @@ export function ProductPurchase({
           customization={customization}
           value={draft}
           onChange={setDraft}
+          sizeErrors={sizeErrors}
+          onCustomSizeChange={handleCustomSizeChange}
         />
       ) : null}
 

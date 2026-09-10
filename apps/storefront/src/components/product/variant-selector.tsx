@@ -9,6 +9,8 @@ type VariantSelectorProps = {
   selected: Record<string, string>;
   onChange: (optionId: string, valueId: string) => void;
   availability: Record<string, Record<string, OptionValueStatus>>;
+  disabledOptionIds?: ReadonlySet<string>;
+  hiddenValueIds?: ReadonlySet<string>;
 };
 
 const REASONS = {
@@ -36,8 +38,15 @@ export function VariantSelector({
   selected,
   onChange,
   availability,
+  disabledOptionIds,
+  hiddenValueIds,
 }: VariantSelectorProps) {
-  const choices = options.filter((option) => option.values.length > 1);
+  const choices = options
+    .map((option) => ({
+      ...option,
+      values: option.values.filter((value) => !hiddenValueIds?.has(value.id)),
+    }))
+    .filter((option) => option.values.length > 1);
   if (choices.length === 0) return null;
 
   return (
@@ -51,6 +60,7 @@ export function VariantSelector({
             key={option.id}
             label={option.title}
             isRequired
+            isDisabled={disabledOptionIds?.has(option.id)}
             description={describeUnavailable(
               option.values.map((value) => statusOf(value.id)),
             )}

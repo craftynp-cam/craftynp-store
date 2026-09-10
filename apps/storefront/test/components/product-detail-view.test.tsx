@@ -309,6 +309,142 @@ describe("ProductDetailView", () => {
     expect(readCart().lines[0]?.imageUrl).toBe("https://example.com/sage.png");
   });
 
+  describe("a custom size", () => {
+    const sizeOptions = [
+      {
+        id: "opt_size",
+        title: "Size",
+        values: [
+          { id: "val_small", value: "Small" },
+          { id: "val_large", value: "Large" },
+          { id: "val_custom", value: "Custom" },
+        ],
+      },
+    ];
+
+    const sizeVariants: ProductDetailVariant[] = [
+      "small",
+      "large",
+      "custom",
+    ].map((name, index) => ({
+      id: `var_${name}`,
+      sku: `SIGN-${name.toUpperCase()}`,
+      thumbnail: null,
+      optionValueIds: [`val_${name}`],
+      availability: "in_stock" as const,
+      price: `$${10 + index}.00`,
+      originalPrice: undefined,
+      calculatedAmount: 10 + index,
+      currencyCode: "usd",
+    }));
+
+    const customizable = resolveProductCustomization({
+      customizable: "true",
+      customization_size: "optional",
+      customization_size_min_inches: "2",
+      customization_size_max_inches: "48",
+      customization_size_option: "Size",
+      customization_size_option_value: "Custom",
+    });
+
+    function renderProduct() {
+      render(
+        <ProductDetailView
+          product={makeProduct({
+            options: sizeOptions,
+            variants: sizeVariants,
+            customization: customizable,
+          })}
+        />,
+      );
+    }
+
+    function toggle() {
+      return screen.getByRole("checkbox", { name: /enter my own size/i });
+    }
+
+    it("keeps the preset sizes pickable and the custom value out of them", () => {
+      renderProduct();
+
+      expect(screen.getByRole("radio", { name: "Small" })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("radio", { name: "Custom" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/width/i)).not.toBeInTheDocument();
+    });
+
+    it("reveals the inputs and prices the custom variant once checked", () => {
+      renderProduct();
+      fireEvent.click(toggle());
+
+      expect(screen.getByLabelText(/width/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/height/i)).toBeInTheDocument();
+      expect(screen.getByText("$12.00")).toBeInTheDocument();
+    });
+
+    it("restores the preset the shopper had chosen when unchecked", () => {
+      renderProduct();
+      fireEvent.click(screen.getByRole("radio", { name: "Large" }));
+
+      fireEvent.click(toggle());
+      expect(screen.getByRole("radio", { name: "Large" })).not.toBeChecked();
+
+      fireEvent.click(toggle());
+      expect(screen.getByRole("radio", { name: "Large" })).toBeChecked();
+      expect(screen.getByText("$11.00")).toBeInTheDocument();
+    });
+
+    it("shows the range on the field and blocks add-to-cart while it is broken", () => {
+      renderProduct();
+      fireEvent.click(toggle());
+
+      fireEvent.change(screen.getByLabelText(/width/i), {
+        target: { value: "60" },
+      });
+      fireEvent.change(screen.getByLabelText(/height/i), {
+        target: { value: "10" },
+      });
+
+      expect(
+        screen.getByText("Enter a width between 2 and 48 inches."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/width/i), {
+        target: { value: "8" },
+      });
+
+      expect(
+        screen.queryByText("Enter a width between 2 and 48 inches."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeEnabled();
+    });
+
+    it("keeps two custom sizes of one variant as two cart lines", () => {
+      renderProduct();
+      fireEvent.click(toggle());
+
+      for (const width of ["8", "12"]) {
+        fireEvent.change(screen.getByLabelText(/width/i), {
+          target: { value: width },
+        });
+        fireEvent.change(screen.getByLabelText(/height/i), {
+          target: { value: "10" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+      }
+
+      expect(readCart().lines).toHaveLength(2);
+      expect(
+        readCart().lines.map((line) => line.details?.at(-1)?.value),
+      ).toEqual(["8\u2033 \u00d7 10\u2033", "12\u2033 \u00d7 10\u2033"]);
+    });
+  });
+
   describe("a customizable product", () => {
     const textOnly = resolveProductCustomization({
       customizable: "true",

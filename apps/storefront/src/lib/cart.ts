@@ -17,6 +17,13 @@ export type Cart = { lines: readonly CartLine[] };
 
 export const CART_STORAGE_KEY = "craftynp-cart";
 
+export function cartLineKey(line: CartLine): string {
+  const configuration = (line.details ?? [])
+    .map((detail) => `${detail.label}=${detail.value}`)
+    .join("|");
+  return configuration === "" ? line.id : `${line.id}#${configuration}`;
+}
+
 const EMPTY_CART: Cart = { lines: [] };
 
 function isCartLine(value: unknown): value is CartLine {
@@ -103,11 +110,14 @@ function writeCart(cart: Cart): void {
 
 export function addCartLine(line: CartLine): void {
   const current = readCartFromStorage();
-  const existing = current.lines.find((candidate) => candidate.id === line.id);
+  const key = cartLineKey(line);
+  const existing = current.lines.find(
+    (candidate) => cartLineKey(candidate) === key,
+  );
 
   const lines = existing
     ? current.lines.map((candidate) =>
-        candidate.id === line.id
+        cartLineKey(candidate) === key
           ? { ...candidate, quantity: candidate.quantity + line.quantity }
           : candidate,
       )
@@ -124,14 +134,16 @@ export function setCartLineQuantity(id: string, quantity: number): void {
 
   writeCart({
     lines: current.lines.map((line) =>
-      line.id === id ? { ...line, quantity: clamped } : line,
+      cartLineKey(line) === id ? { ...line, quantity: clamped } : line,
     ),
   });
 }
 
 export function removeCartLine(id: string): void {
   const current = readCartFromStorage();
-  writeCart({ lines: current.lines.filter((line) => line.id !== id) });
+  writeCart({
+    lines: current.lines.filter((line) => cartLineKey(line) !== id),
+  });
 }
 
 export function clearCart(): void {

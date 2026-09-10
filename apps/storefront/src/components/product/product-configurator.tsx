@@ -1,18 +1,25 @@
 "use client";
 
 import type {
+  CustomDimensionErrors,
   CustomizationInputMode,
   ProductCustomization,
 } from "@craftynp/types";
 
-import { TextInput, Textarea } from "../ui";
+import { Checkbox, TextInput, Textarea } from "../ui";
 import { ArtworkUpload } from "./artwork-upload";
-import type { CustomizationDraft } from "@/lib/product-customization";
+import {
+  isCustomSizeOffered,
+  usesCustomSize,
+  type CustomizationDraft,
+} from "@/lib/product-customization";
 
 type ProductConfiguratorProps = {
   customization: ProductCustomization;
   value: CustomizationDraft;
   onChange: (next: CustomizationDraft) => void;
+  sizeErrors: CustomDimensionErrors;
+  onCustomSizeChange: (useCustomSize: boolean) => void;
 };
 
 function hint(mode: CustomizationInputMode): string | undefined {
@@ -23,8 +30,11 @@ export function ProductConfigurator({
   customization,
   value,
   onChange,
+  sizeErrors,
+  onCustomSizeChange,
 }: ProductConfiguratorProps) {
-  const { inputs } = customization;
+  const { inputs, size } = customization;
+  const showsCustomSize = usesCustomSize(customization, value);
 
   function patch(change: Partial<CustomizationDraft>) {
     onChange({ ...value, ...change });
@@ -62,22 +72,40 @@ export function ProductConfigurator({
           <legend className="text-sm font-medium text-foreground-muted uppercase tracking-wide">
             Size
           </legend>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextInput
-              label="Width (inches)"
-              inputMode="decimal"
-              isRequired={inputs.dimensions === "required"}
-              value={value.widthInches}
-              onChange={(widthInches) => patch({ widthInches })}
-            />
-            <TextInput
-              label="Height (inches)"
-              inputMode="decimal"
-              isRequired={inputs.dimensions === "required"}
-              value={value.heightInches}
-              onChange={(heightInches) => patch({ heightInches })}
-            />
-          </div>
+
+          {isCustomSizeOffered(customization) ? (
+            <Checkbox
+              isSelected={value.useCustomSize}
+              onChange={onCustomSizeChange}
+            >
+              Enter my own size
+            </Checkbox>
+          ) : null}
+
+          {showsCustomSize ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextInput
+                label="Width (inches)"
+                description={`Between ${size.minInches} and ${size.maxInches} inches.`}
+                inputMode="decimal"
+                isRequired
+                isInvalid={Boolean(sizeErrors.widthInches)}
+                errorMessage={sizeErrors.widthInches}
+                value={value.widthInches}
+                onChange={(widthInches) => patch({ widthInches })}
+              />
+              <TextInput
+                label="Height (inches)"
+                description={`Between ${size.minInches} and ${size.maxInches} inches.`}
+                inputMode="decimal"
+                isRequired
+                isInvalid={Boolean(sizeErrors.heightInches)}
+                errorMessage={sizeErrors.heightInches}
+                value={value.heightInches}
+                onChange={(heightInches) => patch({ heightInches })}
+              />
+            </div>
+          ) : null}
         </fieldset>
       ) : null}
 

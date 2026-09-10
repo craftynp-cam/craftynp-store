@@ -4,7 +4,7 @@ import { Skeleton } from "@heroui/react/skeleton";
 import Image from "next/image";
 import Link from "next/link";
 
-import type { CartLine } from "@/lib/cart";
+import { cartLineKey, type CartLine } from "@/lib/cart";
 import { formatMoney } from "@/lib/money";
 
 import { X } from "../icons";
@@ -42,7 +42,6 @@ export function CartCard(props: CartCardProps) {
 
   const { line, onQuantityChange, onRemove } = props;
   const {
-    id,
     href,
     title,
     imageUrl,
@@ -83,7 +82,7 @@ export function CartCard(props: CartCardProps) {
             <button
               type="button"
               aria-label={`Remove ${title} from cart`}
-              onClick={() => onRemove(id)}
+              onClick={() => onRemove(cartLineKey(line))}
               className="shrink-0 rounded-md p-1 text-foreground-muted transition-colors hover:bg-surface-soft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <X aria-hidden="true" size={18} />
@@ -128,7 +127,7 @@ export function CartCard(props: CartCardProps) {
       <div className="mt-3 flex items-center justify-between gap-4">
         <QuantityStepper
           value={quantity}
-          onChange={(next) => onQuantityChange(id, next)}
+          onChange={(next) => onQuantityChange(cartLineKey(line), next)}
           label={`Quantity for ${title}`}
         />
         <p className="font-display text-lg">
