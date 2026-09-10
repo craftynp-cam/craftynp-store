@@ -448,6 +448,22 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   gated on is the one an order can be checked against later. `dpi` is not
   stored: it is a function of the pixel width and the ordered size, and a
   stored copy could disagree with both.
+- **The inspect route is anonymous, and that is the considered position, not an
+  oversight.** A shopper uploads before any cart or session exists, so there is
+  no identity to bind it to — the same reason the presign route is anonymous.
+  The `uploadId` is a v4 UUID and is therefore the capability: it cannot be
+  guessed, and knowing one buys only that file's pixel dimensions, never its
+  bytes or a URL to them. It is rate-limited like every other anonymous store
+  route that spends anything. Do not "fix" this by adding a session check that
+  the flow cannot satisfy.
+- **The resolution decision is only half server-side today.** The pixel count
+  is measured here from the stored bytes and cannot be forged by the browser,
+  but the comparison against the threshold still happens in the storefront,
+  because artwork does not reach any server-side order path yet.
+  `validateCustomization` holds the rule and has no caller; **CNP-45 is what
+  closes this**, and until it lands the story's "enforced server-side as well
+  as client-side" is not fully true. There is no exploit in the meantime — a
+  crafted client has nowhere to send an artwork reference.
 - **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,
   written by `src/admin/widgets/category-artwork.tsx` and read through
   `resolveArtworkMinDpi` in `@craftynp/types`, which takes the strictest value
