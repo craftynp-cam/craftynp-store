@@ -63,17 +63,29 @@ const CategoryArtworkWidget = ({
   }, [category]);
 
   const save = useMutation({
-    mutationFn: () =>
-      sdk.admin.productCategory.update(data.id, {
-        // Medusa replaces the metadata column wholesale, so an unspread write
-        // destroys this category's image and everything else on it.
+    // Re-read immediately before writing rather than spreading this widget's
+    // own cached copy. Medusa replaces the metadata column wholesale, and more
+    // than one widget writes this column, so a copy fetched at mount is stale
+    // the moment a sibling saves — spreading it silently destroys whatever the
+    // sibling just wrote. Invalidation alone does not fix this: it is async,
+    // and the race is what does the damage.
+    mutationFn: async () => {
+      const fresh = await sdk.admin.productCategory.retrieve(data.id, {
+        fields: "id,metadata",
+      });
+
+      return sdk.admin.productCategory.update(data.id, {
         metadata: {
-          ...(category?.product_category.metadata ?? {}),
+          ...(fresh.product_category.metadata ?? {}),
           [ARTWORK_MIN_DPI_METADATA_KEY]: minDpi.trim(),
         },
-      }),
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({
+        queryKey: ["product_category_image", data.id],
+      });
       void queryClient.invalidateQueries({
         queryKey: ["product_category", data.id],
       });

@@ -18,9 +18,19 @@ tax provider), `notification-resend`, `auth-auth0`, and
   registry change, never a migration.
 - **A category carries two settings of its own, on its `metadata`**: the
   homepage carousel image below, and `artwork_min_dpi`. Each has its own widget
-  on `product_category.details.side.after`; both must spread the existing
-  metadata into their update, because Medusa replaces the jsonb column
-  wholesale and an unspread write destroys the other one.
+  on `product_category.details.side.after` — Medusa stacks both — and both must
+  spread the existing metadata into their update, because Medusa replaces the
+  jsonb column wholesale and an unspread write destroys the other one.
+  **Spreading is not enough on its own: each widget must re-read the category
+  inside its `mutationFn`, immediately before writing.** A copy fetched when
+  the widget mounted is stale the moment its sibling saves, and spreading that
+  copy destroys exactly what the sibling just wrote. Cross-invalidating the
+  other widget's query key keeps the _displayed_ value honest but does not fix
+  the write — invalidation is asynchronous, and the race is what does the
+  damage. This was a live bug the moment a second widget joined the zone, and
+  it is invisible to `tsc`, to Jest (nothing under `src/admin` is testable) and
+  to a single-widget zone; it showed up only on a real save in a real
+  dashboard.
 - **Category imagery is not site content.** The storefront's homepage carousel
   renders one slide per product category and reads each slide's photo from that
   category's own `metadata.image_url` / `metadata.image_alt`, written by the
