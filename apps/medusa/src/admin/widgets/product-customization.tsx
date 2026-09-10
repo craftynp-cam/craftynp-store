@@ -24,6 +24,7 @@ import {
   activeCustomizationInputs,
   customizationMetadataPatch,
   resolveProductCustomization,
+  unmeasuredOptionValues,
   type CustomizationInputMode,
   type ProductCustomization,
 } from "@craftynp/types";
@@ -88,7 +89,10 @@ const ProductCustomizationWidget = ({
   const { data: product, isLoading } = useQuery({
     queryKey,
     queryFn: () =>
-      sdk.admin.product.retrieve(data.id, { fields: "id,metadata" }),
+      sdk.admin.product.retrieve(data.id, {
+        fields:
+          "id,metadata,options.title,options.values.value,*options.values",
+      }),
   });
 
   useEffect(() => {
@@ -111,10 +115,19 @@ const ProductCustomizationWidget = ({
   }, [product]);
 
   const save = useMutation({
-    mutationFn: () =>
-      sdk.admin.product.update(data.id, {
+    // Re-read immediately before writing rather than spreading this widget's
+    // own cached copy. Medusa replaces the metadata column wholesale, and the
+    // dashboard's built-in Metadata and JSON editors write the same column on
+    // this very page — so a copy fetched at mount is stale the moment the
+    // owner uses one of them, and spreading it destroys what they just wrote.
+    mutationFn: async () => {
+      const fresh = await sdk.admin.product.retrieve(data.id, {
+        fields: "id,metadata",
+      });
+
+      return sdk.admin.product.update(data.id, {
         metadata: {
-          ...(product?.product.metadata ?? {}),
+          ...(fresh.product.metadata ?? {}),
           ...customizationMetadataPatch({
             ...customization,
             size: {
@@ -125,7 +138,8 @@ const ProductCustomizationWidget = ({
             },
           }),
         },
-      }),
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({ queryKey: ["product", data.id] });
@@ -153,6 +167,18 @@ const ProductCustomizationWidget = ({
 
   const boundsAreSet = [size.minInches, size.maxInches].every(
     (bound) => Number(bound) > 0,
+  );
+
+  const asksForArtwork =
+    customization.isCustomizable && customization.inputs.artwork !== "off";
+
+  const sizing = unmeasuredOptionValues(
+    (product?.product as { options?: unknown } | undefined)?.options as
+      Parameters<typeof unmeasuredOptionValues>[0] | undefined,
+    {
+      sizeOptionTitle: size.optionTitle.trim() || null,
+      customValue: size.optionValue.trim() || null,
+    },
   );
 
   return (
@@ -253,6 +279,22 @@ const ProductCustomizationWidget = ({
           <Hint variant="error">
             A made-to-order product has to ask for at least one input.
             Publishing it like this is rejected.
+          </Hint>
+        ) : null}
+
+        {asksForArtwork && !sizing.anyMeasured ? (
+          <Hint variant="error">
+            No option value on this product records a physical size, so uploads
+            here cannot be checked against a minimum resolution — every file
+            will be accepted. Put a width_inches (and height_inches) on your
+            size option values in the Options section.
+          </Hint>
+        ) : null}
+
+        {asksForArtwork && sizing.anyMeasured && sizing.missing.length > 0 ? (
+          <Hint variant="error">
+            These option values record no physical size, so a shopper choosing
+            one gets no resolution check: {sizing.missing.join(", ")}.
           </Hint>
         ) : null}
       </div>

@@ -8,6 +8,7 @@ import { productValidationMiddlewares } from "./admin/products/middlewares";
 import { siteContentMiddlewares } from "./admin/site-content/middlewares";
 import { shipstationTrackMiddlewares } from "./hooks/shipstation/track/middlewares";
 import { artworkUploadMiddlewares } from "./store/artwork/uploads/middlewares";
+import { categoryValidationMiddlewares } from "./admin/product-categories/middlewares";
 import { checkoutMiddlewares } from "./store/checkout/middlewares";
 import { orderConfirmationMiddlewares } from "./store/order-confirmation/middlewares";
 import { shippingRatesMiddlewares } from "./store/shipping-rates/middlewares";
@@ -25,6 +26,7 @@ export default defineMiddlewares({
     ...shippingRatesMiddlewares,
     ...taxQuoteMiddlewares,
     ...artworkUploadMiddlewares,
+    ...categoryValidationMiddlewares,
     ...checkoutMiddlewares,
     ...orderConfirmationMiddlewares,
   ],

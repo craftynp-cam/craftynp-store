@@ -23,4 +23,17 @@ export const artworkUploadMiddlewares: MiddlewareRoute[] = [
       validateAndTransformBody(validatedBodySchema),
     ],
   },
+  {
+    matcher: "/store/artwork/uploads/:uploadId/inspect",
+    method: "POST",
+    middlewares: [
+      rateLimit(
+        ruleFromEnv(
+          "artwork-inspect",
+          "RATE_LIMIT_ARTWORK_INSPECT_PER_MINUTE",
+          20,
+        ),
+      ),
+    ],
+  },
 ];

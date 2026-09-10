@@ -28,6 +28,9 @@ function referenceFor(file: File): ArtworkReference {
     fileName: file.name,
     mimeType: file.type as ArtworkReference["mimeType"],
     sizeBytes: file.size,
+    kind: "raster",
+    widthPx: 1200,
+    heightPx: 1200,
   };
 }
 
@@ -247,6 +250,9 @@ describe("ArtworkUpload", () => {
       fileName: "original.pdf",
       mimeType: "application/pdf",
       sizeBytes: 2_097_152,
+      kind: "vector",
+      widthPx: null,
+      heightPx: null,
     };
 
     render(
@@ -353,7 +359,52 @@ describe("ArtworkUpload", () => {
 
     expect(
       screen.getByRole("button", { name: "Choose a file" }),
-    ).toHaveAccessibleDescription(/PNG, JPG, SVG or PDF, up to 25 MB/);
+    ).toHaveAccessibleDescription(
+      /PNG, JPG, WEBP, SVG, PDF or AI, up to 25 MB/,
+    );
+  });
+
+  it("shows the resolution the shopper needs before they choose a file", () => {
+    // Told only after a rejection, the guidance costs an upload to learn.
+    render(
+      <ArtworkUpload
+        value={null}
+        onChange={jest.fn()}
+        guidance="PNG, JPG, WEBP, SVG, PDF or AI, up to 25 MB. At 3″ wide we need at least 900 pixels across (300 DPI)."
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Choose a file" }),
+    ).toHaveAccessibleDescription(/at least 900 pixels across \(300 DPI\)/);
+  });
+
+  it("reports a file that uploaded but cannot be printed, and keeps it attached", () => {
+    render(
+      <ArtworkUpload
+        value={{
+          uploadId: "upload-3",
+          storageKey: "staging/upload-3.png",
+          fileName: "screenshot.png",
+          mimeType: "image/png",
+          sizeBytes: 51_200,
+          kind: "raster",
+          widthPx: 400,
+          heightPx: 400,
+        }}
+        onChange={jest.fn()}
+        errorMessage="This file works out at 50 DPI at 8″ wide. We need at least 300 DPI — about 2,400 pixels across. Upload a higher-resolution file."
+      />,
+    );
+
+    // The upload succeeded, so the file stays on screen with its name; what
+    // failed is the resolution, and Replace is the way out of it.
+    expect(screen.getByText(/screenshot\.png/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/50 DPI/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
+    expect(
+      screen.getByRole("button", { name: "Replace file" }),
+    ).toHaveAccessibleDescription(/2,400 pixels across/);
   });
 
   it("renders the uploaded view from a reference alone, with no upload history", () => {
@@ -365,6 +416,9 @@ describe("ArtworkUpload", () => {
           fileName: "banner.pdf",
           mimeType: "application/pdf",
           sizeBytes: 3_355_443,
+          kind: "vector",
+          widthPx: null,
+          heightPx: null,
         }}
         onChange={jest.fn()}
       />,

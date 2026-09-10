@@ -78,6 +78,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           options={product.options}
           variants={product.variants}
           customization={product.customization}
+          artworkMinDpi={product.artworkMinDpi}
           selected={selected}
           onOptionChange={(optionId, valueId) =>
             setSelected((current) => {

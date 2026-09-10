@@ -215,6 +215,27 @@ export async function headArtwork(
   return { sizeBytes: result.ContentLength ?? 0 };
 }
 
+// The head of the object is all any of the supported formats needs to name its
+// dimensions, so this reads a slice rather than pulling a 25 MB print file
+// through Medusa. R2 and the local MinIO container both serve Range.
+export async function readArtworkHead(
+  key: string,
+  byteCount: number,
+  options: ArtworkStorageOptions = readArtworkStorageOptions(),
+): Promise<Uint8Array> {
+  const result = await s3(options).send(
+    new GetObjectCommand({
+      Bucket: options.bucket,
+      Key: key,
+      Range: `bytes=0-${byteCount - 1}`,
+    }),
+  );
+
+  if (!result.Body) return new Uint8Array();
+
+  return result.Body.transformToByteArray();
+}
+
 export async function copyArtwork(
   fromKey: string,
   toKey: string,

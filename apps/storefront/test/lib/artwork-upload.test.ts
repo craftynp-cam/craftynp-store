@@ -50,6 +50,21 @@ const presignBody = {
   },
 };
 
+const inspectBody = {
+  uploadId: "upload-1",
+  kind: "raster" as const,
+  widthPx: 1200,
+  heightPx: 900,
+};
+
+// The presign and the inspect call are two requests to the backend around one
+// PUT, so a fetch double has to answer both in order.
+function backendFetch(...responses: Response[]) {
+  const fetchImpl = jest.fn();
+  for (const response of responses) fetchImpl.mockResolvedValueOnce(response);
+  return fetchImpl;
+}
+
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   try {
     await promise;
@@ -77,8 +92,8 @@ describe("checkArtworkFile", () => {
     });
   });
 
-  it("rejects a file with no type, which is how a dropped folder arrives", () => {
-    expect(checkArtworkFile(makeFile({ type: "" }))).toEqual({
+  it("rejects a dropped folder, which arrives with neither type nor extension", () => {
+    expect(checkArtworkFile(makeFile({ name: "Designs", type: "" }))).toEqual({
       ok: false,
       code: "unsupported_type",
     });
@@ -151,9 +166,10 @@ describe("uploadArtwork", () => {
 
   it("presigns with the file's own metadata, then PUTs that same file to the returned url", async () => {
     const file = makeFile();
-    const fetchImpl = jest
-      .fn()
-      .mockResolvedValue(jsonResponse(200, presignBody));
+    const fetchImpl = backendFetch(
+      jsonResponse(200, presignBody),
+      jsonResponse(200, inspectBody),
+    );
     const putFile = jest.fn<
       ReturnType<PutArtworkFile>,
       Parameters<PutArtworkFile>
@@ -182,12 +198,85 @@ describe("uploadArtwork", () => {
       fileName: "logo.png",
       mimeType: "image/png",
       sizeBytes: 2048,
+      kind: "raster",
+      widthPx: 1200,
+      heightPx: 900,
     });
+  });
+
+  it("measures the stored file after the PUT, never in the browser", async () => {
+    // The pixel count decides whether the order is printable, so it has to come
+    // from the bytes in the bucket rather than from anything the shopper sends.
+    const order: string[] = [];
+    const fetchImpl = jest
+      .fn()
+      .mockImplementationOnce(() => {
+        order.push("presign");
+        return Promise.resolve(jsonResponse(200, presignBody));
+      })
+      .mockImplementationOnce(() => {
+        order.push("inspect");
+        return Promise.resolve(jsonResponse(200, inspectBody));
+      });
+    const putFile = jest.fn(() => {
+      order.push("put");
+      return Promise.resolve();
+    });
+
+    await uploadArtwork({ file: makeFile(), fetchImpl, putFile });
+
+    const [inspectUrl, inspectInit] = fetchImpl.mock.calls[1]!;
+    expect(inspectUrl).toBe(
+      `${BACKEND_URL}/store/artwork/uploads/upload-1/inspect`,
+    );
+    expect(inspectInit.method).toBe("POST");
+    // Inspecting before the PUT would measure an object that is not there yet.
+    expect(order).toEqual(["presign", "put", "inspect"]);
+  });
+
+  it.each<[string, ArtworkUploadErrorCode]>([
+    ["mismatched_type", "mismatched_type"],
+    ["unreadable", "unreadable"],
+  ])(
+    "surfaces a rejected file as %s rather than a generic failure",
+    async (reason, expected) => {
+      const fetchImpl = backendFetch(
+        jsonResponse(200, presignBody),
+        jsonResponse(422, { error: "artwork_rejected", reason }),
+      );
+
+      expect(
+        await codeOf(
+          uploadArtwork({
+            file: makeFile(),
+            fetchImpl,
+            putFile: jest.fn().mockResolvedValue(undefined),
+          }),
+        ),
+      ).toBe(expected);
+    },
+  );
+
+  it("does not hand back a reference when the file could not be measured", async () => {
+    const fetchImpl = backendFetch(
+      jsonResponse(200, presignBody),
+      jsonResponse(200, { uploadId: "upload-1" }),
+    );
+
+    expect(
+      await codeOf(
+        uploadArtwork({
+          file: makeFile(),
+          fetchImpl,
+          putFile: jest.fn().mockResolvedValue(undefined),
+        }),
+      ),
+    ).toBe("inspect_failed");
   });
 
   it("sends the content type the presign response signed for, not the file's own", async () => {
     const file = makeFile();
-    const fetchImpl = jest.fn().mockResolvedValue(
+    const fetchImpl = backendFetch(
       jsonResponse(200, {
         ...presignBody,
         requiredHeaders: {
@@ -195,6 +284,7 @@ describe("uploadArtwork", () => {
           "content-type": "image/jpeg",
         },
       }),
+      jsonResponse(200, inspectBody),
     );
     const putFile = jest.fn().mockResolvedValue(undefined);
 

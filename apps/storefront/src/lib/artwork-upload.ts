@@ -1,9 +1,12 @@
 import {
-  ARTWORK_MIME_TYPES,
+  ARTWORK_ACCEPT,
+  ARTWORK_ACCEPTED_LABEL,
   MAX_ARTWORK_BYTES,
+  artworkInspectResponseSchema,
   artworkUploadResponseSchema,
+  resolveArtworkMimeType,
 } from "@craftynp/types";
-import type { ArtworkMimeType } from "@craftynp/types";
+import type { ArtworkKind, ArtworkMimeType } from "@craftynp/types";
 
 export type ArtworkFileMeta = {
   fileName: string;
@@ -14,6 +17,11 @@ export type ArtworkFileMeta = {
 export type ArtworkReference = ArtworkFileMeta & {
   uploadId: string;
   storageKey: string;
+  // Measured from the stored bytes by Medusa, never from the browser, so the
+  // resolution the shopper is gated on is one they cannot overstate.
+  kind: ArtworkKind;
+  widthPx: number | null;
+  heightPx: number | null;
 };
 
 export type ArtworkUploadErrorCode =
@@ -28,6 +36,10 @@ export type ArtworkUploadErrorCode =
   | "invalid_request"
   | "put_network"
   | "put_rejected"
+  | "inspect_failed"
+  | "inspect_network"
+  | "mismatched_type"
+  | "unreadable"
   | "aborted";
 
 export class ArtworkUploadError extends Error {
@@ -51,11 +63,12 @@ export function isArtworkUploadError(
   return value instanceof ArtworkUploadError;
 }
 
-export const ARTWORK_ACCEPT = ARTWORK_MIME_TYPES.join(",");
+export { ARTWORK_ACCEPT };
 
 const PREVIEWABLE_MIME_TYPES: readonly string[] = [
   "image/png",
   "image/jpeg",
+  "image/webp",
   "image/svg+xml",
 ];
 
@@ -63,16 +76,13 @@ export function isPreviewableArtwork(mimeType: string): boolean {
   return PREVIEWABLE_MIME_TYPES.includes(mimeType);
 }
 
-function isArtworkMimeType(value: string): value is ArtworkMimeType {
-  return (ARTWORK_MIME_TYPES as readonly string[]).includes(value);
-}
-
 export type ArtworkFileCheck =
   | { ok: true; meta: ArtworkFileMeta }
   | { ok: false; code: "unsupported_type" | "empty_file" | "too_large" };
 
 export function checkArtworkFile(file: File): ArtworkFileCheck {
-  if (!isArtworkMimeType(file.type)) {
+  const mimeType = resolveArtworkMimeType(file.name, file.type);
+  if (mimeType === null) {
     return { ok: false, code: "unsupported_type" };
   }
   if (file.size === 0) {
@@ -83,7 +93,7 @@ export function checkArtworkFile(file: File): ArtworkFileCheck {
   }
   return {
     ok: true,
-    meta: { fileName: file.name, mimeType: file.type, sizeBytes: file.size },
+    meta: { fileName: file.name, mimeType, sizeBytes: file.size },
   };
 }
 
@@ -113,6 +123,8 @@ const RETRYABLE_CODES: readonly ArtworkUploadErrorCode[] = [
   "rate_limited",
   "put_network",
   "put_rejected",
+  "inspect_failed",
+  "inspect_network",
 ];
 
 export function isRetryableArtworkUpload(
@@ -132,7 +144,7 @@ export function artworkUploadMessage(
 ): string {
   switch (code) {
     case "unsupported_type":
-      return "That file type isn't supported. Upload a PNG, JPG, SVG or PDF.";
+      return `That file type isn't supported. Upload a ${ARTWORK_ACCEPTED_LABEL}.`;
     case "empty_file":
       return "That file is empty. Check it and choose another.";
     case "too_large": {
@@ -156,13 +168,21 @@ export function artworkUploadMessage(
         : `You've started a lot of uploads. Wait ${wait} seconds and try again.`;
     }
     case "invalid_request":
-      return "We couldn't accept that file. Try a different PNG, JPG, SVG or PDF.";
+      return `We couldn't accept that file. Try a different ${ARTWORK_ACCEPTED_LABEL}.`;
     case "presign_network":
       return "We couldn't reach the store. Check your connection and try again.";
     case "put_network":
       return "The upload didn't finish. Check your connection and try again.";
     case "put_rejected":
       return "The upload link expired before the file finished. Try again.";
+    case "inspect_failed":
+      return "We couldn't check that file. Try again.";
+    case "inspect_network":
+      return "We couldn't reach the store to check that file. Check your connection and try again.";
+    case "mismatched_type":
+      return `That file isn't the kind of file its name says it is. Export it again as a ${ARTWORK_ACCEPTED_LABEL} and re-upload.`;
+    case "unreadable":
+      return "We couldn't read that image — it may be damaged. Export it again and re-upload.";
     case "aborted":
       return "Upload cancelled.";
   }
@@ -287,6 +307,17 @@ function presignFailureCode(
   return "presign_failed";
 }
 
+function inspectFailureCode(body: unknown): ArtworkUploadErrorCode {
+  const reason =
+    body != null && typeof body === "object"
+      ? (body as Record<string, unknown>).reason
+      : undefined;
+
+  if (reason === "mismatched_type") return "mismatched_type";
+  if (reason === "unreadable") return "unreadable";
+  return "inspect_failed";
+}
+
 export const uploadArtwork: UploadArtwork = async ({
   file,
   signal,
@@ -304,21 +335,20 @@ export const uploadArtwork: UploadArtwork = async ({
   }
 
   const doFetch = fetchImpl ?? fetch;
+  const origin = backendUrl.replace(/\/+$/, "");
+  const headers = {
+    "Content-Type": "application/json",
+    "x-publishable-api-key": publishableKey,
+  };
 
   let response: Response;
   try {
-    response = await doFetch(
-      `${backendUrl.replace(/\/+$/, "")}/store/artwork/uploads`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-publishable-api-key": publishableKey,
-        },
-        body: JSON.stringify(check.meta),
-        signal,
-      },
-    );
+    response = await doFetch(`${origin}/store/artwork/uploads`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(check.meta),
+      signal,
+    });
   } catch (error) {
     if (signal?.aborted) throw new ArtworkUploadError("aborted");
     if (error instanceof Error && error.name === "AbortError") {
@@ -348,9 +378,38 @@ export const uploadArtwork: UploadArtwork = async ({
     onProgress,
   });
 
+  // Only the stored bytes can say what the file really is and how many pixels
+  // across it is. Nothing here measures it in the browser: a shopper cannot be
+  // the source of the number that decides whether their order is printable.
+  let inspectResponse: Response;
+  try {
+    inspectResponse = await doFetch(
+      `${origin}/store/artwork/uploads/${encodeURIComponent(parsed.data.uploadId)}/inspect`,
+      { method: "POST", headers, signal },
+    );
+  } catch (error) {
+    if (signal?.aborted) throw new ArtworkUploadError("aborted");
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ArtworkUploadError("aborted");
+    }
+    throw new ArtworkUploadError("inspect_network");
+  }
+
+  const inspectBody: unknown = await inspectResponse.json().catch(() => null);
+
+  if (!inspectResponse.ok) {
+    throw new ArtworkUploadError(inspectFailureCode(inspectBody));
+  }
+
+  const inspected = artworkInspectResponseSchema.safeParse(inspectBody);
+  if (!inspected.success) throw new ArtworkUploadError("inspect_failed");
+
   return {
     uploadId: parsed.data.uploadId,
     storageKey: parsed.data.storageKey,
+    kind: inspected.data.kind,
+    widthPx: inspected.data.widthPx,
+    heightPx: inspected.data.heightPx,
     ...check.meta,
   };
 };

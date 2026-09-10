@@ -2,9 +2,14 @@ import {
   CUSTOMIZATION_INPUTS,
   CUSTOM_SIZE_FALLBACK_BOUNDS,
   READY_MADE_PRODUCT,
+  DEFAULT_ARTWORK_MIN_DPI,
   activeCustomizationInputs,
   customizationMetadataPatch,
+  readOptionValueWidthInches,
   requiredCustomizationInputs,
+  resolveArtworkMinDpi,
+  unmeasuredOptionValues,
+  validateCategoryArtwork,
   resolveProductCustomization,
   validateProductCustomization,
 } from "./product-customization.js";
@@ -303,5 +308,171 @@ describe("validateProductCustomization", () => {
         { published: false },
       ),
     ).toEqual({ ok: true });
+  });
+});
+
+describe("resolveArtworkMinDpi", () => {
+  it("takes the strictest category, so a looser one cannot weaken it", () => {
+    expect(
+      resolveArtworkMinDpi([
+        { metadata: { artwork_min_dpi: "150" } },
+        { metadata: { artwork_min_dpi: "300" } },
+      ]),
+    ).toBe(300);
+  });
+
+  it("ignores a category that declares nothing", () => {
+    expect(
+      resolveArtworkMinDpi([
+        { metadata: { artwork_min_dpi: "300" } },
+        { metadata: { image_url: "https://example.test/sale.jpg" } },
+        { metadata: null },
+      ]),
+    ).toBe(300);
+  });
+
+  it("reads a number as readily as a string, since a CSV writes one and the widget the other", () => {
+    expect(resolveArtworkMinDpi([{ metadata: { artwork_min_dpi: 240 } }])).toBe(
+      240,
+    );
+  });
+
+  it("rounds a fractional threshold rather than comparing against a fraction", () => {
+    expect(
+      resolveArtworkMinDpi([{ metadata: { artwork_min_dpi: "299.6" } }]),
+    ).toBe(300);
+  });
+
+  it("ignores a value it cannot read rather than throwing on it", () => {
+    // The owner can type anything into the raw metadata editor or a CSV column.
+    expect(
+      resolveArtworkMinDpi([
+        { metadata: { artwork_min_dpi: "three hundred" } },
+        { metadata: { artwork_min_dpi: "-50" } },
+        { metadata: { artwork_min_dpi: "" } },
+      ]),
+    ).toBe(DEFAULT_ARTWORK_MIN_DPI);
+  });
+
+  it("falls back when a product is in no category at all", () => {
+    expect(resolveArtworkMinDpi([])).toBe(DEFAULT_ARTWORK_MIN_DPI);
+    expect(resolveArtworkMinDpi(null)).toBe(DEFAULT_ARTWORK_MIN_DPI);
+  });
+});
+
+describe("readOptionValueWidthInches", () => {
+  it("reads either spelling, as the sub-label read does", () => {
+    expect(readOptionValueWidthInches({ width_inches: "3" })).toBe(3);
+    expect(readOptionValueWidthInches({ widthInches: 2.5 })).toBe(2.5);
+  });
+
+  it("returns null for a preset that names no physical width", () => {
+    expect(readOptionValueWidthInches({ subLabel: "Small" })).toBeNull();
+    expect(readOptionValueWidthInches({ width_inches: "wide" })).toBeNull();
+    expect(readOptionValueWidthInches(null)).toBeNull();
+  });
+});
+
+describe("validateCategoryArtwork", () => {
+  it("accepts a category that names no threshold", () => {
+    expect(validateCategoryArtwork({ image_url: "x" }).ok).toBe(true);
+    expect(validateCategoryArtwork(null).ok).toBe(true);
+    expect(validateCategoryArtwork({ artwork_min_dpi: "" }).ok).toBe(true);
+  });
+
+  it("accepts a readable threshold", () => {
+    expect(validateCategoryArtwork({ artwork_min_dpi: "300" }).ok).toBe(true);
+    expect(validateCategoryArtwork({ artwork_min_dpi: 150 }).ok).toBe(true);
+  });
+
+  it.each(["3OO", "-50", "0", "lots"])(
+    "refuses %s, which the tolerant reader would silently ignore",
+    (raw) => {
+      // resolveArtworkMinDpi drops what it cannot read, so an unrejected typo
+      // drops every product in the category to the default floor with nothing
+      // said anywhere.
+      const problem = validateCategoryArtwork({ artwork_min_dpi: raw });
+
+      expect(problem.ok).toBe(false);
+      if (problem.ok) return;
+      expect(problem.message).toContain("artwork_min_dpi");
+    },
+  );
+});
+
+describe("unmeasuredOptionValues", () => {
+  const product = [
+    {
+      title: "Size",
+      values: [
+        { value: "Small", metadata: { width_inches: "3" } },
+        { value: "Large", metadata: { subLabel: "45 cm" } },
+        { value: "Custom", metadata: null },
+      ],
+    },
+    {
+      title: "Finish",
+      values: [{ value: "Matte", metadata: null }],
+    },
+  ];
+
+  const sized = { sizeOptionTitle: "Size", customValue: "Custom" };
+
+  it("names the size values a shopper could pick and get no gate on", () => {
+    expect(unmeasuredOptionValues(product, sized)).toEqual({
+      anyMeasured: true,
+      missing: ["Large"],
+    });
+  });
+
+  it("leaves other option groups alone, since a finish has no size to record", () => {
+    // Complaining about Matte is noise, and noise is how an owner learns to
+    // ignore the one warning that matters.
+    expect(unmeasuredOptionValues(product, sized).missing).not.toContain(
+      "Matte",
+    );
+  });
+
+  it("ignores the custom value, which takes its size from the shopper", () => {
+    expect(unmeasuredOptionValues(product, sized).missing).not.toContain(
+      "Custom",
+    );
+  });
+
+  it("complains about no value in particular when no size group is named", () => {
+    // Without a named group there is no telling a size from a finish, so the
+    // only honest report is the whole-product one below.
+    expect(unmeasuredOptionValues(product, { customValue: "Custom" })).toEqual({
+      anyMeasured: true,
+      missing: [],
+    });
+  });
+
+  it("reports a product where nothing anywhere is measured", () => {
+    // This is the silent case the warning exists for: artwork on, no size
+    // anywhere, every upload accepted whatever its resolution.
+    expect(
+      unmeasuredOptionValues([
+        { title: "Colour", values: [{ value: "Blush", metadata: null }] },
+      ]),
+    ).toEqual({ anyMeasured: false, missing: [] });
+  });
+
+  it("counts a height on its own as measured", () => {
+    expect(
+      unmeasuredOptionValues([
+        {
+          title: "Size",
+          values: [{ value: "Tall", metadata: { height_inches: "40" } }],
+        },
+      ]).anyMeasured,
+    ).toBe(true);
+  });
+
+  it("copes with a product that has no options at all", () => {
+    expect(unmeasuredOptionValues(null)).toEqual({
+      anyMeasured: false,
+      missing: [],
+    });
   });
 });

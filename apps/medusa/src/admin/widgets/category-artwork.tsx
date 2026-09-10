@@ -15,22 +15,36 @@ import type {
   AdminProductCategory,
   DetailWidgetProps,
 } from "@medusajs/framework/types";
+import {
+  ARTWORK_MIN_DPI_METADATA_KEY,
+  DEFAULT_ARTWORK_MIN_DPI,
+} from "@craftynp/types";
 
 import { sdk } from "../lib/client";
-import { SiteContentImageField } from "../components/site-content-image-field";
 
 function toText(value: unknown): string {
+  if (typeof value === "number") return String(value);
   return typeof value === "string" ? value : "";
 }
 
-const CategoryImageWidget = ({
+function problemWith(value: string): string | null {
+  if (value.trim() === "") return null;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return "Enter a positive number of dots per inch, like 300.";
+  }
+
+  return null;
+}
+
+const CategoryArtworkWidget = ({
   data,
 }: DetailWidgetProps<AdminProductCategory>) => {
   const queryClient = useQueryClient();
-  const queryKey = ["product_category_image", data.id];
+  const queryKey = ["product_category_artwork", data.id];
 
-  const [imageUrl, setImageUrl] = useState("");
-  const [imageAlt, setImageAlt] = useState("");
+  const [minDpi, setMinDpi] = useState("");
 
   const { data: category, isLoading } = useQuery({
     queryKey,
@@ -40,8 +54,11 @@ const CategoryImageWidget = ({
 
   useEffect(() => {
     if (category) {
-      setImageUrl(toText(category.product_category.metadata?.image_url));
-      setImageAlt(toText(category.product_category.metadata?.image_alt));
+      setMinDpi(
+        toText(
+          category.product_category.metadata?.[ARTWORK_MIN_DPI_METADATA_KEY],
+        ),
+      );
     }
   }, [category]);
 
@@ -60,25 +77,26 @@ const CategoryImageWidget = ({
       return sdk.admin.productCategory.update(data.id, {
         metadata: {
           ...(fresh.product_category.metadata ?? {}),
-          image_url: imageUrl,
-          image_alt: imageAlt,
+          [ARTWORK_MIN_DPI_METADATA_KEY]: minDpi.trim(),
         },
       });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({
-        queryKey: ["product_category_artwork", data.id],
+        queryKey: ["product_category_image", data.id],
       });
       void queryClient.invalidateQueries({
         queryKey: ["product_category", data.id],
       });
-      toast.success("Category image saved");
+      toast.success("Artwork requirements saved");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to save the category image");
+      toast.error(error.message || "Failed to save the artwork requirements");
     },
   });
+
+  const problem = problemWith(minDpi);
 
   if (isLoading || !category) {
     return (
@@ -91,45 +109,38 @@ const CategoryImageWidget = ({
   return (
     <Container className="divide-y p-0">
       <div className="flex items-center justify-between px-6 py-4">
-        <Heading level="h2">Image</Heading>
+        <Heading level="h2">Artwork</Heading>
         <Button
           size="small"
           onClick={() => save.mutate()}
           isLoading={save.isPending}
-          disabled={save.isPending}
+          disabled={save.isPending || problem !== null}
         >
           Save
         </Button>
       </div>
 
-      <div className="flex flex-col gap-y-4 px-6 py-4">
-        <div className="flex flex-col gap-y-2">
-          <Label htmlFor="category_image_url">Image</Label>
-          <SiteContentImageField
-            id="category_image_url"
-            value={imageUrl}
-            onChange={setImageUrl}
-          />
+      <div className="flex flex-col gap-y-2 px-6 py-4">
+        <Label htmlFor="category_artwork_min_dpi">Minimum resolution</Label>
+        <Input
+          id="category_artwork_min_dpi"
+          inputMode="decimal"
+          placeholder={String(DEFAULT_ARTWORK_MIN_DPI)}
+          value={minDpi}
+          onChange={(event) => setMinDpi(event.target.value)}
+        />
+        {problem ? (
+          <Hint variant="error">{problem}</Hint>
+        ) : (
           <Hint>
-            This is the photo behind this category&apos;s slide in the homepage
-            carousel. Without one the slide falls back to a pattern.
+            Uploads for products in this category are held to this many dots per
+            inch at the size ordered, and a file below it cannot be added to the
+            cart. 300 is the print standard; 150 is a common floor for
+            large-format work seen at a distance. Leave it blank to use{" "}
+            {DEFAULT_ARTWORK_MIN_DPI}. A product in more than one category is
+            held to the strictest.
           </Hint>
-        </div>
-
-        <div className="flex flex-col gap-y-2">
-          <Label htmlFor="category_image_alt">Alt text</Label>
-          <Input
-            id="category_image_alt"
-            value={imageAlt}
-            onChange={(event) => setImageAlt(event.target.value)}
-          />
-          <Hint>
-            Describe the photo for shoppers using a screen reader, which reads
-            this aloud in place of the image. Leave it blank if the photo is
-            purely decorative and the slide&apos;s heading already says
-            everything it shows.
-          </Hint>
-        </div>
+        )}
       </div>
     </Container>
   );
@@ -139,4 +150,4 @@ export const config = defineWidgetConfig({
   zone: "product_category.details.side.after",
 });
 
-export default CategoryImageWidget;
+export default CategoryArtworkWidget;

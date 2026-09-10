@@ -1,6 +1,9 @@
 import { cache } from "react";
 
 import {
+  readOptionValueHeightInches,
+  readOptionValueWidthInches,
+  resolveArtworkMinDpi,
   resolveProductCustomization,
   type ProductCustomization,
 } from "@craftynp/types";
@@ -34,7 +37,13 @@ export type ProductDetailSourceProduct = {
   description?: string | null;
   thumbnail?: string | null;
   metadata?: Record<string, unknown> | null;
-  categories?: readonly { name: string; handle: string }[] | null;
+  categories?:
+    | readonly {
+        name: string;
+        handle: string;
+        metadata?: Record<string, unknown> | null;
+      }[]
+    | null;
   images?: readonly { url: string }[] | null;
   options?:
     | readonly {
@@ -58,6 +67,11 @@ export type ProductDetailOptionValue = {
   id: string;
   value: string;
   subLabel?: string;
+  // How large the finished piece is at this preset, when the owner has said.
+  // Without it there is no ordered size to check an upload's resolution
+  // against, so the preset gets guidance rather than a gate.
+  widthInches?: number;
+  heightInches?: number;
 };
 
 export type ProductDetailOption = {
@@ -90,6 +104,7 @@ export type ProductDetail = {
   options: ProductDetailOption[];
   variants: ProductDetailVariant[];
   customization: ProductCustomization;
+  artworkMinDpi: number;
 };
 
 const SUB_LABEL_KEYS = ["subLabel", "sub_label"] as const;
@@ -132,6 +147,8 @@ export function toProductDetail(
         id: value.id,
         value: value.value,
         subLabel: optionValueSubLabel(value.metadata),
+        widthInches: readOptionValueWidthInches(value.metadata) ?? undefined,
+        heightInches: readOptionValueHeightInches(value.metadata) ?? undefined,
       })),
     }),
   );
@@ -182,6 +199,7 @@ export function toProductDetail(
     options,
     variants,
     customization: resolveProductCustomization(product.metadata),
+    artworkMinDpi: resolveArtworkMinDpi(product.categories),
   };
 }
 

@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { ARTWORK_ACCEPTED_LABEL } from "@craftynp/types";
+
 import {
   ARTWORK_ACCEPT,
   ARTWORK_SIZE_LIMIT_LABEL,
@@ -35,6 +37,12 @@ export type ArtworkUploadProps = {
   label?: string;
   disabled?: boolean;
   upload?: UploadArtwork;
+  // What the shopper needs to know before choosing a file, and what is wrong
+  // with the one they chose. Both are derived by the parent, which is the only
+  // thing that knows the ordered size — this component stays controlled on the
+  // durable reference alone.
+  guidance?: string;
+  errorMessage?: string | null;
 };
 
 type InternalState =
@@ -62,6 +70,8 @@ export function ArtworkUpload({
   label = "Your artwork",
   disabled = false,
   upload = uploadArtwork,
+  guidance,
+  errorMessage = null,
 }: ArtworkUploadProps) {
   const [state, setState] = useState<InternalState>({ status: "quiet" });
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -78,6 +88,7 @@ export function ArtworkUpload({
   const pendingFocusRef = useRef<PendingFocus>(null);
 
   const hintId = useId();
+  const guidanceId = useId();
 
   const view =
     state.status === "uploading"
@@ -318,7 +329,7 @@ export function ArtworkUpload({
           <p id={hintId} className="text-sm text-foreground-muted">
             {isDraggingOver
               ? "Release to upload"
-              : `or drag one here — PNG, JPG, SVG or PDF, up to ${ARTWORK_SIZE_LIMIT_LABEL}`}
+              : `or drag one here — ${guidance ?? `${ARTWORK_ACCEPTED_LABEL}, up to ${ARTWORK_SIZE_LIMIT_LABEL}.`}`}
           </p>
         </div>
       ) : null}
@@ -374,11 +385,25 @@ export function ArtworkUpload({
               <CheckCircle aria-hidden="true" size={16} />
               Uploaded {value.fileName} · {formatFileSize(value.sizeBytes)}
             </p>
+            {errorMessage ? (
+              // The upload itself succeeded, so this sits on the uploaded view
+              // rather than the error one: the file is attached, it just
+              // cannot be printed at the size ordered.
+              <p
+                id={guidanceId}
+                role="alert"
+                className="flex items-start gap-2 text-sm text-danger-foreground"
+              >
+                <WarningCircle aria-hidden="true" size={16} />
+                {errorMessage}
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 ref={browseRef}
                 disabled={disabled}
+                aria-describedby={errorMessage ? guidanceId : undefined}
                 onClick={openPicker}
                 className={secondaryActionClassName}
               >
