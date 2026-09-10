@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
 import {
@@ -7,6 +7,7 @@ import {
 } from "@craftynp/types";
 import type { ProductDetail, ProductDetailVariant } from "@/lib/product";
 import { clearCart, readCart } from "@/lib/cart";
+import { uploadArtwork } from "@/lib/artwork-upload";
 import { readCartDrawerOpen, setCartDrawerOpen } from "@/lib/cart-drawer";
 
 const options = [
@@ -60,8 +61,52 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
     options,
     variants,
     customization: READY_MADE_PRODUCT,
+    artworkMinDpi: 300,
     ...overrides,
   };
+}
+
+// The only way artwork reaches the configurator draft is a real upload, so the
+// transport is doubled and the file is chosen through the control itself.
+// Mocked by its own path rather than the @/ alias: this jest config maps the
+// alias for imports but not for jest.mock's own resolution.
+jest.mock("../../src/lib/artwork-upload", () => {
+  const actual = jest.requireActual("../../src/lib/artwork-upload");
+  return { ...actual, uploadArtwork: jest.fn() };
+});
+
+const uploadArtworkMock = jest.mocked(uploadArtwork);
+
+function uploadedReference(widthPx: number) {
+  return {
+    uploadId: "upload-1",
+    storageKey: "staging/upload-1.png",
+    fileName: "screenshot.png",
+    mimeType: "image/png" as const,
+    sizeBytes: 51_200,
+    kind: "raster" as const,
+    widthPx,
+    heightPx: widthPx,
+  };
+}
+
+async function uploadArtworkOfWidth(widthPx: number) {
+  uploadArtworkMock.mockResolvedValue(uploadedReference(widthPx));
+
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error("no file input rendered");
+
+  await act(async () => {
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File([new Uint8Array(1)], "screenshot.png", {
+            type: "image/png",
+          }),
+        ],
+      },
+    });
+  });
 }
 
 function chooseBlush() {
@@ -628,6 +673,179 @@ describe("ProductDetailView", () => {
           { label: "Custom text", value: "Ellie" },
           { label: "Order notes", value: "Matte finish" },
         ],
+      });
+    });
+
+    describe("artwork resolution", () => {
+      // jsdom implements neither, and ArtworkUpload builds a preview from the
+      // chosen file the moment it is accepted.
+      beforeEach(() => {
+        Object.defineProperty(URL, "createObjectURL", {
+          configurable: true,
+          value: jest.fn(() => "blob:artwork-preview"),
+        });
+        Object.defineProperty(URL, "revokeObjectURL", {
+          configurable: true,
+          value: jest.fn(),
+        });
+      });
+
+      const artworkAndSize = resolveProductCustomization({
+        customizable: "true",
+        customization_artwork: "required",
+        customization_size: "optional",
+        customization_size_min_inches: "1",
+        customization_size_max_inches: "48",
+        customization_size_option: "Size",
+        customization_size_option_value: "Custom",
+      });
+
+      const sizeOptions = [
+        {
+          id: "opt_size",
+          title: "Size",
+          values: [
+            { id: "val_small", value: "Small", widthInches: 3 },
+            { id: "val_large", value: "Large", widthInches: 12 },
+            { id: "val_custom", value: "Custom" },
+          ],
+        },
+      ];
+
+      const sizeVariants: ProductDetailVariant[] = [
+        {
+          id: "var_small",
+          sku: "S",
+          thumbnail: null,
+          optionValueIds: ["val_small"],
+          availability: "in_stock" as const,
+          price: "$9.00",
+          calculatedAmount: 9,
+          currencyCode: "usd",
+        },
+        {
+          id: "var_large",
+          sku: "L",
+          thumbnail: null,
+          optionValueIds: ["val_large"],
+          availability: "in_stock" as const,
+          price: "$19.00",
+          calculatedAmount: 19,
+          currencyCode: "usd",
+        },
+        {
+          id: "var_custom",
+          sku: "C",
+          thumbnail: null,
+          optionValueIds: ["val_custom"],
+          availability: "in_stock" as const,
+          price: "$29.00",
+          calculatedAmount: 29,
+          currencyCode: "usd",
+        },
+      ];
+
+      function renderSized() {
+        render(
+          <ProductDetailView
+            product={makeProduct({
+              customization: artworkAndSize,
+              options: sizeOptions,
+              variants: sizeVariants,
+              artworkMinDpi: 300,
+            })}
+          />,
+        );
+      }
+
+      function chooseSize(name: string) {
+        fireEvent.click(screen.getByRole("radio", { name }));
+      }
+
+      it("tells the shopper the resolution needed before they upload (AC 9)", () => {
+        renderSized();
+        chooseSize("Small");
+
+        expect(
+          screen.getByRole("button", { name: "Choose a file" }),
+        ).toHaveAccessibleDescription(/900 pixels across \(300 DPI\)/);
+      });
+
+      it("holds add to cart shut on a file below the floor, and says why (AC 6, AC 7)", async () => {
+        renderSized();
+        chooseSize("Small");
+        await uploadArtworkOfWidth(300);
+
+        expect(screen.getByRole("alert")).toHaveTextContent(/100 DPI/);
+        expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
+        expect(
+          screen.getByText(
+            "Replace your artwork with a higher-resolution file to continue.",
+          ),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /add to cart/i }),
+        ).toBeDisabled();
+      });
+
+      it("re-blocks a passing file when the ordered size grows (AC 8)", async () => {
+        renderSized();
+        chooseSize("Small");
+        await uploadArtworkOfWidth(900);
+
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /add to cart/i }),
+        ).toBeEnabled();
+
+        chooseSize("Large");
+
+        expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
+        expect(
+          screen.getByRole("button", { name: /add to cart/i }),
+        ).toBeDisabled();
+      });
+
+      it("measures against the size the shopper types once custom is on", async () => {
+        renderSized();
+        chooseSize("Small");
+        await uploadArtworkOfWidth(900);
+
+        fireEvent.click(screen.getByRole("checkbox", { name: /my own size/i }));
+        fireEvent.change(screen.getByLabelText(/width/i), {
+          target: { value: "9" },
+        });
+        fireEvent.change(screen.getByLabelText(/height/i), {
+          target: { value: "9" },
+        });
+
+        expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
+        expect(
+          screen.getByRole("button", { name: /add to cart/i }),
+        ).toBeDisabled();
+      });
+
+      it("does not gate a preset the owner has never measured", async () => {
+        // Without a physical width there is no DPI to work out, and refusing
+        // every upload on a product mid-setup would be worse than not gating.
+        render(
+          <ProductDetailView
+            product={makeProduct({
+              customization: resolveProductCustomization({
+                customizable: "true",
+                customization_artwork: "required",
+              }),
+              artworkMinDpi: 300,
+            })}
+          />,
+        );
+        chooseBlush();
+        await uploadArtworkOfWidth(10);
+
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /add to cart/i }),
+        ).toBeEnabled();
       });
     });
 

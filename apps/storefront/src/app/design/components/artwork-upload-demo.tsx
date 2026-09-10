@@ -36,6 +36,9 @@ const simulatedUpload: UploadArtwork = ({ file, signal, onProgress }) =>
         fileName: file.name,
         mimeType: file.type as ArtworkReference["mimeType"],
         sizeBytes: file.size,
+        kind: "raster",
+        widthPx: 2400,
+        heightPx: 2400,
       });
     }, PROGRESS_STEP_MS);
   });
@@ -79,6 +82,9 @@ const PRESET_REFERENCE: ArtworkReference = {
   fileName: "banner-artwork.pdf",
   mimeType: "application/pdf",
   sizeBytes: 3_355_443,
+  kind: "vector",
+  widthPx: null,
+  heightPx: null,
 };
 
 export function ArtworkUploadDemo() {

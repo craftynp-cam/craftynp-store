@@ -20,6 +20,8 @@ type ProductConfiguratorProps = {
   onChange: (next: CustomizationDraft) => void;
   sizeErrors: CustomDimensionErrors;
   onCustomSizeChange: (useCustomSize: boolean) => void;
+  artworkError: string | null;
+  artworkGuidance: string;
 };
 
 function hint(mode: CustomizationInputMode): string | undefined {
@@ -32,6 +34,8 @@ export function ProductConfigurator({
   onChange,
   sizeErrors,
   onCustomSizeChange,
+  artworkError,
+  artworkGuidance,
 }: ProductConfiguratorProps) {
   const { inputs, size } = customization;
   const showsCustomSize = usesCustomSize(customization, value);
@@ -53,6 +57,8 @@ export function ProductConfigurator({
               ? "Your artwork"
               : "Your artwork (optional)"
           }
+          guidance={artworkGuidance}
+          errorMessage={artworkError}
         />
       ) : null}
 

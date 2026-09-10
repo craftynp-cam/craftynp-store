@@ -82,6 +82,16 @@ describe("resolveArtworkMimeType", () => {
     expect(resolveArtworkMimeType("photo.WEBP", "")).toBe("image/webp");
   });
 
+  it("rejects a file whose type the browser did give and we do not accept", () => {
+    // Otherwise renaming notes.txt to logo.png would talk its way past the
+    // client-side check. Only .ai overrides a type the browser supplied.
+    expect(resolveArtworkMimeType("logo.png", "text/plain")).toBeNull();
+  });
+
+  it("rejects a dropped folder, which arrives with no type and no extension", () => {
+    expect(resolveArtworkMimeType("Designs", "")).toBeNull();
+  });
+
   it("treats .jpeg and .jpg as the same type", () => {
     expect(resolveArtworkMimeType("shot.jpeg", "")).toBe("image/jpeg");
     expect(resolveArtworkMimeType("shot.jpg", "")).toBe("image/jpeg");

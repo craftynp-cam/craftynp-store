@@ -59,19 +59,21 @@ const EXTENSION_MIME_TYPES: Record<string, ArtworkMimeType> = {
   ai: "application/illustrator",
 };
 
-// Browsers disagree about `.ai`: Chrome on macOS reports application/pdf,
-// Firefox and Safari often report nothing at all. The extension is the only
-// thing that tells an Illustrator file from the PDF it is compatible with, so
-// it wins wherever it names a type we accept.
+// Chrome on macOS reports an .ai file as application/pdf and Firefox reports
+// nothing at all, so the extension has to answer in those two cases — it is
+// the only thing that tells an Illustrator file from the PDF it is compatible
+// with. Everywhere else a type the browser did give and we do not accept is a
+// rejection, so renaming a text file to .png does not talk its way in.
 export function resolveArtworkMimeType(
   fileName: string,
   fileType: string,
 ): ArtworkMimeType | null {
   const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
   const fromExtension = EXTENSION_MIME_TYPES[extension] ?? null;
-  if (fromExtension !== null) return fromExtension;
 
-  return isArtworkMimeType(fileType) ? fileType : null;
+  if (fromExtension === "application/illustrator") return fromExtension;
+  if (isArtworkMimeType(fileType)) return fileType;
+  return fileType === "" ? fromExtension : null;
 }
 
 export const artworkUploadRequestSchema = z.object({

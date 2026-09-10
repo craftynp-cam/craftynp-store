@@ -15,10 +15,13 @@ import { formatMoney } from "@/lib/money";
 import type { ProductDetailOption, ProductDetailVariant } from "@/lib/product";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
+  artworkGuidance,
+  artworkResolutionError,
   customSizeErrors,
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
+  orderedWidthInches,
   resolveCustomSizeOption,
   usesCustomSize,
   type CustomizationDraft,
@@ -32,6 +35,7 @@ type ProductPurchaseProps = {
   options: readonly ProductDetailOption[];
   variants: readonly ProductDetailVariant[];
   customization: ProductCustomization;
+  artworkMinDpi: number;
   selected: Record<string, string>;
   onOptionChange: (optionId: string, valueId: string | null) => void;
   onCtaHeightChange?: (height: number) => void;
@@ -56,6 +60,7 @@ export function ProductPurchase({
   options,
   variants,
   customization,
+  artworkMinDpi,
   selected,
   onOptionChange,
   onCtaHeightChange,
@@ -132,13 +137,25 @@ export function ProductPurchase({
   const missingInputs = missingRequiredInputs(customization, draft);
   const sizeErrors = customSizeErrors(customization, draft);
   const hasSizeErrors = Object.keys(sizeErrors).length > 0;
+  const orderedWidth = orderedWidthInches(
+    customization,
+    draft,
+    options,
+    selected,
+  );
+  const artworkError = artworkResolutionError(
+    draft,
+    artworkMinDpi,
+    orderedWidth,
+  );
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isSoldOut = selectedVariant?.availability === "out_of_stock";
   const canAddToCart =
     selectedVariant != null &&
     !isSoldOut &&
     missingInputs.length === 0 &&
-    !hasSizeErrors;
+    !hasSizeErrors &&
+    artworkError === null;
 
   const clauses: string[] = [];
   if (outstanding.length > 0) {
@@ -151,6 +168,9 @@ export function ProductPurchase({
   }
   if (hasSizeErrors) {
     clauses.push("check the size you entered");
+  }
+  if (artworkError !== null) {
+    clauses.push("replace your artwork with a higher-resolution file");
   }
 
   const hint = isSoldOut
@@ -258,6 +278,8 @@ export function ProductPurchase({
           onChange={setDraft}
           sizeErrors={sizeErrors}
           onCustomSizeChange={handleCustomSizeChange}
+          artworkError={artworkError}
+          artworkGuidance={artworkGuidance(artworkMinDpi, orderedWidth)}
         />
       ) : null}
 

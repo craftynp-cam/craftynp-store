@@ -1,7 +1,10 @@
 import {
+  ARTWORK_ACCEPTED_LABEL,
   CUSTOMIZATION_INPUTS,
+  checkArtworkResolution,
   checkCustomDimensions,
   requiredCustomizationInputs,
+  requiredPixelWidth,
 } from "@craftynp/types";
 import type {
   CustomDimensionErrors,
@@ -9,6 +12,7 @@ import type {
   ProductCustomization,
 } from "@craftynp/types";
 
+import { ARTWORK_SIZE_LIMIT_LABEL } from "./artwork-upload";
 import type { ArtworkReference } from "./artwork-upload";
 import type { CartLineDetail } from "./cart";
 import type { ProductDetailOption, ProductDetailOptionValue } from "./product";
@@ -178,4 +182,59 @@ export function customizationDetails(
   }
 
   return details;
+}
+
+// The physical width the artwork will be printed at. A custom size is whatever
+// the shopper typed; a preset carries its width on the Medusa option value's
+// own metadata, and the selector is deliberately not told which group is the
+// size, so any selected value that names one answers.
+export function orderedWidthInches(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+  options: readonly ProductDetailOption[],
+  selected: Record<string, string>,
+): number | null {
+  if (usesCustomSize(customization, draft)) {
+    return positiveNumber(draft.widthInches);
+  }
+
+  for (const option of options) {
+    const value = option.values.find(
+      (candidate) => candidate.id === selected[option.id],
+    );
+    if (value?.widthInches != null) return value.widthInches;
+  }
+
+  return null;
+}
+
+// A file below the floor blocks whatever the declared artwork mode is:
+// `optional` says the shopper need not supply artwork, not that a file too
+// coarse to print is acceptable once they have.
+export function artworkResolutionError(
+  draft: CustomizationDraft,
+  minDpi: number,
+  widthInches: number | null,
+): string | null {
+  if (draft.artwork === null) return null;
+
+  const result = checkArtworkResolution(draft.artwork, {
+    minDpi,
+    orderedWidthInches: widthInches,
+  });
+
+  return result.ok ? null : result.message;
+}
+
+export function artworkGuidance(
+  minDpi: number,
+  widthInches: number | null,
+): string {
+  const formats = `${ARTWORK_ACCEPTED_LABEL}, up to ${ARTWORK_SIZE_LIMIT_LABEL}.`;
+  if (widthInches === null) return formats;
+
+  const pixels = requiredPixelWidth(minDpi, widthInches).toLocaleString(
+    "en-US",
+  );
+  return `${formats} At ${widthInches}\u2033 wide we need at least ${pixels} pixels across (${minDpi} DPI).`;
 }
