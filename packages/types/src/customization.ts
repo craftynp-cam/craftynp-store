@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-import { artworkMimeTypeSchema } from "./artwork.js";
-
-export const MIN_ARTWORK_DPI = 150;
+import { artworkMimeTypeSchema, isVectorArtwork } from "./artwork.js";
 
 export const customTextSchema = z.object({
   value: z.string().trim().min(1).max(120),
@@ -14,9 +12,8 @@ export const artworkReferenceSchema = z.object({
   fileName: z.string().min(1),
   mimeType: artworkMimeTypeSchema,
   sizeBytes: z.number().int().positive(),
-  widthPx: z.number().int().positive(),
-  heightPx: z.number().int().positive(),
-  dpi: z.number().int().min(MIN_ARTWORK_DPI),
+  widthPx: z.number().int().positive().nullable(),
+  heightPx: z.number().int().positive().nullable(),
 });
 export type ArtworkReference = z.infer<typeof artworkReferenceSchema>;
 
@@ -57,6 +54,73 @@ export function checkCustomDimensions(
   }
 
   return errors;
+}
+
+export function effectiveDpi(widthPx: number, widthInches: number): number {
+  return Math.floor(widthPx / widthInches);
+}
+
+export function requiredPixelWidth(
+  minDpi: number,
+  widthInches: number,
+): number {
+  return Math.ceil(minDpi * widthInches);
+}
+
+export type ArtworkResolutionInput = {
+  mimeType: string;
+  widthPx: number | null;
+};
+
+export type ArtworkResolutionContext = {
+  minDpi: number;
+  orderedWidthInches: number | null;
+};
+
+export type ArtworkResolutionCheck =
+  | { ok: true }
+  | {
+      ok: false;
+      detectedDpi: number;
+      requiredDpi: number;
+      requiredWidthPx: number;
+      message: string;
+    };
+
+function formatInches(inches: number): string {
+  return `${Math.round(inches * 100) / 100}″`;
+}
+
+function formatPixels(pixels: number): string {
+  return pixels.toLocaleString("en-US");
+}
+
+// A vector file has no fixed resolution, and an ordered width we cannot read is
+// not a shopper's fault — neither can be checked, so neither blocks.
+export function checkArtworkResolution(
+  artwork: ArtworkResolutionInput,
+  { minDpi, orderedWidthInches }: ArtworkResolutionContext,
+): ArtworkResolutionCheck {
+  if (isVectorArtwork(artwork.mimeType)) return { ok: true };
+  if (orderedWidthInches === null || orderedWidthInches <= 0)
+    return { ok: true };
+  if (artwork.widthPx === null || artwork.widthPx <= 0) return { ok: true };
+
+  const detectedDpi = effectiveDpi(artwork.widthPx, orderedWidthInches);
+  if (detectedDpi >= minDpi) return { ok: true };
+
+  const requiredWidthPx = requiredPixelWidth(minDpi, orderedWidthInches);
+
+  return {
+    ok: false,
+    detectedDpi,
+    requiredDpi: minDpi,
+    requiredWidthPx,
+    message:
+      `This file works out at ${detectedDpi} DPI at ${formatInches(orderedWidthInches)} wide. ` +
+      `We need at least ${minDpi} DPI — about ${formatPixels(requiredWidthPx)} pixels across. ` +
+      `Upload a higher-resolution file.`,
+  };
 }
 
 export const lineItemCustomizationSchema = z.object({

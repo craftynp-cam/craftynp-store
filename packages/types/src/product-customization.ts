@@ -58,6 +58,18 @@ export const CUSTOM_SIZE_OPTION_METADATA_KEY = "customization_size_option";
 export const CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY =
   "customization_size_option_value";
 
+export const ARTWORK_MIN_DPI_METADATA_KEY = "artwork_min_dpi";
+
+// Reachable, unlike CUSTOM_SIZE_FALLBACK_BOUNDS: a product need not belong to
+// any category, so nothing can force a threshold to be declared. 150 DPI is the
+// common floor for large-format work.
+export const DEFAULT_ARTWORK_MIN_DPI = 150;
+
+export const OPTION_VALUE_WIDTH_INCHES_KEYS = [
+  "widthInches",
+  "width_inches",
+] as const;
+
 export const CUSTOM_SIZE_FALLBACK_BOUNDS: CustomSizeBounds = {
   minInches: 1,
   maxInches: 96,
@@ -323,4 +335,37 @@ export function validateProductCustomization(
   }
 
   return { ok: true };
+}
+
+type MetadataCarrier = { metadata?: Record<string, unknown> | null };
+
+function readDpi(value: unknown): number | null {
+  const inches = readInches(value);
+  if (inches === null) return null;
+  return Number.isInteger(inches) ? inches : Math.round(inches);
+}
+
+// The strictest declared threshold wins: a product sitting in both "Stickers"
+// and "Sale" is still a sticker, and the looser category must not weaken it.
+export function resolveArtworkMinDpi(
+  categories: readonly MetadataCarrier[] | null | undefined,
+): number {
+  let highest: number | null = null;
+
+  for (const category of categories ?? []) {
+    const declared = readDpi(category.metadata?.[ARTWORK_MIN_DPI_METADATA_KEY]);
+    if (declared === null) continue;
+    if (highest === null || declared > highest) highest = declared;
+  }
+
+  return highest ?? DEFAULT_ARTWORK_MIN_DPI;
+}
+
+export function readOptionValueWidthInches(metadata: Metadata): number | null {
+  for (const key of OPTION_VALUE_WIDTH_INCHES_KEYS) {
+    const inches = readInches(metadata?.[key]);
+    if (inches !== null) return inches;
+  }
+
+  return null;
 }

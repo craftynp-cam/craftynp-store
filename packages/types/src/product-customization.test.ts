@@ -2,9 +2,12 @@ import {
   CUSTOMIZATION_INPUTS,
   CUSTOM_SIZE_FALLBACK_BOUNDS,
   READY_MADE_PRODUCT,
+  DEFAULT_ARTWORK_MIN_DPI,
   activeCustomizationInputs,
   customizationMetadataPatch,
+  readOptionValueWidthInches,
   requiredCustomizationInputs,
+  resolveArtworkMinDpi,
   resolveProductCustomization,
   validateProductCustomization,
 } from "./product-customization.js";
@@ -303,5 +306,67 @@ describe("validateProductCustomization", () => {
         { published: false },
       ),
     ).toEqual({ ok: true });
+  });
+});
+
+describe("resolveArtworkMinDpi", () => {
+  it("takes the strictest category, so a looser one cannot weaken it", () => {
+    expect(
+      resolveArtworkMinDpi([
+        { metadata: { artwork_min_dpi: "150" } },
+        { metadata: { artwork_min_dpi: "300" } },
+      ]),
+    ).toBe(300);
+  });
+
+  it("ignores a category that declares nothing", () => {
+    expect(
+      resolveArtworkMinDpi([
+        { metadata: { artwork_min_dpi: "300" } },
+        { metadata: { image_url: "https://example.test/sale.jpg" } },
+        { metadata: null },
+      ]),
+    ).toBe(300);
+  });
+
+  it("reads a number as readily as a string, since a CSV writes one and the widget the other", () => {
+    expect(resolveArtworkMinDpi([{ metadata: { artwork_min_dpi: 240 } }])).toBe(
+      240,
+    );
+  });
+
+  it("rounds a fractional threshold rather than comparing against a fraction", () => {
+    expect(
+      resolveArtworkMinDpi([{ metadata: { artwork_min_dpi: "299.6" } }]),
+    ).toBe(300);
+  });
+
+  it("ignores a value it cannot read rather than throwing on it", () => {
+    // The owner can type anything into the raw metadata editor or a CSV column.
+    expect(
+      resolveArtworkMinDpi([
+        { metadata: { artwork_min_dpi: "three hundred" } },
+        { metadata: { artwork_min_dpi: "-50" } },
+        { metadata: { artwork_min_dpi: "" } },
+      ]),
+    ).toBe(DEFAULT_ARTWORK_MIN_DPI);
+  });
+
+  it("falls back when a product is in no category at all", () => {
+    expect(resolveArtworkMinDpi([])).toBe(DEFAULT_ARTWORK_MIN_DPI);
+    expect(resolveArtworkMinDpi(null)).toBe(DEFAULT_ARTWORK_MIN_DPI);
+  });
+});
+
+describe("readOptionValueWidthInches", () => {
+  it("reads either spelling, as the sub-label read does", () => {
+    expect(readOptionValueWidthInches({ width_inches: "3" })).toBe(3);
+    expect(readOptionValueWidthInches({ widthInches: 2.5 })).toBe(2.5);
+  });
+
+  it("returns null for a preset that names no physical width", () => {
+    expect(readOptionValueWidthInches({ subLabel: "Small" })).toBeNull();
+    expect(readOptionValueWidthInches({ width_inches: "wide" })).toBeNull();
+    expect(readOptionValueWidthInches(null)).toBeNull();
   });
 });
