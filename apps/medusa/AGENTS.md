@@ -16,6 +16,11 @@ tax provider), `notification-resend`, `auth-auth0`, and
   `@craftynp/types`, not by the `siteContent` module.** Adding a field —
   including an `image` field, whose stored value is just the URL string — is a
   registry change, never a migration.
+- **A category carries two settings of its own, on its `metadata`**: the
+  homepage carousel image below, and `artwork_min_dpi`. Each has its own widget
+  on `product_category.details.side.after`; both must spread the existing
+  metadata into their update, because Medusa replaces the jsonb column
+  wholesale and an unspread write destroys the other one.
 - **Category imagery is not site content.** The storefront's homepage carousel
   renders one slide per product category and reads each slide's photo from that
   category's own `metadata.image_url` / `metadata.image_alt`, written by the
@@ -47,8 +52,10 @@ tax provider), `notification-resend`, `auth-auth0`, and
   is unreachable on a live product and the constant is not a hidden policy.
   `validateCustomization` (`src/lib/validate-customization.ts`) takes those
   bounds as an argument rather than a constant, so the message it throws names
-  the same range the shopper was shown. It still has no production caller;
-  CNP-45 wires the real `LineItemCustomization` payload through.
+  the same range the shopper was shown. It takes the artwork resolution floor
+  and the ordered width the same way, for the same reason. It still has no
+  production caller; CNP-45 wires the real `LineItemCustomization` payload
+  through.
 - **`tsconfig.json` must keep `medusa-config.ts` in `include`, with `rootDir`
   at `./`.** `medusa build` emits exactly `tsConfig.fileNames`, so scoping the
   root to `src` leaves the built `.medusa/server` with no `medusa-config.js` and
@@ -419,9 +426,38 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   the number of bytes it was minted for — that is the ceiling on what one
   presign call can store. The S3 presigner adds `content-type` to its own
   unsignable set and a `signableHeaders` override does not reach the signer, so
-  the declared type is advisory. Do not build a check on it. What actually
-  contains a mislabelled file is that the bucket is private and every read is a
-  signed URL forcing an attachment disposition; CNP-40 inspects the bytes.
+  the declared type is advisory. Do not build a check on it. What contains a
+  mislabelled file is that the bucket is private and every read is a signed URL
+  forcing an attachment disposition — and the inspect route below, which is the
+  only thing that ever reads the bytes.
+- **`POST /store/artwork/uploads/:uploadId/inspect` is the gate, and the
+  storefront calls it straight after the PUT.** It reads the head of the
+  staging object over `Range` (`readArtworkHead`), sniffs the real format from
+  its magic bytes, and refuses anything whose bytes contradict the type it was
+  presigned as. `src/lib/artwork-inspection.ts` is the pure half — PNG's IHDR,
+  a JPEG marker walk past EXIF and Photoshop segments, and all three WebP chunk
+  types — and is tested against real encoder output rather than fixtures packed
+  the way the reader reads.
+  **An unmeasurable raster is rejected, not passed.** No dimensions means no
+  DPI check means nothing blocks the file, which is the one hole this exists to
+  close. **SVG, PDF and AI always bypass the resolution check**: a raster
+  wrapped in a PDF falls to the manual backstop (CNP-68) rather than to a PDF
+  parser here. `.ai` is accepted as either a PDF or a PostScript header.
+  The measurement is written to `artwork_asset`'s existing `width_px` /
+  `height_px` columns before the response, so the resolution the shopper was
+  gated on is the one an order can be checked against later. `dpi` is not
+  stored: it is a function of the pixel width and the ordered size, and a
+  stored copy could disagree with both.
+- **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,
+  written by `src/admin/widgets/category-artwork.tsx` and read through
+  `resolveArtworkMinDpi` in `@craftynp/types`, which takes the strictest value
+  among a product's categories. Unlike `CUSTOM_SIZE_FALLBACK_BOUNDS`,
+  `DEFAULT_ARTWORK_MIN_DPI` (150) **is reachable on a live product** — a
+  product need not belong to any category, so nothing can force a threshold to
+  be declared. It is deliberate policy, not a hidden one.
+  The ordered physical width comes from the size option value's own
+  `width_inches` metadata, or from the shopper's typed dimensions; see
+  [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
 - **`GET /admin/artwork/:id` returns a signed URL where the label route streams
   bytes.** That divergence is deliberate — a print-resolution file is far larger
   than a label PDF and there is no reason to move it through Medusa. Do not

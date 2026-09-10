@@ -156,6 +156,11 @@ nothing here knows that a product might have a size or a material.
   `subLabel` or `sub_label` — Medusa has no native field for it. A blank or
   non-string entry is ignored, so a half-filled metadata row renders nothing
   rather than `[object Object]`.
+- **A value's physical width comes from the same place**, under `width_inches`
+  or `widthInches`. It is what the artwork resolution check measures against on
+  a preset size, and a preset that names none gets guidance but no gate — so
+  leaving it off a size option quietly disables the only gate protecting that
+  product. `readOptionValueWidthInches` in `@craftynp/types` is the reader.
 - **`RadioButtonGroup` (`src/components/ui`) is the option control**, not
   `RadioGroup`, which still serves every ordinary form. It renders React Aria
   radios as buttons, so the selected state is a real `aria-checked` rather than a
@@ -207,6 +212,17 @@ guard that validates them).
   `details` entries alongside the variant options; **artwork does not**, because
   a filename in `details` would show an attachment the cart cannot actually
   carry. CNP-45 threads the real payload through.
+- **The artwork resolution check joins the one gate, and it blocks whatever the
+  declared artwork mode is.** `optional` says the shopper need not supply
+  artwork, not that a file too coarse to print is acceptable once they have —
+  the same distinction CNP-41 drew for the custom size. `artworkResolutionError`
+  and `orderedWidthInches` (`src/lib/product-customization.ts`) are derived on
+  every render, so changing the size re-runs the check and re-blocks a file that
+  had passed. **Do not turn that into an effect** — the derivation is what makes
+  it correct, and `react-hooks/set-state-in-effect` is enforced here anyway.
+  The threshold reaches the page as `ProductDetail.artworkMinDpi`, resolved from
+  the product's categories; `fetchProductByHandle` must keep asking for
+  `*categories`, and the failure mode if it stops is silent.
 - **There is one add-to-cart gate and one hint, not two.** `canAddToCart` is
   false while an option is outstanding, while the variant is sold out, _or_
   while a required configurator input is empty; the hint names whatever is
@@ -320,6 +336,26 @@ in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
   success rather than at upload start.** `onChange` fires only when an upload
   resolves, so a failed replace leaves the previous artwork attached and still
   showing its own thumbnail rather than the one that failed.
+- **The upload has three steps, not two: presign, PUT, then inspect.** Only the
+  stored bytes can say what the file really is and how many pixels across it
+  is, so nothing measures it in the browser — a shopper cannot be the source of
+  the number that decides whether their order is printable. The measurements
+  land on the `ArtworkReference` as `kind`, `widthPx` and `heightPx`. The
+  backend half is in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+- **`resolveArtworkMimeType` (`@craftynp/types`), not `file.type`, decides what
+  a file is.** Chrome on macOS reports `.ai` as `application/pdf` and Firefox
+  reports nothing at all, so the extension answers for `.ai`. Everywhere else a
+  type the browser did give and we do not accept is a rejection, or renaming
+  `notes.txt` to `logo.png` would pass the client-side check.
+- **The resolution failure is rendered on the _uploaded_ view, not the error
+  one.** The upload itself succeeded; what failed is that the file cannot be
+  printed at the size ordered. The file stays attached and showing its name,
+  with Replace as the way out — and the message names both the resolution the
+  file has and the one it needs, because "too low" alone tells a shopper
+  nothing about what to export instead.
+- **`guidance` and `errorMessage` are derived by the parent**, which is the only
+  thing that knows the ordered size. The component stays controlled on the
+  durable reference alone.
 - **The drag counter is not incidental.** Crossing from the zone onto a child
   fires `dragleave` on the zone before `dragenter` on the child, so a plain
   boolean flickers off at every internal boundary. `dragDepthRef` is the fix.
