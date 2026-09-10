@@ -13,6 +13,8 @@ const lowDpiArtwork = {
   },
 };
 
+const BOUNDS = { minInches: 2, maxInches: 48 };
+
 function captureThrown(fn: () => unknown): unknown {
   try {
     fn();
@@ -25,44 +27,49 @@ function captureThrown(fn: () => unknown): unknown {
 
 describe("validateCustomization", () => {
   it("returns the parsed payload when valid", () => {
-    const result = validateCustomization({
-      customText: { value: "For Grandma" },
-      orderNotes: "Gift wrap please",
-    });
+    const result = validateCustomization(
+      {
+        customText: { value: "For Grandma" },
+        orderNotes: "Gift wrap please",
+      },
+      BOUNDS,
+    );
 
     expect(result.customText?.value).toBe("For Grandma");
     expect(result.orderNotes).toBe("Gift wrap please");
   });
 
   it("accepts an empty payload for a ready-made product", () => {
-    expect(validateCustomization({})).toEqual({});
+    expect(validateCustomization({}, BOUNDS)).toEqual({});
   });
 
   it("throws when custom text is empty", () => {
-    expect(() => validateCustomization({ customText: { value: "" } })).toThrow(
-      /Invalid line item customization/,
-    );
-    expect(() => validateCustomization({ customText: { value: "" } })).toThrow(
+    expect(() =>
+      validateCustomization({ customText: { value: "" } }, BOUNDS),
+    ).toThrow(/Invalid line item customization/);
+    expect(() =>
+      validateCustomization({ customText: { value: "" } }, BOUNDS),
+    ).toThrow(MedusaError);
+  });
+
+  it("names the offending field in the error message", () => {
+    expect(() =>
+      validateCustomization({ customText: { value: "" } }, BOUNDS),
+    ).toThrow(/customText\.value/);
+  });
+
+  it("throws when artwork is below the minimum DPI", () => {
+    expect(() => validateCustomization(lowDpiArtwork, BOUNDS)).toThrow(/dpi/);
+    expect(() => validateCustomization(lowDpiArtwork, BOUNDS)).toThrow(
       MedusaError,
     );
   });
 
-  it("names the offending field in the error message", () => {
-    expect(() => validateCustomization({ customText: { value: "" } })).toThrow(
-      /customText\.value/,
-    );
-  });
-
-  it("throws when artwork is below the minimum DPI", () => {
-    expect(() => validateCustomization(lowDpiArtwork)).toThrow(/dpi/);
-    expect(() => validateCustomization(lowDpiArtwork)).toThrow(MedusaError);
-  });
-
   it("throws on a non-object payload", () => {
-    expect(() => validateCustomization("nope")).toThrow(
+    expect(() => validateCustomization("nope", BOUNDS)).toThrow(
       /Invalid line item customization/,
     );
-    expect(() => validateCustomization("nope")).toThrow(MedusaError);
+    expect(() => validateCustomization("nope", BOUNDS)).toThrow(MedusaError);
   });
 
   // A plain Error carrying the same message would satisfy every assertion above
@@ -74,10 +81,30 @@ describe("validateCustomization", () => {
       ["artwork below the minimum DPI", lowDpiArtwork],
       ["a non-object payload", "nope"],
     ])("is INVALID_DATA for %s", (_label, payload) => {
-      const thrown = captureThrown(() => validateCustomization(payload));
+      const thrown = captureThrown(() =>
+        validateCustomization(payload, BOUNDS),
+      );
 
       expect(thrown).toBeInstanceOf(MedusaError);
       expect((thrown as MedusaError).type).toBe(MedusaError.Types.INVALID_DATA);
     });
+  });
+
+  it("rejects a dimension outside the product's own bounds", () => {
+    const oversized = { dimensions: { widthInches: 60, heightInches: 10 } };
+
+    expect(() => validateCustomization(oversized, BOUNDS)).toThrow(
+      /between 2 and 48 inches/,
+    );
+    expect(() => validateCustomization(oversized, BOUNDS)).toThrow(MedusaError);
+  });
+
+  it("accepts a dimension the bounds allow", () => {
+    expect(
+      validateCustomization(
+        { dimensions: { widthInches: 8, heightInches: 10 } },
+        BOUNDS,
+      ).dimensions,
+    ).toEqual({ widthInches: 8, heightInches: 10 });
   });
 });
