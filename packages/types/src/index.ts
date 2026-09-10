@@ -11,6 +11,7 @@ export {
 export {
   MIN_ARTWORK_DPI,
   artworkReferenceSchema,
+  checkCustomDimensions,
   customDimensionsSchema,
   customTextSchema,
   lineItemCustomizationSchema,
@@ -19,6 +20,11 @@ export {
   CUSTOMIZABLE_METADATA_KEY,
   CUSTOMIZATION_INPUTS,
   CUSTOMIZATION_INPUT_MODES,
+  CUSTOM_SIZE_FALLBACK_BOUNDS,
+  CUSTOM_SIZE_MAX_METADATA_KEY,
+  CUSTOM_SIZE_MIN_METADATA_KEY,
+  CUSTOM_SIZE_OPTION_METADATA_KEY,
+  CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY,
   READY_MADE_PRODUCT,
   activeCustomizationInputs,
   customizationInputModeSchema,
@@ -114,11 +120,15 @@ export type {
 } from "./artwork.js";
 export type {
   ArtworkReference,
+  CustomDimensionErrors,
+  CustomDimensionField,
   CustomDimensions,
+  CustomSizeBounds,
   CustomText,
   LineItemCustomization,
 } from "./customization.js";
 export type {
+  CustomSizeConfig,
   CustomizationInput,
   CustomizationInputKey,
   CustomizationInputMode,

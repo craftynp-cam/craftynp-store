@@ -1,6 +1,7 @@
 import {
   MIN_ARTWORK_DPI,
   artworkReferenceSchema,
+  checkCustomDimensions,
   customDimensionsSchema,
   customTextSchema,
   lineItemCustomizationSchema,
@@ -73,7 +74,7 @@ describe("artworkReferenceSchema", () => {
 });
 
 describe("customDimensionsSchema", () => {
-  it("accepts positive dimensions within the maximum", () => {
+  it("accepts positive dimensions", () => {
     const result = customDimensionsSchema.parse({
       widthInches: 12.5,
       heightInches: 18,
@@ -88,11 +89,42 @@ describe("customDimensionsSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects dimensions above 96 inches", () => {
+  it("leaves the range to the product's own bounds", () => {
     expect(
-      customDimensionsSchema.safeParse({ widthInches: 97, heightInches: 10 })
+      customDimensionsSchema.safeParse({ widthInches: 400, heightInches: 400 })
         .success,
-    ).toBe(false);
+    ).toBe(true);
+  });
+});
+
+describe("checkCustomDimensions", () => {
+  const bounds = { minInches: 2, maxInches: 48 };
+
+  it("accepts a size inside the bounds", () => {
+    expect(
+      checkCustomDimensions({ widthInches: 8, heightInches: 10 }, bounds),
+    ).toEqual({});
+  });
+
+  it("accepts a size sitting exactly on each bound", () => {
+    expect(
+      checkCustomDimensions({ widthInches: 2, heightInches: 48 }, bounds),
+    ).toEqual({});
+  });
+
+  it("names the offending side and the range it must sit in", () => {
+    expect(
+      checkCustomDimensions({ widthInches: 1, heightInches: 10 }, bounds),
+    ).toEqual({ widthInches: "Enter a width between 2 and 48 inches." });
+  });
+
+  it("reports both sides when both are out of range", () => {
+    expect(
+      checkCustomDimensions({ widthInches: 1, heightInches: 60 }, bounds),
+    ).toEqual({
+      widthInches: "Enter a width between 2 and 48 inches.",
+      heightInches: "Enter a height between 2 and 48 inches.",
+    });
   });
 });
 

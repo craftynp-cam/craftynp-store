@@ -7,6 +7,7 @@ import {
   Container,
   Heading,
   Hint,
+  Input,
   Label,
   Select,
   Switch,
@@ -35,6 +36,40 @@ const MODE_LABELS: Record<CustomizationInputMode, string> = {
   required: "Required",
 };
 
+type SizeDraft = {
+  minInches: string;
+  maxInches: string;
+  optionTitle: string;
+  optionValue: string;
+};
+
+const SIZE_FIELDS = [
+  {
+    key: "minInches",
+    label: "Smallest side (inches)",
+    hint: "Anything below this is refused with an error naming the range.",
+  },
+  {
+    key: "maxInches",
+    label: "Largest side (inches)",
+    hint: "The biggest width or height the workshop will make.",
+  },
+  {
+    key: "optionTitle",
+    label: "Preset size option",
+    hint: "The option group the custom size replaces, exactly as it is titled — leave blank and the presets are untouched.",
+  },
+  {
+    key: "optionValue",
+    label: "Custom option value",
+    hint: "The value on that group the storefront selects while the shopper is entering their own size.",
+  },
+] as const satisfies readonly {
+  key: keyof SizeDraft;
+  label: string;
+  hint: string;
+}[];
+
 const ProductCustomizationWidget = ({
   data,
 }: DetailWidgetProps<AdminProduct>) => {
@@ -43,6 +78,12 @@ const ProductCustomizationWidget = ({
 
   const [customization, setCustomization] =
     useState<ProductCustomization>(READY_MADE_PRODUCT);
+  const [size, setSize] = useState<SizeDraft>({
+    minInches: "",
+    maxInches: "",
+    optionTitle: "",
+    optionValue: "",
+  });
 
   const { data: product, isLoading } = useQuery({
     queryKey,
@@ -51,9 +92,22 @@ const ProductCustomizationWidget = ({
   });
 
   useEffect(() => {
-    if (product) {
-      setCustomization(resolveProductCustomization(product.product.metadata));
-    }
+    if (!product) return;
+
+    const resolved = resolveProductCustomization(product.product.metadata);
+    setCustomization(resolved);
+    setSize({
+      minInches:
+        resolved.inputs.dimensions === "off"
+          ? ""
+          : String(resolved.size.minInches),
+      maxInches:
+        resolved.inputs.dimensions === "off"
+          ? ""
+          : String(resolved.size.maxInches),
+      optionTitle: resolved.size.optionTitle ?? "",
+      optionValue: resolved.size.optionValue ?? "",
+    });
   }, [product]);
 
   const save = useMutation({
@@ -61,7 +115,15 @@ const ProductCustomizationWidget = ({
       sdk.admin.product.update(data.id, {
         metadata: {
           ...(product?.product.metadata ?? {}),
-          ...customizationMetadataPatch(customization),
+          ...customizationMetadataPatch({
+            ...customization,
+            size: {
+              minInches: Number(size.minInches),
+              maxInches: Number(size.maxInches),
+              optionTitle: size.optionTitle.trim() || null,
+              optionValue: size.optionValue.trim() || null,
+            },
+          }),
         },
       }),
     onSuccess: () => {
@@ -85,6 +147,13 @@ const ProductCustomizationWidget = ({
   const asksForNothing =
     customization.isCustomizable &&
     activeCustomizationInputs(customization).length === 0;
+
+  const asksForSize =
+    customization.isCustomizable && customization.inputs.dimensions !== "off";
+
+  const boundsAreSet = [size.minInches, size.maxInches].every(
+    (bound) => Number(bound) > 0,
+  );
 
   return (
     <Container className="divide-y p-0">
@@ -150,9 +219,35 @@ const ProductCustomizationWidget = ({
                   </Select.Content>
                 </Select>
                 <Hint>{input.description}</Hint>
+
+                {input.key === "dimensions" && asksForSize
+                  ? SIZE_FIELDS.map((field) => (
+                      <div key={field.key} className="flex flex-col gap-y-2">
+                        <Label htmlFor={field.key}>{field.label}</Label>
+                        <Input
+                          id={field.key}
+                          value={size[field.key]}
+                          onChange={(event) =>
+                            setSize((current) => ({
+                              ...current,
+                              [field.key]: event.target.value,
+                            }))
+                          }
+                        />
+                        <Hint>{field.hint}</Hint>
+                      </div>
+                    ))
+                  : null}
               </div>
             ))
           : null}
+
+        {asksForSize && !boundsAreSet ? (
+          <Hint variant="error">
+            A custom size needs both bounds. Publishing it like this is
+            rejected.
+          </Hint>
+        ) : null}
 
         {asksForNothing ? (
           <Hint variant="error">

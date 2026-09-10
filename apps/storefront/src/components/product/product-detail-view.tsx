@@ -6,28 +6,43 @@ import type { CSSProperties } from "react";
 import { ProductDetails } from "./product-details";
 import { ProductGallery } from "./product-gallery";
 import { ProductPurchase } from "./product-purchase";
-import type { ProductDetail, ProductDetailOption } from "@/lib/product";
+import type { ProductDetail } from "@/lib/product";
+import {
+  EMPTY_CUSTOMIZATION_DRAFT,
+  resolveCustomSizeOption,
+  usesCustomSize,
+} from "@/lib/product-customization";
 import { findVariant } from "@/lib/variant";
 
 type ProductDetailViewProps = {
   product: ProductDetail;
 };
 
-function defaultSelection(
-  options: readonly ProductDetailOption[],
-): Record<string, string> {
+function defaultSelection(product: ProductDetail): Record<string, string> {
   const selection: Record<string, string> = {};
-  for (const option of options) {
+  for (const option of product.options) {
     if (option.values.length !== 1) continue;
     const onlyValue = option.values[0];
     if (onlyValue) selection[option.id] = onlyValue.id;
   }
+
+  const customSize = resolveCustomSizeOption(
+    product.options,
+    product.customization,
+  );
+  if (
+    customSize &&
+    usesCustomSize(product.customization, EMPTY_CUSTOMIZATION_DRAFT)
+  ) {
+    selection[customSize.option.id] = customSize.customValue.id;
+  }
+
   return selection;
 }
 
 export function ProductDetailView({ product }: ProductDetailViewProps) {
   const [selected, setSelected] = useState<Record<string, string>>(() =>
-    defaultSelection(product.options),
+    defaultSelection(product),
   );
   const [ctaHeight, setCtaHeight] = useState<number | null>(null);
 
@@ -65,7 +80,13 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           customization={product.customization}
           selected={selected}
           onOptionChange={(optionId, valueId) =>
-            setSelected((current) => ({ ...current, [optionId]: valueId }))
+            setSelected((current) => {
+              if (valueId === null) {
+                const { [optionId]: _removed, ...rest } = current;
+                return rest;
+              }
+              return { ...current, [optionId]: valueId };
+            })
           }
           onCtaHeightChange={setCtaHeight}
         />

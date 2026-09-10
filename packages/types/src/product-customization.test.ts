@@ -1,5 +1,6 @@
 import {
   CUSTOMIZATION_INPUTS,
+  CUSTOM_SIZE_FALLBACK_BOUNDS,
   READY_MADE_PRODUCT,
   activeCustomizationInputs,
   customizationMetadataPatch,
@@ -14,6 +15,21 @@ const CUSTOM = {
   customization_text: "optional",
 } as const;
 
+const CUSTOM_SIZE = {
+  customizable: "true",
+  customization_size: "optional",
+  customization_size_min_inches: "2",
+  customization_size_max_inches: "48",
+  customization_size_option: "Size",
+  customization_size_option_value: "Custom",
+} as const;
+
+const NO_SIZE_CONFIG = {
+  ...CUSTOM_SIZE_FALLBACK_BOUNDS,
+  optionTitle: null,
+  optionValue: null,
+};
+
 describe("resolveProductCustomization", () => {
   it("reads a declaration off product metadata", () => {
     expect(resolveProductCustomization(CUSTOM)).toEqual({
@@ -24,6 +40,7 @@ describe("resolveProductCustomization", () => {
         dimensions: "off",
         orderNotes: "off",
       },
+      size: NO_SIZE_CONFIG,
     });
   });
 
@@ -51,6 +68,38 @@ describe("resolveProductCustomization", () => {
     ).toEqual(READY_MADE_PRODUCT);
   });
 
+  it("reads the size bounds and the option the toggle drives", () => {
+    expect(resolveProductCustomization(CUSTOM_SIZE).size).toEqual({
+      minInches: 2,
+      maxInches: 48,
+      optionTitle: "Size",
+      optionValue: "Custom",
+    });
+  });
+
+  it.each([
+    ["a missing bound", { customization_size_max_inches: undefined }],
+    ["a bound that is not a number", { customization_size_min_inches: "wide" }],
+    ["a bound at or below zero", { customization_size_min_inches: "0" }],
+    ["a minimum above the maximum", { customization_size_min_inches: "60" }],
+  ])("falls back to the shared bounds on %s", (_label, override) => {
+    const size = resolveProductCustomization({
+      ...CUSTOM_SIZE,
+      ...override,
+    }).size;
+    expect(size.minInches).toBe(CUSTOM_SIZE_FALLBACK_BOUNDS.minInches);
+    expect(size.maxInches).toBe(CUSTOM_SIZE_FALLBACK_BOUNDS.maxInches);
+  });
+
+  it("drops the custom value when no option names it", () => {
+    expect(
+      resolveProductCustomization({
+        ...CUSTOM_SIZE,
+        customization_size_option: "",
+      }).size,
+    ).toMatchObject({ optionTitle: null, optionValue: null });
+  });
+
   it("drops a mode it does not understand rather than throwing", () => {
     expect(
       resolveProductCustomization({
@@ -71,6 +120,21 @@ describe("customizationMetadataPatch", () => {
       customization_text: "optional",
       customization_size: "off",
       customization_notes: "off",
+      customization_size_min_inches: "",
+      customization_size_max_inches: "",
+      customization_size_option: "",
+      customization_size_option_value: "",
+    });
+  });
+
+  it("writes the size configuration only while custom size is asked for", () => {
+    expect(
+      customizationMetadataPatch(resolveProductCustomization(CUSTOM_SIZE)),
+    ).toMatchObject({
+      customization_size_min_inches: "2",
+      customization_size_max_inches: "48",
+      customization_size_option: "Size",
+      customization_size_option_value: "Custom",
     });
   });
 
@@ -83,6 +147,12 @@ describe("customizationMetadataPatch", () => {
         dimensions: "required",
         orderNotes: "required",
       },
+      size: {
+        minInches: 2,
+        maxInches: 48,
+        optionTitle: "Size",
+        optionValue: "Custom",
+      },
     });
 
     expect(patch.customizable).toBe("false");
@@ -91,8 +161,11 @@ describe("customizationMetadataPatch", () => {
     }
   });
 
-  it("round-trips through resolve", () => {
-    const customization = resolveProductCustomization(CUSTOM);
+  it.each([
+    ["a declaration without a custom size", CUSTOM],
+    ["a declaration with one", CUSTOM_SIZE],
+  ])("round-trips %s through resolve", (_label, metadata) => {
+    const customization = resolveProductCustomization(metadata);
     expect(
       resolveProductCustomization(customizationMetadataPatch(customization)),
     ).toEqual(customization);
@@ -168,6 +241,59 @@ describe("validateProductCustomization", () => {
         { published: true },
       ).ok,
     ).toBe(false);
+  });
+
+  it("accepts a complete size configuration", () => {
+    expect(
+      validateProductCustomization(CUSTOM_SIZE, { published: true }),
+    ).toEqual({ ok: true });
+  });
+
+  it.each([
+    ["a bound that is not a number", { customization_size_min_inches: "wide" }],
+    ["a bound at or below zero", { customization_size_max_inches: "0" }],
+    [
+      "a minimum that is not below the maximum",
+      {
+        customization_size_min_inches: "48",
+      },
+    ],
+  ])("rejects %s at any status", (_label, override) => {
+    expect(
+      validateProductCustomization(
+        { ...CUSTOM_SIZE, ...override },
+        { published: false },
+      ).ok,
+    ).toBe(false);
+  });
+
+  it("rejects a custom option value with no option to belong to", () => {
+    const result = validateProductCustomization(
+      { ...CUSTOM_SIZE, customization_size_option: "" },
+      { published: false },
+    );
+    expect(result).toEqual({
+      ok: false,
+      message: expect.stringContaining("customization_size_option"),
+    });
+  });
+
+  it("refuses to publish a custom size with no bounds", () => {
+    expect(
+      validateProductCustomization(
+        { customizable: "true", customization_size: "optional" },
+        { published: true },
+      ).ok,
+    ).toBe(false);
+  });
+
+  it("lets a draft declare a custom size before its bounds are set", () => {
+    expect(
+      validateProductCustomization(
+        { customizable: "true", customization_size: "optional" },
+        { published: false },
+      ),
+    ).toEqual({ ok: true });
   });
 
   it("lets a draft be customizable before its inputs are chosen", () => {

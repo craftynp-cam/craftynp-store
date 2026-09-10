@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 
 import {
   cartLineCount,
+  cartLineKey,
   cartSubtotal,
   readCart,
   readServerCart,
@@ -77,7 +78,7 @@ export function CartDrawer() {
                 <ul className="space-y-4">
                   {cart.lines.map((line) => (
                     <CartCard
-                      key={line.id}
+                      key={cartLineKey(line)}
                       line={line}
                       onQuantityChange={setCartLineQuantity}
                       onRemove={removeCartLine}

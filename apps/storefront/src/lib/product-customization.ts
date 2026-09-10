@@ -1,15 +1,22 @@
-import { requiredCustomizationInputs } from "@craftynp/types";
+import {
+  CUSTOMIZATION_INPUTS,
+  checkCustomDimensions,
+  requiredCustomizationInputs,
+} from "@craftynp/types";
 import type {
+  CustomDimensionErrors,
   CustomizationInputKey,
   ProductCustomization,
 } from "@craftynp/types";
 
 import type { ArtworkReference } from "./artwork-upload";
 import type { CartLineDetail } from "./cart";
+import type { ProductDetailOption, ProductDetailOptionValue } from "./product";
 
 export type CustomizationDraft = {
   artwork: ArtworkReference | null;
   customText: string;
+  useCustomSize: boolean;
   widthInches: string;
   heightInches: string;
   orderNotes: string;
@@ -18,10 +25,69 @@ export type CustomizationDraft = {
 export const EMPTY_CUSTOMIZATION_DRAFT: CustomizationDraft = {
   artwork: null,
   customText: "",
+  useCustomSize: false,
   widthInches: "",
   heightInches: "",
   orderNotes: "",
 };
+
+export type CustomSizeOption = {
+  option: ProductDetailOption;
+  customValue: ProductDetailOptionValue;
+};
+
+export function resolveCustomSizeOption(
+  options: readonly ProductDetailOption[],
+  customization: ProductCustomization,
+): CustomSizeOption | null {
+  const { optionTitle, optionValue } = customization.size;
+  if (optionTitle === null || optionValue === null) return null;
+
+  const option = options.find((candidate) => candidate.title === optionTitle);
+  const customValue = option?.values.find(
+    (candidate) => candidate.value === optionValue,
+  );
+
+  return option && customValue ? { option, customValue } : null;
+}
+
+export function isCustomSizeOffered(
+  customization: ProductCustomization,
+): boolean {
+  return customization.inputs.dimensions === "optional";
+}
+
+export function usesCustomSize(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+): boolean {
+  if (customization.inputs.dimensions === "off") return false;
+  return isCustomSizeOffered(customization) ? draft.useCustomSize : true;
+}
+
+export function customSizeErrors(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+): CustomDimensionErrors {
+  if (!usesCustomSize(customization, draft)) return {};
+
+  const widthInches = positiveNumber(draft.widthInches);
+  const heightInches = positiveNumber(draft.heightInches);
+  const errors: CustomDimensionErrors = {};
+
+  if (draft.widthInches.trim() !== "" && widthInches === null) {
+    errors.widthInches = "Enter a width in inches, like 8.5.";
+  }
+  if (draft.heightInches.trim() !== "" && heightInches === null) {
+    errors.heightInches = "Enter a height in inches, like 10.";
+  }
+  if (widthInches === null || heightInches === null) return errors;
+
+  return checkCustomDimensions(
+    { widthInches, heightInches },
+    customization.size,
+  );
+}
 
 function positiveNumber(value: string): number | null {
   const trimmed = value.trim();
@@ -30,7 +96,11 @@ function positiveNumber(value: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function isSatisfied(key: CustomizationInputKey, draft: CustomizationDraft) {
+function isSatisfied(
+  key: CustomizationInputKey,
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+) {
   switch (key) {
     case "artwork":
       return draft.artwork != null;
@@ -38,8 +108,10 @@ function isSatisfied(key: CustomizationInputKey, draft: CustomizationDraft) {
       return draft.customText.trim() !== "";
     case "dimensions":
       return (
+        usesCustomSize(customization, draft) &&
         positiveNumber(draft.widthInches) != null &&
-        positiveNumber(draft.heightInches) != null
+        positiveNumber(draft.heightInches) != null &&
+        Object.keys(customSizeErrors(customization, draft)).length === 0
       );
     case "orderNotes":
       return draft.orderNotes.trim() !== "";
@@ -50,9 +122,15 @@ export function missingRequiredInputs(
   customization: ProductCustomization,
   draft: CustomizationDraft,
 ): CustomizationInputKey[] {
-  return requiredCustomizationInputs(customization).filter(
-    (key) => !isSatisfied(key, draft),
+  const asked = new Set<CustomizationInputKey>(
+    requiredCustomizationInputs(customization),
   );
+  if (usesCustomSize(customization, draft)) asked.add("dimensions");
+
+  return CUSTOMIZATION_INPUTS.filter(
+    (input) =>
+      asked.has(input.key) && !isSatisfied(input.key, customization, draft),
+  ).map((input) => input.key);
 }
 
 const MISSING_LABELS: Record<CustomizationInputKey, string> = {
@@ -77,14 +155,14 @@ export function customizationDetails(
 
   if (
     customization.inputs.customText !== "off" &&
-    isSatisfied("customText", draft)
+    isSatisfied("customText", customization, draft)
   ) {
     details.push({ label: "Custom text", value: draft.customText.trim() });
   }
 
   if (
     customization.inputs.dimensions !== "off" &&
-    isSatisfied("dimensions", draft)
+    isSatisfied("dimensions", customization, draft)
   ) {
     details.push({
       label: "Size",
@@ -94,7 +172,7 @@ export function customizationDetails(
 
   if (
     customization.inputs.orderNotes !== "off" &&
-    isSatisfied("orderNotes", draft)
+    isSatisfied("orderNotes", customization, draft)
   ) {
     details.push({ label: "Order notes", value: draft.orderNotes.trim() });
   }
