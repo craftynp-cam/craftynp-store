@@ -247,6 +247,12 @@ for the keys).
   the shopper must give dimensions, so there is no toggle and no preset to fall
   back to — `usesCustomSize` is what encodes that, and it is what every other
   read goes through.
+- **A `required` custom size has no checkbox, so `ProductDetailView` selects
+  the `Custom` value in its initial state instead.** Without that the shopper
+  picked a preset, was priced as that preset, and still got a line reading
+  `Size: 8″ × 10″` — a custom size sold at the Medium price. It is seeded in
+  `defaultSelection`, not an effect, for the same reason the single-value
+  options are: `react-hooks/set-state-in-effect`.
 - **Checking the box makes the dimensions required, whatever the declared
   mode.** `optional` describes whether the shopper is _offered_ a custom size,
   not whether they may leave it blank once they have asked for one — otherwise

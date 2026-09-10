@@ -466,6 +466,48 @@ describe("ProductDetailView", () => {
       ]);
     });
 
+    it("prices and sells the custom variant when the size is required outright", () => {
+      const required = resolveProductCustomization({
+        customizable: "true",
+        customization_size: "required",
+        customization_size_min_inches: "2",
+        customization_size_max_inches: "48",
+        customization_size_option: "Size",
+        customization_size_option_value: "Custom",
+      });
+
+      render(
+        <ProductDetailView
+          product={makeProduct({
+            options: sizeOptions,
+            variants: sizeVariants,
+            customization: required,
+          })}
+        />,
+      );
+
+      expect(
+        screen.queryByRole("checkbox", { name: /enter my own size/i }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/width/i)).toBeInTheDocument();
+      expect(screen.getByText("$12.00")).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText(/width/i), {
+        target: { value: "8" },
+      });
+      fireEvent.change(screen.getByLabelText(/height/i), {
+        target: { value: "10" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+      const line = readCart().lines[0];
+      expect(line?.id).toBe("var_custom");
+      expect(line?.unitPrice).toBe(12);
+      expect(line?.details).toEqual([
+        { label: "Size", value: "8\u2033 \u00d7 10\u2033" },
+      ]);
+    });
+
     it("keeps two custom sizes of one variant as two cart lines", () => {
       renderProduct();
       fireEvent.click(toggle());

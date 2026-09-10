@@ -245,7 +245,7 @@ export function ProductPurchase({
             : undefined
         }
         disabledOptionIds={
-          customSizeOption && draft.useCustomSize
+          customSizeOption && usesCustomSize(customization, draft)
             ? new Set([customSizeOption.option.id])
             : undefined
         }
