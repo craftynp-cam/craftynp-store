@@ -2,13 +2,54 @@ import { z } from "zod";
 
 import { artworkMimeTypeSchema, isVectorArtwork } from "./artwork.js";
 
-// The one limit for shopper-entered custom text. The storefront input and this
-// schema are the same number by construction, so the field cannot promise a
-// length the backend then refuses.
-export const CUSTOM_TEXT_MAX_LENGTH = 120;
+// What a shopper would call a character. A thumbs-up carrying a skin tone is
+// four UTF-16 code units and one thing you can point at, and a counter that
+// says 4 is a counter nobody believes. Both this schema and the storefront field count through
+// here, so the number the field shows is the number the backend enforces.
+// Where Intl.Segmenter is missing the count falls back to code units, which
+// over-counts rather than under-counts — an old browser refuses text a beat
+// early rather than sending text the backend will reject.
+const graphemes =
+  typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter("en", { granularity: "grapheme" })
+    : null;
+
+export function textLength(value: string): number {
+  const trimmed = value.trim();
+  if (graphemes === null) return trimmed.length;
+
+  return [...graphemes.segment(trimmed)].length;
+}
+
+// The limit a product falls back to when its owner has named none, and the
+// most any owner may name. The ceiling is what customTextSchema stores; the
+// product's own limit narrows it, the way custom size bounds narrow a
+// positive number of inches.
+export const CUSTOM_TEXT_FALLBACK_MAX_LENGTH = 120;
+export const CUSTOM_TEXT_LENGTH_CEILING = 1000;
+
+export const ORDER_NOTES_MAX_LENGTH = 500;
+
+// The one message for text that runs long, shared by the field that shows it
+// and the backend that rejects it.
+export function checkTextLength(
+  value: string,
+  maxLength: number,
+): string | null {
+  const over = textLength(value) - maxLength;
+  if (over <= 0) return null;
+
+  return `Shorten this to ${maxLength} characters or fewer \u2014 ${over} ${over === 1 ? "character" : "characters"} over.`;
+}
 
 export const customTextSchema = z.object({
-  value: z.string().trim().min(1).max(CUSTOM_TEXT_MAX_LENGTH),
+  value: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => textLength(value) <= CUSTOM_TEXT_LENGTH_CEILING, {
+      message: `must be ${CUSTOM_TEXT_LENGTH_CEILING} characters or fewer`,
+    }),
 });
 export type CustomText = z.infer<typeof customTextSchema>;
 
@@ -199,6 +240,12 @@ export const lineItemCustomizationSchema = z.object({
   customText: customTextSchema.optional(),
   artwork: artworkReferenceSchema.optional(),
   dimensions: customDimensionsSchema.optional(),
-  orderNotes: z.string().trim().max(500).optional(),
+  orderNotes: z
+    .string()
+    .trim()
+    .refine((value) => textLength(value) <= ORDER_NOTES_MAX_LENGTH, {
+      message: `must be ${ORDER_NOTES_MAX_LENGTH} characters or fewer`,
+    })
+    .optional(),
 });
 export type LineItemCustomization = z.infer<typeof lineItemCustomizationSchema>;
