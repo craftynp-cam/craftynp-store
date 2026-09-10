@@ -401,7 +401,7 @@ describe("validateCategoryArtwork", () => {
 });
 
 describe("unmeasuredOptionValues", () => {
-  const sizes = [
+  const product = [
     {
       title: "Size",
       values: [
@@ -410,48 +410,67 @@ describe("unmeasuredOptionValues", () => {
         { value: "Custom", metadata: null },
       ],
     },
+    {
+      title: "Finish",
+      values: [{ value: "Matte", metadata: null }],
+    },
   ];
 
-  it("names the values a shopper could pick and get no gate on", () => {
-    expect(unmeasuredOptionValues(sizes, "Custom")).toEqual({
+  const sized = { sizeOptionTitle: "Size", customValue: "Custom" };
+
+  it("names the size values a shopper could pick and get no gate on", () => {
+    expect(unmeasuredOptionValues(product, sized)).toEqual({
       anyMeasured: true,
       missing: ["Large"],
     });
   });
 
+  it("leaves other option groups alone, since a finish has no size to record", () => {
+    // Complaining about Matte is noise, and noise is how an owner learns to
+    // ignore the one warning that matters.
+    expect(unmeasuredOptionValues(product, sized).missing).not.toContain(
+      "Matte",
+    );
+  });
+
   it("ignores the custom value, which takes its size from the shopper", () => {
-    expect(unmeasuredOptionValues(sizes, "Custom").missing).not.toContain(
+    expect(unmeasuredOptionValues(product, sized).missing).not.toContain(
       "Custom",
     );
   });
 
-  it("reports a product where nothing is measured at all", () => {
+  it("complains about no value in particular when no size group is named", () => {
+    // Without a named group there is no telling a size from a finish, so the
+    // only honest report is the whole-product one below.
+    expect(unmeasuredOptionValues(product, { customValue: "Custom" })).toEqual({
+      anyMeasured: true,
+      missing: [],
+    });
+  });
+
+  it("reports a product where nothing anywhere is measured", () => {
     // This is the silent case the warning exists for: artwork on, no size
     // anywhere, every upload accepted whatever its resolution.
     expect(
-      unmeasuredOptionValues(
-        [{ title: "Colour", values: [{ value: "Blush", metadata: null }] }],
-        null,
-      ),
-    ).toEqual({ anyMeasured: false, missing: ["Blush"] });
+      unmeasuredOptionValues([
+        { title: "Colour", values: [{ value: "Blush", metadata: null }] },
+      ]),
+    ).toEqual({ anyMeasured: false, missing: [] });
   });
 
   it("counts a height on its own as measured", () => {
     expect(
-      unmeasuredOptionValues(
-        [
-          {
-            title: "Size",
-            values: [{ value: "Tall", metadata: { height_inches: "40" } }],
-          },
-        ],
-        null,
-      ).anyMeasured,
+      unmeasuredOptionValues([
+        {
+          title: "Size",
+          values: [{ value: "Tall", metadata: { height_inches: "40" } }],
+        },
+      ]).anyMeasured,
     ).toBe(true);
   });
 
   it("copes with a product that has no options at all", () => {
-    expect(unmeasuredOptionValues(null, null)).toEqual({
+    expect(unmeasuredOptionValues(null)).toEqual({
       anyMeasured: false,
       missing: [],
     });

@@ -115,10 +115,19 @@ const ProductCustomizationWidget = ({
   }, [product]);
 
   const save = useMutation({
-    mutationFn: () =>
-      sdk.admin.product.update(data.id, {
+    // Re-read immediately before writing rather than spreading this widget's
+    // own cached copy. Medusa replaces the metadata column wholesale, and the
+    // dashboard's built-in Metadata and JSON editors write the same column on
+    // this very page — so a copy fetched at mount is stale the moment the
+    // owner uses one of them, and spreading it destroys what they just wrote.
+    mutationFn: async () => {
+      const fresh = await sdk.admin.product.retrieve(data.id, {
+        fields: "id,metadata",
+      });
+
+      return sdk.admin.product.update(data.id, {
         metadata: {
-          ...(product?.product.metadata ?? {}),
+          ...(fresh.product.metadata ?? {}),
           ...customizationMetadataPatch({
             ...customization,
             size: {
@@ -129,7 +138,8 @@ const ProductCustomizationWidget = ({
             },
           }),
         },
-      }),
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({ queryKey: ["product", data.id] });
@@ -165,7 +175,10 @@ const ProductCustomizationWidget = ({
   const sizing = unmeasuredOptionValues(
     (product?.product as { options?: unknown } | undefined)?.options as
       Parameters<typeof unmeasuredOptionValues>[0] | undefined,
-    size.optionValue.trim() === "" ? null : size.optionValue.trim(),
+    {
+      sizeOptionTitle: size.optionTitle.trim() || null,
+      customValue: size.optionValue.trim() || null,
+    },
   );
 
   return (

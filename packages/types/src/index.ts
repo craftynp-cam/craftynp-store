@@ -160,6 +160,7 @@ export type {
   CustomSizeConfig,
   OptionLike,
   OptionValueLike,
+  UnmeasuredOptions,
   CustomizationInput,
   CustomizationInputKey,
   CustomizationInputMode,

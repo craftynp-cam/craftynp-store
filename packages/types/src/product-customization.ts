@@ -423,21 +423,42 @@ function measuresSomething(value: OptionValueLike): boolean {
   );
 }
 
+export type UnmeasuredOptions = {
+  // The option group the owner named as carrying sizes. Without it there is no
+  // way to tell a size that should record inches from a finish that never
+  // will, so no per-value complaint is made at all.
+  sizeOptionTitle?: string | null;
+  customValue?: string | null;
+};
+
 // The resolution check needs to know how big the finished piece is, and reads
 // that off whichever selected option value declares it. A product where none
 // does is silently ungated — every upload accepted whatever its resolution —
 // which the admin can see coming and the shopper never can.
 export function unmeasuredOptionValues(
   options: readonly OptionLike[] | null | undefined,
-  customValue: string | null,
+  { sizeOptionTitle, customValue }: UnmeasuredOptions = {},
 ): { anyMeasured: boolean; missing: string[] } {
-  const pickable = (options ?? [])
-    .flatMap((option) => option.values ?? [])
-    .filter((value) => value.value != null && value.value !== customValue);
+  const named = (option: OptionLike) =>
+    sizeOptionTitle != null &&
+    sizeOptionTitle !== "" &&
+    option.title === sizeOptionTitle;
+
+  const pickable = (values: readonly OptionValueLike[] | null | undefined) =>
+    (values ?? []).filter(
+      (value) => value.value != null && value.value !== customValue,
+    );
+
+  const everything = (options ?? []).flatMap((option) =>
+    pickable(option.values),
+  );
+  const sizes = (options ?? [])
+    .filter(named)
+    .flatMap((option) => pickable(option.values));
 
   return {
-    anyMeasured: pickable.some(measuresSomething),
-    missing: pickable
+    anyMeasured: everything.some(measuresSomething),
+    missing: sizes
       .filter((value) => !measuresSomething(value))
       .map((value) => value.value as string),
   };
