@@ -394,6 +394,32 @@ describe("ProductDetailView", () => {
       expect(screen.getByText("$11.00")).toBeInTheDocument();
     });
 
+    it("will not add a custom size the shopper never entered", () => {
+      renderProduct();
+      fireEvent.click(screen.getByRole("radio", { name: "Small" }));
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeEnabled();
+
+      fireEvent.click(toggle());
+
+      expect(
+        screen.getByText("Add a width and height to continue."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+    });
+
+    it("drops the preset group's availability note while it is disabled", () => {
+      renderProduct();
+      fireEvent.click(toggle());
+
+      expect(
+        screen.queryByText(/struck-through choices/i),
+      ).not.toBeInTheDocument();
+    });
+
     it("shows the range on the field and blocks add-to-cart while it is broken", () => {
       renderProduct();
       fireEvent.click(toggle());
@@ -422,6 +448,22 @@ describe("ProductDetailView", () => {
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();
+    });
+
+    it("names the size once, as the dimensions rather than the Custom value", () => {
+      renderProduct();
+      fireEvent.click(toggle());
+      fireEvent.change(screen.getByLabelText(/width/i), {
+        target: { value: "8" },
+      });
+      fireEvent.change(screen.getByLabelText(/height/i), {
+        target: { value: "10" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+      expect(readCart().lines[0]?.details).toEqual([
+        { label: "Size", value: "8\u2033 \u00d7 10\u2033" },
+      ]);
     });
 
     it("keeps two custom sizes of one variant as two cart lines", () => {

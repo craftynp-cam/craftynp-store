@@ -247,11 +247,29 @@ for the keys).
   the shopper must give dimensions, so there is no toggle and no preset to fall
   back to — `usesCustomSize` is what encodes that, and it is what every other
   read goes through.
+- **Checking the box makes the dimensions required, whatever the declared
+  mode.** `optional` describes whether the shopper is _offered_ a custom size,
+  not whether they may leave it blank once they have asked for one — otherwise
+  add-to-cart happily takes a `Custom` variant with no size on it.
+  `missingRequiredInputs` adds `dimensions` itself when `usesCustomSize` is
+  true, so this still lands in the one gate.
+- **The preset option's own detail row is dropped from the cart line while a
+  custom size is on.** Both are called "Size", so keeping it showed the shopper
+  `Size: Custom` immediately above `Size: 8″ × 10″`.
 - **Field errors are not a second gate.** `customSizeErrors` feeds both the
   `isInvalid`/`errorMessage` on each input and the one `canAddToCart` gate, and
   adds one clause to the one hint. The wording of the range comes from
   `checkCustomDimensions` in `@craftynp/types`, shared with the backend, so the
   two cannot drift.
+- **A stored line's `imageUrl` is unvalidated persisted data, and
+  `renderableImageUrl` (`src/lib/cart.ts`) is what makes it safe.** `next/image`
+  throws outright on a host that is not in `next.config.ts`'s
+  `remotePatterns` — and because the cart drawer is mounted in the root layout,
+  that one throw takes down **every page**, not just the cart. A cart written
+  before a media host changed, or by an older catalogue, is enough to do it, so
+  the origin is checked against the backend and media base URLs on read and a
+  stranger is dropped to the placeholder rather than rendered. With neither
+  variable set there is nothing to compare against and the URL is kept.
 - **`cartLineKey` (`src/lib/cart.ts`), not `line.id`, is a cart line's
   identity.** Every custom size shares one `Custom` variant, so keying on the
   variant alone merged two different sizes into one line and dropped the

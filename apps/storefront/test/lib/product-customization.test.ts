@@ -222,6 +222,25 @@ describe("the custom size toggle", () => {
     ).toEqual([{ label: "Size", value: "8\u2033 \u00d7 10\u2033" }]);
   });
 
+  it("insists on the dimensions once the shopper opts in, though the product calls the size optional", () => {
+    expect(missingRequiredInputs(OPTIONAL_SIZE, draft())).toEqual([]);
+    expect(
+      missingRequiredInputs(OPTIONAL_SIZE, draft({ useCustomSize: true })),
+    ).toEqual(["dimensions"]);
+    expect(
+      missingRequiredInputs(
+        OPTIONAL_SIZE,
+        draft({ useCustomSize: true, widthInches: "8" }),
+      ),
+    ).toEqual(["dimensions"]);
+    expect(
+      missingRequiredInputs(
+        OPTIONAL_SIZE,
+        draft({ useCustomSize: true, widthInches: "8", heightInches: "10" }),
+      ),
+    ).toEqual([]);
+  });
+
   it("blocks a required size that is out of range", () => {
     expect(
       missingRequiredInputs(

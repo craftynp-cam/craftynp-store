@@ -61,9 +61,13 @@ export function VariantSelector({
             label={option.title}
             isRequired
             isDisabled={disabledOptionIds?.has(option.id)}
-            description={describeUnavailable(
-              option.values.map((value) => statusOf(value.id)),
-            )}
+            description={
+              disabledOptionIds?.has(option.id)
+                ? undefined
+                : describeUnavailable(
+                    option.values.map((value) => statusOf(value.id)),
+                  )
+            }
             value={selected[option.id] ?? ""}
             onChange={(value) => onChange(option.id, value)}
             options={option.values.map((value) => {

@@ -20,6 +20,7 @@ import {
   missingInputLabels,
   missingRequiredInputs,
   resolveCustomSizeOption,
+  usesCustomSize,
   type CustomizationDraft,
 } from "@/lib/product-customization";
 import { findVariant, optionValueAvailability } from "@/lib/variant";
@@ -169,6 +170,13 @@ export function ProductPurchase({
 
   const detailsForCart = [
     ...options
+      .filter(
+        (option) =>
+          !(
+            usesCustomSize(customization, draft) &&
+            option.id === customSizeOption?.option.id
+          ),
+      )
       .map((option) => {
         const valueId = selected[option.id];
         const value = option.values.find(

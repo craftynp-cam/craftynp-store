@@ -1,4 +1,5 @@
 import {
+  CUSTOMIZATION_INPUTS,
   checkCustomDimensions,
   requiredCustomizationInputs,
 } from "@craftynp/types";
@@ -121,9 +122,15 @@ export function missingRequiredInputs(
   customization: ProductCustomization,
   draft: CustomizationDraft,
 ): CustomizationInputKey[] {
-  return requiredCustomizationInputs(customization).filter(
-    (key) => !isSatisfied(key, customization, draft),
+  const asked = new Set<CustomizationInputKey>(
+    requiredCustomizationInputs(customization),
   );
+  if (usesCustomSize(customization, draft)) asked.add("dimensions");
+
+  return CUSTOMIZATION_INPUTS.filter(
+    (input) =>
+      asked.has(input.key) && !isSatisfied(input.key, customization, draft),
+  ).map((input) => input.key);
 }
 
 const MISSING_LABELS: Record<CustomizationInputKey, string> = {
