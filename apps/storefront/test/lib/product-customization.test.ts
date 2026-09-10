@@ -1,10 +1,15 @@
-import { resolveProductCustomization } from "@craftynp/types";
+import {
+  CUSTOM_TEXT_MAX_LENGTH,
+  resolveProductCustomization,
+} from "@craftynp/types";
 
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
   artworkGuidance,
   artworkResolutionError,
   customSizeErrors,
+  customTextError,
+  customTextHint,
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
@@ -171,6 +176,73 @@ describe("customizationDetails", () => {
         draft({ customText: "Ellie" }),
       ),
     ).toEqual([]);
+  });
+});
+
+const AT_LIMIT = "a".repeat(CUSTOM_TEXT_MAX_LENGTH);
+
+describe("customTextError", () => {
+  it("accepts text at exactly the limit", () => {
+    expect(customTextError(ALL_REQUIRED, draft({ customText: AT_LIMIT }))).toBe(
+      null,
+    );
+  });
+
+  it("measures the trimmed value, as the schema does", () => {
+    expect(
+      customTextError(ALL_REQUIRED, draft({ customText: `  ${AT_LIMIT}  ` })),
+    ).toBe(null);
+  });
+
+  it("says how far over the limit the text runs", () => {
+    expect(
+      customTextError(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}abc` })),
+    ).toBe(
+      `Shorten this to ${CUSTOM_TEXT_MAX_LENGTH} characters or fewer \u2014 3 characters over.`,
+    );
+  });
+
+  it("counts one character over in the singular", () => {
+    expect(
+      customTextError(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}a` })),
+    ).toContain("1 character over");
+  });
+
+  it("stays quiet on a product that never asks for text", () => {
+    const notesOnly = resolveProductCustomization({
+      customizable: "true",
+      customization_notes: "optional",
+    });
+
+    expect(
+      customTextError(notesOnly, draft({ customText: `${AT_LIMIT}a` })),
+    ).toBe(null);
+  });
+});
+
+describe("customTextHint", () => {
+  it("states the limit before the shopper has typed anything", () => {
+    expect(customTextHint("required", "")).toBe(
+      `Up to ${CUSTOM_TEXT_MAX_LENGTH} characters.`,
+    );
+  });
+
+  it("counts what is used once there is text", () => {
+    expect(customTextHint("required", "Ellie")).toBe(
+      `5 of ${CUSTOM_TEXT_MAX_LENGTH} characters used.`,
+    );
+  });
+
+  it("keeps counting past the limit rather than stopping at it", () => {
+    expect(customTextHint("required", `${AT_LIMIT}ab`)).toBe(
+      `${CUSTOM_TEXT_MAX_LENGTH + 2} of ${CUSTOM_TEXT_MAX_LENGTH} characters used.`,
+    );
+  });
+
+  it("marks an optional input as optional", () => {
+    expect(customTextHint("optional", "")).toBe(
+      `Optional. Up to ${CUSTOM_TEXT_MAX_LENGTH} characters.`,
+    );
   });
 });
 

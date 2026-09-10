@@ -18,6 +18,7 @@ import {
   artworkGuidance,
   artworkResolutionError,
   customSizeErrors,
+  customTextError,
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
@@ -148,6 +149,7 @@ export function ProductPurchase({
     artworkMinDpi,
     orderedSize,
   );
+  const textError = customTextError(customization, draft);
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isSoldOut = selectedVariant?.availability === "out_of_stock";
   const canAddToCart =
@@ -155,6 +157,7 @@ export function ProductPurchase({
     !isSoldOut &&
     missingInputs.length === 0 &&
     !hasSizeErrors &&
+    textError === null &&
     artworkError === null;
 
   const clauses: string[] = [];
@@ -165,6 +168,9 @@ export function ProductPurchase({
   }
   if (missingInputs.length > 0) {
     clauses.push(`add ${joinTitles(missingInputLabels(missingInputs))}`);
+  }
+  if (textError !== null) {
+    clauses.push("shorten your custom text");
   }
   if (hasSizeErrors) {
     clauses.push("check the size you entered");
@@ -280,6 +286,7 @@ export function ProductPurchase({
           onCustomSizeChange={handleCustomSizeChange}
           artworkError={artworkError}
           artworkGuidance={artworkGuidance(artworkMinDpi, orderedSize)}
+          customTextError={textError}
         />
       ) : null}
 

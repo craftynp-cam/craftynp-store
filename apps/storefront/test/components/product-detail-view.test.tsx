@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
 import {
+  CUSTOM_TEXT_MAX_LENGTH,
   READY_MADE_PRODUCT,
   resolveProductCustomization,
 } from "@craftynp/types";
@@ -636,6 +637,35 @@ describe("ProductDetailView", () => {
 
       fireEvent.change(screen.getByLabelText(/custom text/i), {
         target: { value: "Ellie" },
+      });
+
+      expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeEnabled();
+    });
+
+    it("holds the one gate shut while the custom text runs past its limit", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      chooseBlush();
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "a".repeat(CUSTOM_TEXT_MAX_LENGTH + 1) },
+      });
+
+      expect(
+        screen.getByText("Shorten your custom text to continue."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "a".repeat(CUSTOM_TEXT_MAX_LENGTH) },
       });
 
       expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();

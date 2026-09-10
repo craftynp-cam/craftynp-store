@@ -1,5 +1,7 @@
 export { ArtworkUpload } from "./artwork-upload";
 export type { ArtworkUploadProps } from "./artwork-upload";
+export { CustomTextField } from "./custom-text-field";
+export type { CustomTextFieldProps } from "./custom-text-field";
 export { ProductConfigurator } from "./product-configurator";
 export { ProductDetailView } from "./product-detail-view";
 export { ProductDetails } from "./product-details";

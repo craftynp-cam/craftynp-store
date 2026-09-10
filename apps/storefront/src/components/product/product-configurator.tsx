@@ -8,6 +8,7 @@ import type {
 
 import { Checkbox, TextInput, Textarea } from "../ui";
 import { ArtworkUpload } from "./artwork-upload";
+import { CustomTextField } from "./custom-text-field";
 import {
   isCustomSizeOffered,
   usesCustomSize,
@@ -22,6 +23,7 @@ type ProductConfiguratorProps = {
   onCustomSizeChange: (useCustomSize: boolean) => void;
   artworkError: string | null;
   artworkGuidance: string;
+  customTextError: string | null;
 };
 
 function hint(mode: CustomizationInputMode): string | undefined {
@@ -36,6 +38,7 @@ export function ProductConfigurator({
   onCustomSizeChange,
   artworkError,
   artworkGuidance,
+  customTextError,
 }: ProductConfiguratorProps) {
   const { inputs, size } = customization;
   const showsCustomSize = usesCustomSize(customization, value);
@@ -63,13 +66,11 @@ export function ProductConfigurator({
       ) : null}
 
       {inputs.customText !== "off" ? (
-        <TextInput
-          label="Custom text"
-          description={hint(inputs.customText)}
-          isRequired={inputs.customText === "required"}
+        <CustomTextField
+          mode={inputs.customText}
           value={value.customText}
           onChange={(customText) => patch({ customText })}
-          maxLength={120}
+          errorMessage={customTextError}
         />
       ) : null}
 

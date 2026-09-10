@@ -2,8 +2,13 @@ import { z } from "zod";
 
 import { artworkMimeTypeSchema, isVectorArtwork } from "./artwork.js";
 
+// The one limit for shopper-entered custom text. The storefront input and this
+// schema are the same number by construction, so the field cannot promise a
+// length the backend then refuses.
+export const CUSTOM_TEXT_MAX_LENGTH = 120;
+
 export const customTextSchema = z.object({
-  value: z.string().trim().min(1).max(120),
+  value: z.string().trim().min(1).max(CUSTOM_TEXT_MAX_LENGTH),
 });
 export type CustomText = z.infer<typeof customTextSchema>;
 

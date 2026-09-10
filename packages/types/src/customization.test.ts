@@ -1,4 +1,5 @@
 import {
+  CUSTOM_TEXT_MAX_LENGTH,
   artworkReferenceSchema,
   checkArtworkResolution,
   checkCustomDimensions,
@@ -28,16 +29,29 @@ describe("customTextSchema", () => {
     expect(customTextSchema.safeParse({ value: "   " }).success).toBe(false);
   });
 
-  it("rejects text longer than 120 characters", () => {
-    expect(customTextSchema.safeParse({ value: "a".repeat(121) }).success).toBe(
-      false,
-    );
+  it("rejects text one character over the limit", () => {
+    expect(
+      customTextSchema.safeParse({
+        value: "a".repeat(CUSTOM_TEXT_MAX_LENGTH + 1),
+      }).success,
+    ).toBe(false);
   });
 
-  it("accepts text at exactly 120 characters", () => {
-    expect(customTextSchema.safeParse({ value: "a".repeat(120) }).success).toBe(
-      true,
-    );
+  it("accepts text at exactly the limit", () => {
+    expect(
+      customTextSchema.safeParse({ value: "a".repeat(CUSTOM_TEXT_MAX_LENGTH) })
+        .success,
+    ).toBe(true);
+  });
+
+  // The limit the storefront input counts against is this one; a raw-length
+  // check there would refuse text this accepts.
+  it("measures the trimmed value against the limit", () => {
+    expect(
+      customTextSchema.safeParse({
+        value: `  ${"a".repeat(CUSTOM_TEXT_MAX_LENGTH)}  `,
+      }).success,
+    ).toBe(true);
   });
 });
 

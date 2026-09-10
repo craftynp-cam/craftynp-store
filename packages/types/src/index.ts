@@ -18,6 +18,7 @@ export {
   resolveArtworkMimeType,
 } from "./artwork.js";
 export {
+  CUSTOM_TEXT_MAX_LENGTH,
   artworkReferenceSchema,
   artworkResolutionDemands,
   checkArtworkResolution,

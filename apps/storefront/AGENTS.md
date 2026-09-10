@@ -303,6 +303,35 @@ for the keys).
   `/checkout/prepare` is sent; the key adds the configuration on top, and the
   quantity stepper, the remove button and every React `key` use it.
 
+### Custom text
+
+`CustomTextField` (`src/components/product/custom-text-field.tsx`) is the whole
+input: the counter, the echo of what will be made, and the field's own errors.
+`ProductConfigurator` renders it and passes the length error down.
+
+- **`CUSTOM_TEXT_MAX_LENGTH` in `@craftynp/types` is the only limit.** It is
+  what `customTextSchema` validates against and what the field counts, so the
+  input cannot promise a length the backend then refuses — the two used to be
+  independent literals. 120 characters is the settled answer to CNP-37's AC 2;
+  changing it means changing that constant and nothing else.
+- **The input carries no `maxLength`, deliberately.** A hard cap swallows
+  keystrokes with no explanation, which is exactly what AC 4 rules out. The
+  limit is stated before the shopper types (`customTextHint`), counted while
+  they do, and over-length text is kept and named rather than truncated.
+- **Length is measured trimmed**, because `customTextSchema` trims before it
+  measures. Counting the raw string would refuse text the backend accepts.
+- **The length error is derived in `ProductPurchase`, not in the field.**
+  `customTextError` feeds the field's `isInvalid`/`errorMessage` and the one
+  `canAddToCart` gate, the same arrangement `customSizeErrors` has — one gate,
+  one hint, one clause.
+- **The empty-required message is the field's own, and it waits for a blur.**
+  An untouched field is not yet wrong, so `isVisited` gates it; a length error
+  needs no such wait, since text is already there. That is the AC 3 half the
+  add-to-cart hint cannot do, because the hint names the field from across the
+  page while the field itself stayed silent.
+- **The echo is trimmed and rendered in the display face**, so what the shopper
+  checks is the string the cart line carries, not what is still in the box.
+
 ## Artwork upload
 
 `ArtworkUpload` (`src/components/product/artwork-upload.tsx`) is the shopper's

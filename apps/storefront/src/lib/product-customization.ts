@@ -1,6 +1,7 @@
 import {
   ARTWORK_ACCEPTED_LABEL,
   CUSTOMIZATION_INPUTS,
+  CUSTOM_TEXT_MAX_LENGTH,
   artworkResolutionDemands,
   checkArtworkResolution,
   checkCustomDimensions,
@@ -9,6 +10,7 @@ import {
 import type {
   CustomDimensionErrors,
   CustomizationInputKey,
+  CustomizationInputMode,
   OrderedSizeInches,
   ProductCustomization,
 } from "@craftynp/types";
@@ -92,6 +94,40 @@ export function customSizeErrors(
     { widthInches, heightInches },
     customization.size,
   );
+}
+
+// The trimmed length is what the shopper is judged on, because the trimmed
+// value is what customTextSchema stores. Counting the raw string would refuse
+// text the backend accepts.
+export function customTextLength(value: string): number {
+  return value.trim().length;
+}
+
+export function customTextError(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+): string | null {
+  if (customization.inputs.customText === "off") return null;
+
+  const over = customTextLength(draft.customText) - CUSTOM_TEXT_MAX_LENGTH;
+  if (over <= 0) return null;
+
+  return `Shorten this to ${CUSTOM_TEXT_MAX_LENGTH} characters or fewer \u2014 ${over} ${over === 1 ? "character" : "characters"} over.`;
+}
+
+// The limit is stated before a shopper reaches it and counted while they type,
+// which is the whole reason the input carries no maxLength: refusing keystrokes
+// silently is how a shopper loses the end of a sentence without being told.
+export function customTextHint(
+  mode: CustomizationInputMode,
+  value: string,
+): string {
+  const prefix = mode === "optional" ? "Optional. " : "";
+  const used = customTextLength(value);
+
+  return used === 0
+    ? `${prefix}Up to ${CUSTOM_TEXT_MAX_LENGTH} characters.`
+    : `${prefix}${used} of ${CUSTOM_TEXT_MAX_LENGTH} characters used.`;
 }
 
 function positiveNumber(value: string): number | null {
