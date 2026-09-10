@@ -39,6 +39,39 @@ function isCartLine(value: unknown): value is CartLine {
   );
 }
 
+function allowedImageOrigins(): string[] {
+  return [
+    process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL,
+    process.env.NEXT_PUBLIC_MEDIA_BASE_URL,
+  ]
+    .map((value) => {
+      if (!value) return null;
+      try {
+        return new URL(value).origin;
+      } catch {
+        return null;
+      }
+    })
+    .filter((origin) => origin != null);
+}
+
+export function renderableImageUrl(
+  value: string | undefined,
+): string | undefined {
+  if (!value) return undefined;
+
+  let origin: string;
+  try {
+    origin = new URL(value).origin;
+  } catch {
+    return value;
+  }
+
+  const allowed = allowedImageOrigins();
+  if (allowed.length === 0) return value;
+  return allowed.includes(origin) ? value : undefined;
+}
+
 function parseCart(raw: string | null): Cart {
   if (raw == null) return EMPTY_CART;
 
@@ -52,7 +85,12 @@ function parseCart(raw: string | null): Cart {
       return EMPTY_CART;
     }
 
-    const lines = (parsed as { lines: unknown[] }).lines.filter(isCartLine);
+    const lines = (parsed as { lines: unknown[] }).lines
+      .filter(isCartLine)
+      .map((line) => ({
+        ...line,
+        imageUrl: renderableImageUrl(line.imageUrl),
+      }));
     return lines.length > 0 ? { lines } : EMPTY_CART;
   } catch {
     return EMPTY_CART;

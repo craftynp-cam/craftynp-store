@@ -1,4 +1,5 @@
 import {
+  CART_STORAGE_KEY,
   addCartLine,
   type CartLine,
   cartLineCount,
@@ -6,6 +7,7 @@ import {
   clearCart,
   readCart,
   removeCartLine,
+  renderableImageUrl,
   setCartLineQuantity,
 } from "@/lib/cart";
 
@@ -125,5 +127,68 @@ describe("cart", () => {
     clearCart();
 
     expect(readCart()).toEqual({ lines: [] });
+  });
+});
+
+describe("renderableImageUrl", () => {
+  const MEDIA = "http://media.test/craftynp-media";
+
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_MEDIA_BASE_URL;
+    delete process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL;
+  });
+
+  it("drops a host next/image is not configured for, rather than crashing the page", () => {
+    process.env.NEXT_PUBLIC_MEDIA_BASE_URL = MEDIA;
+
+    expect(
+      renderableImageUrl("https://elsewhere.test/sweatshirt.png"),
+    ).toBeUndefined();
+  });
+
+  it("keeps a host that is configured", () => {
+    process.env.NEXT_PUBLIC_MEDIA_BASE_URL = MEDIA;
+
+    expect(renderableImageUrl(`${MEDIA}/tumbler.png`)).toBe(
+      `${MEDIA}/tumbler.png`,
+    );
+  });
+
+  it("keeps the backend's own host", () => {
+    process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL = "http://backend.test:9000";
+
+    expect(renderableImageUrl("http://backend.test:9000/static/a.png")).toBe(
+      "http://backend.test:9000/static/a.png",
+    );
+  });
+
+  it("keeps a relative path, which needs no host at all", () => {
+    process.env.NEXT_PUBLIC_MEDIA_BASE_URL = MEDIA;
+
+    expect(renderableImageUrl("/placeholder.png")).toBe("/placeholder.png");
+  });
+
+  it("keeps everything when nothing is configured to compare against", () => {
+    expect(renderableImageUrl("https://elsewhere.test/a.png")).toBe(
+      "https://elsewhere.test/a.png",
+    );
+  });
+
+  it("strips an unreachable image off a line stored by an earlier session", async () => {
+    process.env.NEXT_PUBLIC_MEDIA_BASE_URL = MEDIA;
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      JSON.stringify({
+        lines: [makeLine({ imageUrl: "https://elsewhere.test/old.png" })],
+      }),
+    );
+
+    jest.resetModules();
+    const freshCart = await import("@/lib/cart");
+    const lines = freshCart.readCart().lines;
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.title).toBe("Custom Die-Cut Stickers");
+    expect(lines[0]?.imageUrl).toBeUndefined();
   });
 });
