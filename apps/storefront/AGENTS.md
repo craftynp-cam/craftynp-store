@@ -156,11 +156,15 @@ nothing here knows that a product might have a size or a material.
   `subLabel` or `sub_label` — Medusa has no native field for it. A blank or
   non-string entry is ignored, so a half-filled metadata row renders nothing
   rather than `[object Object]`.
-- **A value's physical width comes from the same place**, under `width_inches`
-  or `widthInches`. It is what the artwork resolution check measures against on
-  a preset size, and a preset that names none gets guidance but no gate — so
-  leaving it off a size option quietly disables the only gate protecting that
-  product. `readOptionValueWidthInches` in `@craftynp/types` is the reader.
+- **A value's physical size comes from the same place**, under `width_inches`
+  and `height_inches` (or the camelCase spellings). It is what the artwork
+  resolution check measures against on a preset size, and a preset that names
+  neither gets guidance but no gate — so leaving them off a size option quietly
+  disables the only gate protecting that product. The product-customization
+  admin widget names the unmeasured values back at the owner
+  (`unmeasuredOptionValues` in `@craftynp/types`) precisely because nothing on
+  the storefront can. **Both axes are checked and the coarsest decides**, so a
+  long banner cannot pass on its width alone.
 - **`RadioButtonGroup` (`src/components/ui`) is the option control**, not
   `RadioGroup`, which still serves every ordinary form. It renders React Aria
   radios as buttons, so the selected state is a real `aria-checked` rather than a

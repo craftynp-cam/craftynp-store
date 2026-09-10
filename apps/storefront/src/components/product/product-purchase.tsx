@@ -21,7 +21,7 @@ import {
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
-  orderedWidthInches,
+  orderedSizeInches,
   resolveCustomSizeOption,
   usesCustomSize,
   type CustomizationDraft,
@@ -137,7 +137,7 @@ export function ProductPurchase({
   const missingInputs = missingRequiredInputs(customization, draft);
   const sizeErrors = customSizeErrors(customization, draft);
   const hasSizeErrors = Object.keys(sizeErrors).length > 0;
-  const orderedWidth = orderedWidthInches(
+  const orderedSize = orderedSizeInches(
     customization,
     draft,
     options,
@@ -146,7 +146,7 @@ export function ProductPurchase({
   const artworkError = artworkResolutionError(
     draft,
     artworkMinDpi,
-    orderedWidth,
+    orderedSize,
   );
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isSoldOut = selectedVariant?.availability === "out_of_stock";
@@ -279,7 +279,7 @@ export function ProductPurchase({
           sizeErrors={sizeErrors}
           onCustomSizeChange={handleCustomSizeChange}
           artworkError={artworkError}
-          artworkGuidance={artworkGuidance(artworkMinDpi, orderedWidth)}
+          artworkGuidance={artworkGuidance(artworkMinDpi, orderedSize)}
         />
       ) : null}
 

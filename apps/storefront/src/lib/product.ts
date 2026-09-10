@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import {
+  readOptionValueHeightInches,
   readOptionValueWidthInches,
   resolveArtworkMinDpi,
   resolveProductCustomization,
@@ -66,10 +67,11 @@ export type ProductDetailOptionValue = {
   id: string;
   value: string;
   subLabel?: string;
-  // How wide the finished piece is at this preset, when the owner has said.
-  // Without it there is no ordered width to check an upload's resolution
+  // How large the finished piece is at this preset, when the owner has said.
+  // Without it there is no ordered size to check an upload's resolution
   // against, so the preset gets guidance rather than a gate.
   widthInches?: number;
+  heightInches?: number;
 };
 
 export type ProductDetailOption = {
@@ -146,6 +148,7 @@ export function toProductDetail(
         value: value.value,
         subLabel: optionValueSubLabel(value.metadata),
         widthInches: readOptionValueWidthInches(value.metadata) ?? undefined,
+        heightInches: readOptionValueHeightInches(value.metadata) ?? undefined,
       })),
     }),
   );

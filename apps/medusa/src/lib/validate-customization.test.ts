@@ -122,12 +122,26 @@ describe("validateCustomization", () => {
       const presetOrder = { artwork: lowResArtwork.artwork };
 
       expect(
-        validateCustomization(presetOrder, { ...RULES, orderedWidthInches: 2 })
-          .artwork?.widthPx,
+        validateCustomization(presetOrder, {
+          ...RULES,
+          orderedSize: { widthInches: 2, heightInches: 2 },
+        }).artwork?.widthPx,
       ).toBe(600);
       expect(() =>
-        validateCustomization(presetOrder, { ...RULES, orderedWidthInches: 8 }),
+        validateCustomization(presetOrder, {
+          ...RULES,
+          orderedSize: { widthInches: 8, heightInches: 8 },
+        }),
       ).toThrow(/Invalid line item customization/);
+    });
+
+    it("rejects a file starved on the height even where the width clears", () => {
+      const banner = {
+        artwork: { ...lowResArtwork.artwork, widthPx: 2400, heightPx: 600 },
+        dimensions: { widthInches: 8, heightInches: 40 },
+      };
+
+      expect(() => validateCustomization(banner, RULES)).toThrow(/15 DPI/);
     });
 
     it("lets a vector file through whatever the ordered size", () => {

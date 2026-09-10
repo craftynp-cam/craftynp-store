@@ -455,9 +455,23 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   `DEFAULT_ARTWORK_MIN_DPI` (150) **is reachable on a live product** — a
   product need not belong to any category, so nothing can force a threshold to
   be declared. It is deliberate policy, not a hidden one.
-  The ordered physical width comes from the size option value's own
-  `width_inches` metadata, or from the shopper's typed dimensions; see
-  [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
+  The ordered physical size comes from the size option value's own
+  `width_inches` / `height_inches` metadata, or from the shopper's typed
+  dimensions; see [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
+  **Both axes are measured, and the coarsest one decides.** A 2400x600 file
+  ordered at 8" x 40" clears 300 DPI across and prints at 15 DPI down the
+  banner — checking the width alone, which is what the story's acceptance
+  criterion literally asks for, would call that acceptable.
+- **`artwork_min_dpi` is strict on the way in and tolerant on the way out.**
+  `resolveArtworkMinDpi` ignores what it cannot read, because a live category
+  must never break a product page — which leaves a typo (`3OO`) reading as no
+  threshold and quietly dropping the whole category to the default.
+  `validateCategoryArtwork` therefore guards the write:
+  `src/api/admin/product-categories/middlewares.ts` runs it on category create
+  and update, merging the patch over the stored metadata for the same reason
+  the product middleware does. There is no workflow-hook half here — Medusa
+  exposes no category equivalent — so a category written by a path that never
+  touches HTTP is unguarded.
 - **`GET /admin/artwork/:id` returns a signed URL where the label route streams
   bytes.** That divergence is deliberate — a print-resolution file is far larger
   than a label PDF and there is no reason to move it through Medusa. Do not

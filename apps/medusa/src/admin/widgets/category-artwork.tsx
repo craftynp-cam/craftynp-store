@@ -84,6 +84,8 @@ const CategoryArtworkWidget = ({
     },
   });
 
+  const problem = problemWith(minDpi);
+
   if (isLoading || !category) {
     return (
       <Container className="flex items-center justify-center p-6">
@@ -91,8 +93,6 @@ const CategoryArtworkWidget = ({
       </Container>
     );
   }
-
-  const problem = problemWith(minDpi);
 
   return (
     <Container className="divide-y p-0">
@@ -102,7 +102,7 @@ const CategoryArtworkWidget = ({
           size="small"
           onClick={() => save.mutate()}
           isLoading={save.isPending}
-          disabled={save.isPending}
+          disabled={save.isPending || problem !== null}
         >
           Save
         </Button>

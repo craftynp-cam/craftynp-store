@@ -56,25 +56,37 @@ export function checkCustomDimensions(
   return errors;
 }
 
-export function effectiveDpi(widthPx: number, widthInches: number): number {
-  return Math.floor(widthPx / widthInches);
+export function effectiveDpi(pixels: number, inches: number): number {
+  return Math.floor(pixels / inches);
 }
 
-export function requiredPixelWidth(
-  minDpi: number,
-  widthInches: number,
-): number {
-  return Math.ceil(minDpi * widthInches);
+export function requiredPixels(minDpi: number, inches: number): number {
+  return Math.ceil(minDpi * inches);
 }
 
 export type ArtworkResolutionInput = {
   mimeType: string;
   widthPx: number | null;
+  heightPx: number | null;
 };
 
-export type ArtworkResolutionContext = {
+export type OrderedSizeInches = {
+  widthInches: number | null;
+  heightInches: number | null;
+};
+
+export type ArtworkResolutionContext = OrderedSizeInches & {
   minDpi: number;
-  orderedWidthInches: number | null;
+};
+
+export type ArtworkAxis = "width" | "height";
+
+export type ArtworkResolutionDemand = {
+  axis: ArtworkAxis;
+  inches: number;
+  pixels: number;
+  dpi: number;
+  requiredPx: number;
 };
 
 export type ArtworkResolutionCheck =
@@ -83,42 +95,97 @@ export type ArtworkResolutionCheck =
       ok: false;
       detectedDpi: number;
       requiredDpi: number;
-      requiredWidthPx: number;
+      axis: ArtworkAxis;
+      requiredPx: number;
       message: string;
     };
 
+const AXIS_WORDS: Record<ArtworkAxis, { extent: string; direction: string }> = {
+  width: { extent: "wide", direction: "across" },
+  height: { extent: "tall", direction: "down" },
+};
+
 function formatInches(inches: number): string {
-  return `${Math.round(inches * 100) / 100}″`;
+  return `${Math.round(inches * 100) / 100}\u2033`;
 }
 
 function formatPixels(pixels: number): string {
   return pixels.toLocaleString("en-US");
 }
 
-// A vector file has no fixed resolution, and an ordered width we cannot read is
-// not a shopper's fault — neither can be checked, so neither blocks.
+function known(
+  pixels: number | null,
+  inches: number | null,
+): { pixels: number; inches: number } | null {
+  if (pixels === null || pixels <= 0) return null;
+  if (inches === null || inches <= 0) return null;
+  return { pixels, inches };
+}
+
+// Both axes are measured, not only the width. A 2400x600 file ordered at
+// 8" x 40" clears 300 DPI across and prints at 15 DPI down the banner, and
+// checking the width alone would call that acceptable.
+export function artworkResolutionDemands(
+  artwork: ArtworkResolutionInput,
+  size: OrderedSizeInches,
+  minDpi: number,
+): ArtworkResolutionDemand[] {
+  const axes: [ArtworkAxis, number | null, number | null][] = [
+    ["width", artwork.widthPx, size.widthInches],
+    ["height", artwork.heightPx, size.heightInches],
+  ];
+
+  return axes.flatMap(([axis, pixels, inches]) => {
+    const pair = known(pixels, inches);
+    if (pair === null) return [];
+
+    return [
+      {
+        axis,
+        inches: pair.inches,
+        pixels: pair.pixels,
+        dpi: effectiveDpi(pair.pixels, pair.inches),
+        requiredPx: requiredPixels(minDpi, pair.inches),
+      },
+    ];
+  });
+}
+
+// A vector file has no fixed resolution, and a dimension we cannot read is not
+// a shopper's fault — neither can be checked, so neither blocks.
 export function checkArtworkResolution(
   artwork: ArtworkResolutionInput,
-  { minDpi, orderedWidthInches }: ArtworkResolutionContext,
+  { minDpi, widthInches, heightInches }: ArtworkResolutionContext,
 ): ArtworkResolutionCheck {
   if (isVectorArtwork(artwork.mimeType)) return { ok: true };
-  if (orderedWidthInches === null || orderedWidthInches <= 0)
-    return { ok: true };
-  if (artwork.widthPx === null || artwork.widthPx <= 0) return { ok: true };
 
-  const detectedDpi = effectiveDpi(artwork.widthPx, orderedWidthInches);
-  if (detectedDpi >= minDpi) return { ok: true };
+  const demands = artworkResolutionDemands(
+    artwork,
+    { widthInches, heightInches },
+    minDpi,
+  );
 
-  const requiredWidthPx = requiredPixelWidth(minDpi, orderedWidthInches);
+  // The coarsest axis decides: clearing the floor one way over is no help if
+  // the piece is starved the other way.
+  const worst = demands.reduce<ArtworkResolutionDemand | null>(
+    (lowest, demand) =>
+      lowest === null || demand.dpi < lowest.dpi ? demand : lowest,
+    null,
+  );
+
+  if (worst === null || worst.dpi >= minDpi) return { ok: true };
+
+  const words = AXIS_WORDS[worst.axis];
 
   return {
     ok: false,
-    detectedDpi,
+    detectedDpi: worst.dpi,
     requiredDpi: minDpi,
-    requiredWidthPx,
+    axis: worst.axis,
+    requiredPx: worst.requiredPx,
     message:
-      `This file works out at ${detectedDpi} DPI at ${formatInches(orderedWidthInches)} wide. ` +
-      `We need at least ${minDpi} DPI — about ${formatPixels(requiredWidthPx)} pixels across. ` +
+      `This file works out at ${worst.dpi} DPI at ${formatInches(worst.inches)} ${words.extent}. ` +
+      `We need at least ${minDpi} DPI — about ${formatPixels(worst.requiredPx)} pixels ${words.direction}. ` +
       `Upload a higher-resolution file.`,
   };
 }

@@ -19,13 +19,14 @@ export {
 } from "./artwork.js";
 export {
   artworkReferenceSchema,
+  artworkResolutionDemands,
   checkArtworkResolution,
   checkCustomDimensions,
   customDimensionsSchema,
   customTextSchema,
   effectiveDpi,
   lineItemCustomizationSchema,
-  requiredPixelWidth,
+  requiredPixels,
 } from "./customization.js";
 export {
   ARTWORK_MIN_DPI_METADATA_KEY,
@@ -38,15 +39,19 @@ export {
   CUSTOM_SIZE_OPTION_METADATA_KEY,
   CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY,
   DEFAULT_ARTWORK_MIN_DPI,
+  OPTION_VALUE_HEIGHT_INCHES_KEYS,
   OPTION_VALUE_WIDTH_INCHES_KEYS,
   READY_MADE_PRODUCT,
   activeCustomizationInputs,
   customizationInputModeSchema,
   customizationMetadataPatch,
+  readOptionValueHeightInches,
   readOptionValueWidthInches,
   requiredCustomizationInputs,
   resolveArtworkMinDpi,
   resolveProductCustomization,
+  unmeasuredOptionValues,
+  validateCategoryArtwork,
   validateProductCustomization,
 } from "./product-customization.js";
 export { SITE_NAME, SITE_TAGLINE } from "./site.js";
@@ -138,8 +143,10 @@ export type {
 } from "./artwork.js";
 export type {
   ArtworkReference,
+  ArtworkAxis,
   ArtworkResolutionCheck,
   ArtworkResolutionContext,
+  ArtworkResolutionDemand,
   ArtworkResolutionInput,
   CustomDimensionErrors,
   CustomDimensionField,
@@ -147,9 +154,12 @@ export type {
   CustomSizeBounds,
   CustomText,
   LineItemCustomization,
+  OrderedSizeInches,
 } from "./customization.js";
 export type {
   CustomSizeConfig,
+  OptionLike,
+  OptionValueLike,
   CustomizationInput,
   CustomizationInputKey,
   CustomizationInputMode,

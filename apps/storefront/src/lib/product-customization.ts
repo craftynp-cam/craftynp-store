@@ -1,14 +1,15 @@
 import {
   ARTWORK_ACCEPTED_LABEL,
   CUSTOMIZATION_INPUTS,
+  artworkResolutionDemands,
   checkArtworkResolution,
   checkCustomDimensions,
   requiredCustomizationInputs,
-  requiredPixelWidth,
 } from "@craftynp/types";
 import type {
   CustomDimensionErrors,
   CustomizationInputKey,
+  OrderedSizeInches,
   ProductCustomization,
 } from "@craftynp/types";
 
@@ -184,28 +185,36 @@ export function customizationDetails(
   return details;
 }
 
-// The physical width the artwork will be printed at. A custom size is whatever
-// the shopper typed; a preset carries its width on the Medusa option value's
-// own metadata, and the selector is deliberately not told which group is the
-// size, so any selected value that names one answers.
-export function orderedWidthInches(
+// The physical size the artwork will be printed at. A custom size is whatever
+// the shopper typed; a preset carries its measurements on the Medusa option
+// value's own metadata, and the selector is deliberately not told which group
+// is the size, so any selected value that names them answers.
+export function orderedSizeInches(
   customization: ProductCustomization,
   draft: CustomizationDraft,
   options: readonly ProductDetailOption[],
   selected: Record<string, string>,
-): number | null {
+): OrderedSizeInches {
   if (usesCustomSize(customization, draft)) {
-    return positiveNumber(draft.widthInches);
+    return {
+      widthInches: positiveNumber(draft.widthInches),
+      heightInches: positiveNumber(draft.heightInches),
+    };
   }
 
   for (const option of options) {
     const value = option.values.find(
       (candidate) => candidate.id === selected[option.id],
     );
-    if (value?.widthInches != null) return value.widthInches;
+    if (value?.widthInches != null || value?.heightInches != null) {
+      return {
+        widthInches: value.widthInches ?? null,
+        heightInches: value.heightInches ?? null,
+      };
+    }
   }
 
-  return null;
+  return { widthInches: null, heightInches: null };
 }
 
 // A file below the floor blocks whatever the declared artwork mode is:
@@ -214,27 +223,38 @@ export function orderedWidthInches(
 export function artworkResolutionError(
   draft: CustomizationDraft,
   minDpi: number,
-  widthInches: number | null,
+  size: OrderedSizeInches,
 ): string | null {
   if (draft.artwork === null) return null;
 
-  const result = checkArtworkResolution(draft.artwork, {
-    minDpi,
-    orderedWidthInches: widthInches,
-  });
+  const result = checkArtworkResolution(draft.artwork, { minDpi, ...size });
 
   return result.ok ? null : result.message;
 }
 
 export function artworkGuidance(
   minDpi: number,
-  widthInches: number | null,
+  size: OrderedSizeInches,
 ): string {
   const formats = `${ARTWORK_ACCEPTED_LABEL}, up to ${ARTWORK_SIZE_LIMIT_LABEL}.`;
-  if (widthInches === null) return formats;
 
-  const pixels = requiredPixelWidth(minDpi, widthInches).toLocaleString(
-    "en-US",
+  // Quote the axis that asks the most of the file, so clearing the stated
+  // number is enough rather than only necessary.
+  const demands = artworkResolutionDemands(
+    { mimeType: "image/png", widthPx: 1, heightPx: 1 },
+    size,
+    minDpi,
   );
-  return `${formats} At ${widthInches}\u2033 wide we need at least ${pixels} pixels across (${minDpi} DPI).`;
+  const hardest = demands.reduce<(typeof demands)[number] | null>(
+    (most, demand) =>
+      most === null || demand.requiredPx > most.requiredPx ? demand : most,
+    null,
+  );
+  if (hardest === null) return formats;
+
+  const extent = hardest.axis === "width" ? "wide" : "tall";
+  const direction = hardest.axis === "width" ? "across" : "down";
+  const pixels = hardest.requiredPx.toLocaleString("en-US");
+
+  return `${formats} At ${hardest.inches}\u2033 ${extent} we need at least ${pixels} pixels ${direction} (${minDpi} DPI).`;
 }

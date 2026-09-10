@@ -825,6 +825,37 @@ describe("ProductDetailView", () => {
         ).toBeDisabled();
       });
 
+      it("lets a shopper past an optional file that failed by removing it", async () => {
+        // The gate blocks a coarse file whatever the declared mode, so an
+        // optional one needs a way out that is not "upload something better".
+        render(
+          <ProductDetailView
+            product={makeProduct({
+              customization: resolveProductCustomization({
+                customizable: "true",
+                customization_artwork: "optional",
+              }),
+              options: sizeOptions,
+              variants: sizeVariants,
+              artworkMinDpi: 300,
+            })}
+          />,
+        );
+        chooseSize("Small");
+        await uploadArtworkOfWidth(300);
+
+        expect(
+          screen.getByRole("button", { name: /add to cart/i }),
+        ).toBeDisabled();
+
+        fireEvent.click(screen.getByRole("button", { name: /remove file/i }));
+
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /add to cart/i }),
+        ).toBeEnabled();
+      });
+
       it("does not gate a preset the owner has never measured", async () => {
         // Without a physical width there is no DPI to work out, and refusing
         // every upload on a product mid-setup would be worse than not gating.

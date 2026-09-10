@@ -70,6 +70,11 @@ export const OPTION_VALUE_WIDTH_INCHES_KEYS = [
   "width_inches",
 ] as const;
 
+export const OPTION_VALUE_HEIGHT_INCHES_KEYS = [
+  "heightInches",
+  "height_inches",
+] as const;
+
 export const CUSTOM_SIZE_FALLBACK_BOUNDS: CustomSizeBounds = {
   minInches: 1,
   maxInches: 96,
@@ -361,11 +366,79 @@ export function resolveArtworkMinDpi(
   return highest ?? DEFAULT_ARTWORK_MIN_DPI;
 }
 
-export function readOptionValueWidthInches(metadata: Metadata): number | null {
-  for (const key of OPTION_VALUE_WIDTH_INCHES_KEYS) {
+function readFirstInches(
+  metadata: Metadata,
+  keys: readonly string[],
+): number | null {
+  for (const key of keys) {
     const inches = readInches(metadata?.[key]);
     if (inches !== null) return inches;
   }
 
   return null;
+}
+
+export function readOptionValueWidthInches(metadata: Metadata): number | null {
+  return readFirstInches(metadata, OPTION_VALUE_WIDTH_INCHES_KEYS);
+}
+
+export function readOptionValueHeightInches(metadata: Metadata): number | null {
+  return readFirstInches(metadata, OPTION_VALUE_HEIGHT_INCHES_KEYS);
+}
+
+// resolveArtworkMinDpi is tolerant on purpose — a live category must never
+// break a product page. That leaves a typo ("3OO") reading as no threshold at
+// all and quietly dropping every product in the category to the default, so
+// the write path is strict where the read path is forgiving.
+export function validateCategoryArtwork(
+  metadata: Metadata,
+): ProductCustomizationProblem {
+  const raw = metadata?.[ARTWORK_MIN_DPI_METADATA_KEY];
+  if (!isPresent(raw)) return { ok: true };
+
+  if (readDpi(raw) === null) {
+    return {
+      ok: false,
+      message: `${ARTWORK_MIN_DPI_METADATA_KEY} must be a positive number of dots per inch, like 300`,
+    };
+  }
+
+  return { ok: true };
+}
+
+export type OptionValueLike = {
+  value?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+export type OptionLike = {
+  title?: string | null;
+  values?: readonly OptionValueLike[] | null;
+};
+
+function measuresSomething(value: OptionValueLike): boolean {
+  return (
+    readOptionValueWidthInches(value.metadata) !== null ||
+    readOptionValueHeightInches(value.metadata) !== null
+  );
+}
+
+// The resolution check needs to know how big the finished piece is, and reads
+// that off whichever selected option value declares it. A product where none
+// does is silently ungated — every upload accepted whatever its resolution —
+// which the admin can see coming and the shopper never can.
+export function unmeasuredOptionValues(
+  options: readonly OptionLike[] | null | undefined,
+  customValue: string | null,
+): { anyMeasured: boolean; missing: string[] } {
+  const pickable = (options ?? [])
+    .flatMap((option) => option.values ?? [])
+    .filter((value) => value.value != null && value.value !== customValue);
+
+  return {
+    anyMeasured: pickable.some(measuresSomething),
+    missing: pickable
+      .filter((value) => !measuresSomething(value))
+      .map((value) => value.value as string),
+  };
 }

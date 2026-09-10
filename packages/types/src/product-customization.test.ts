@@ -8,6 +8,8 @@ import {
   readOptionValueWidthInches,
   requiredCustomizationInputs,
   resolveArtworkMinDpi,
+  unmeasuredOptionValues,
+  validateCategoryArtwork,
   resolveProductCustomization,
   validateProductCustomization,
 } from "./product-customization.js";
@@ -368,5 +370,90 @@ describe("readOptionValueWidthInches", () => {
     expect(readOptionValueWidthInches({ subLabel: "Small" })).toBeNull();
     expect(readOptionValueWidthInches({ width_inches: "wide" })).toBeNull();
     expect(readOptionValueWidthInches(null)).toBeNull();
+  });
+});
+
+describe("validateCategoryArtwork", () => {
+  it("accepts a category that names no threshold", () => {
+    expect(validateCategoryArtwork({ image_url: "x" }).ok).toBe(true);
+    expect(validateCategoryArtwork(null).ok).toBe(true);
+    expect(validateCategoryArtwork({ artwork_min_dpi: "" }).ok).toBe(true);
+  });
+
+  it("accepts a readable threshold", () => {
+    expect(validateCategoryArtwork({ artwork_min_dpi: "300" }).ok).toBe(true);
+    expect(validateCategoryArtwork({ artwork_min_dpi: 150 }).ok).toBe(true);
+  });
+
+  it.each(["3OO", "-50", "0", "lots"])(
+    "refuses %s, which the tolerant reader would silently ignore",
+    (raw) => {
+      // resolveArtworkMinDpi drops what it cannot read, so an unrejected typo
+      // drops every product in the category to the default floor with nothing
+      // said anywhere.
+      const problem = validateCategoryArtwork({ artwork_min_dpi: raw });
+
+      expect(problem.ok).toBe(false);
+      if (problem.ok) return;
+      expect(problem.message).toContain("artwork_min_dpi");
+    },
+  );
+});
+
+describe("unmeasuredOptionValues", () => {
+  const sizes = [
+    {
+      title: "Size",
+      values: [
+        { value: "Small", metadata: { width_inches: "3" } },
+        { value: "Large", metadata: { subLabel: "45 cm" } },
+        { value: "Custom", metadata: null },
+      ],
+    },
+  ];
+
+  it("names the values a shopper could pick and get no gate on", () => {
+    expect(unmeasuredOptionValues(sizes, "Custom")).toEqual({
+      anyMeasured: true,
+      missing: ["Large"],
+    });
+  });
+
+  it("ignores the custom value, which takes its size from the shopper", () => {
+    expect(unmeasuredOptionValues(sizes, "Custom").missing).not.toContain(
+      "Custom",
+    );
+  });
+
+  it("reports a product where nothing is measured at all", () => {
+    // This is the silent case the warning exists for: artwork on, no size
+    // anywhere, every upload accepted whatever its resolution.
+    expect(
+      unmeasuredOptionValues(
+        [{ title: "Colour", values: [{ value: "Blush", metadata: null }] }],
+        null,
+      ),
+    ).toEqual({ anyMeasured: false, missing: ["Blush"] });
+  });
+
+  it("counts a height on its own as measured", () => {
+    expect(
+      unmeasuredOptionValues(
+        [
+          {
+            title: "Size",
+            values: [{ value: "Tall", metadata: { height_inches: "40" } }],
+          },
+        ],
+        null,
+      ).anyMeasured,
+    ).toBe(true);
+  });
+
+  it("copes with a product that has no options at all", () => {
+    expect(unmeasuredOptionValues(null, null)).toEqual({
+      anyMeasured: false,
+      missing: [],
+    });
   });
 });

@@ -4,13 +4,14 @@ import {
   lineItemCustomizationSchema,
   type CustomSizeBounds,
   type LineItemCustomization,
+  type OrderedSizeInches,
 } from "@craftynp/types";
 import { MedusaError } from "@medusajs/framework/utils";
 
 export type CustomizationRules = {
   bounds: CustomSizeBounds;
   minDpi: number;
-  orderedWidthInches?: number | null;
+  orderedSize?: Partial<OrderedSizeInches>;
 };
 
 function reject(detail: string): never {
@@ -22,7 +23,7 @@ function reject(detail: string): never {
 
 export function validateCustomization(
   input: unknown,
-  { bounds, minDpi, orderedWidthInches }: CustomizationRules,
+  { bounds, minDpi, orderedSize }: CustomizationRules,
 ): LineItemCustomization {
   const result = lineItemCustomizationSchema.safeParse(input);
 
@@ -45,12 +46,14 @@ export function validateCustomization(
   }
 
   if (artwork) {
-    // A preset size carries its width on the option value rather than the
-    // payload, so the caller may name it; the typed dimensions are the fallback.
-    const widthInches = orderedWidthInches ?? dimensions?.widthInches ?? null;
+    // A preset size carries its measurements on the option value rather than
+    // the payload, so the caller may name them; the typed dimensions are the
+    // fallback.
     const resolution = checkArtworkResolution(artwork, {
       minDpi,
-      orderedWidthInches: widthInches,
+      widthInches: orderedSize?.widthInches ?? dimensions?.widthInches ?? null,
+      heightInches:
+        orderedSize?.heightInches ?? dimensions?.heightInches ?? null,
     });
 
     if (!resolution.ok) reject(`artwork: ${resolution.message}`);

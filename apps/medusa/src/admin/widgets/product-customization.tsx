@@ -24,6 +24,7 @@ import {
   activeCustomizationInputs,
   customizationMetadataPatch,
   resolveProductCustomization,
+  unmeasuredOptionValues,
   type CustomizationInputMode,
   type ProductCustomization,
 } from "@craftynp/types";
@@ -88,7 +89,10 @@ const ProductCustomizationWidget = ({
   const { data: product, isLoading } = useQuery({
     queryKey,
     queryFn: () =>
-      sdk.admin.product.retrieve(data.id, { fields: "id,metadata" }),
+      sdk.admin.product.retrieve(data.id, {
+        fields:
+          "id,metadata,options.title,options.values.value,*options.values",
+      }),
   });
 
   useEffect(() => {
@@ -153,6 +157,15 @@ const ProductCustomizationWidget = ({
 
   const boundsAreSet = [size.minInches, size.maxInches].every(
     (bound) => Number(bound) > 0,
+  );
+
+  const asksForArtwork =
+    customization.isCustomizable && customization.inputs.artwork !== "off";
+
+  const sizing = unmeasuredOptionValues(
+    (product?.product as { options?: unknown } | undefined)?.options as
+      Parameters<typeof unmeasuredOptionValues>[0] | undefined,
+    size.optionValue.trim() === "" ? null : size.optionValue.trim(),
   );
 
   return (
@@ -253,6 +266,22 @@ const ProductCustomizationWidget = ({
           <Hint variant="error">
             A made-to-order product has to ask for at least one input.
             Publishing it like this is rejected.
+          </Hint>
+        ) : null}
+
+        {asksForArtwork && !sizing.anyMeasured ? (
+          <Hint variant="error">
+            No option value on this product records a physical size, so uploads
+            here cannot be checked against a minimum resolution — every file
+            will be accepted. Put a width_inches (and height_inches) on your
+            size option values in the Options section.
+          </Hint>
+        ) : null}
+
+        {asksForArtwork && sizing.anyMeasured && sizing.missing.length > 0 ? (
+          <Hint variant="error">
+            These option values record no physical size, so a shopper choosing
+            one gets no resolution check: {sizing.missing.join(", ")}.
           </Hint>
         ) : null}
       </div>

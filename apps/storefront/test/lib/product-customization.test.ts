@@ -8,7 +8,7 @@ import {
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
-  orderedWidthInches,
+  orderedSizeInches,
   resolveCustomSizeOption,
   type CustomizationDraft,
 } from "@/lib/product-customization";
@@ -290,8 +290,9 @@ const SIZE_OPTION = {
   id: "opt_size",
   title: "Size",
   values: [
-    { id: "val_small", value: "Small", widthInches: 3 },
-    { id: "val_large", value: "Large", widthInches: 12 },
+    { id: "val_small", value: "Small", widthInches: 3, heightInches: 3 },
+    { id: "val_large", value: "Large", widthInches: 12, heightInches: 12 },
+    { id: "val_banner", value: "Banner", widthInches: 8, heightInches: 40 },
     { id: "val_mystery", value: "Mystery" },
     { id: "val_custom", value: "Custom" },
   ],
@@ -303,78 +304,108 @@ const MATERIAL_OPTION = {
   values: [{ id: "val_vinyl", value: "Vinyl" }],
 };
 
-describe("orderedWidthInches", () => {
-  it("reads a preset's physical width off the option value's own metadata", () => {
+const NO_SIZE = { widthInches: null, heightInches: null };
+
+describe("orderedSizeInches", () => {
+  it("reads a preset's measurements off the option value's own metadata", () => {
     expect(
-      orderedWidthInches(OPTIONAL_SIZE, draft(), [SIZE_OPTION], {
-        opt_size: "val_large",
+      orderedSizeInches(OPTIONAL_SIZE, draft(), [SIZE_OPTION], {
+        opt_size: "val_banner",
       }),
-    ).toBe(12);
+    ).toEqual({ widthInches: 8, heightInches: 40 });
   });
 
-  it("is not told which group is the size, so any group may name the width", () => {
+  it("is not told which group is the size, so any group may name it", () => {
     // VariantSelector deliberately knows nothing about sizes, and this keeps
-    // the same promise: whatever value declares a width answers.
+    // the same promise: whatever value declares measurements answers.
     expect(
-      orderedWidthInches(
+      orderedSizeInches(
         OPTIONAL_SIZE,
         draft(),
         [MATERIAL_OPTION, SIZE_OPTION],
         { opt_material: "val_vinyl", opt_size: "val_small" },
       ),
-    ).toBe(3);
+    ).toEqual({ widthInches: 3, heightInches: 3 });
   });
 
   it("prefers what the shopper typed once the custom size is on", () => {
     expect(
-      orderedWidthInches(
+      orderedSizeInches(
         OPTIONAL_SIZE,
         draft({ useCustomSize: true, widthInches: "18", heightInches: "24" }),
         [SIZE_OPTION],
         { opt_size: "val_custom" },
       ),
-    ).toBe(18);
+    ).toEqual({ widthInches: 18, heightInches: 24 });
   });
 
-  it("knows no width for a preset the owner has not measured", () => {
+  it("knows nothing for a preset the owner has not measured", () => {
     expect(
-      orderedWidthInches(OPTIONAL_SIZE, draft(), [SIZE_OPTION], {
+      orderedSizeInches(OPTIONAL_SIZE, draft(), [SIZE_OPTION], {
         opt_size: "val_mystery",
       }),
-    ).toBeNull();
+    ).toEqual(NO_SIZE);
   });
 
-  it("knows no width while a custom size is still half-typed", () => {
+  it("knows only the half a custom size has been typed so far", () => {
     expect(
-      orderedWidthInches(
+      orderedSizeInches(
         OPTIONAL_SIZE,
-        draft({ useCustomSize: true, widthInches: "" }),
+        draft({ useCustomSize: true, widthInches: "9", heightInches: "" }),
         [SIZE_OPTION],
         {},
       ),
-    ).toBeNull();
+    ).toEqual({ widthInches: 9, heightInches: null });
   });
 });
 
 describe("artworkResolutionError", () => {
+  const square = { widthInches: 3, heightInches: 3 };
+
   it("passes a file with pixels to spare", () => {
     expect(
-      artworkResolutionError(draft({ artwork: ARTWORK }), 300, 3),
+      artworkResolutionError(draft({ artwork: ARTWORK }), 300, square),
     ).toBeNull();
   });
 
   it("rejects a file too coarse for the size ordered, naming both numbers", () => {
-    const message = artworkResolutionError(draft({ artwork: ARTWORK }), 300, 8);
+    const message = artworkResolutionError(draft({ artwork: ARTWORK }), 300, {
+      widthInches: 8,
+      heightInches: 8,
+    });
 
     expect(message).toContain("150 DPI");
     expect(message).toContain("at least 300 DPI");
   });
 
+  it("catches a file starved on the height alone", () => {
+    // A banner ordered 8" x 40" from a 2400x600 file clears 300 DPI across and
+    // prints at 15 DPI down its length.
+    const wide = { ...ARTWORK, widthPx: 2400, heightPx: 600 };
+
+    expect(
+      artworkResolutionError(draft({ artwork: wide }), 300, {
+        widthInches: 8,
+        heightInches: 40,
+      }),
+    ).toContain("15 DPI");
+  });
+
   it("re-decides when the ordered size changes, which is the whole point", () => {
     const withArtwork = draft({ artwork: ARTWORK });
 
-    expect(artworkResolutionError(withArtwork, 300, 4)).toBeNull();
-    expect(artworkResolutionError(withArtwork, 300, 5)).not.toBeNull();
+    expect(
+      artworkResolutionError(withArtwork, 300, {
+        widthInches: 4,
+        heightInches: 4,
+      }),
+    ).toBeNull();
+    expect(
+      artworkResolutionError(withArtwork, 300, {
+        widthInches: 5,
+        heightInches: 5,
+      }),
+    ).not.toBeNull();
   });
 
   it("rejects a coarse file even where artwork is only optional", () => {
@@ -382,9 +413,9 @@ describe("artworkResolutionError", () => {
     // coarse to print is acceptable once they have.
     expect(
       artworkResolutionError(
-        draft({ artwork: { ...ARTWORK, widthPx: 200 } }),
+        draft({ artwork: { ...ARTWORK, widthPx: 200, heightPx: 200 } }),
         300,
-        8,
+        { widthInches: 8, heightInches: 8 },
       ),
     ).not.toBeNull();
   });
@@ -400,28 +431,41 @@ describe("artworkResolutionError", () => {
     };
 
     expect(
-      artworkResolutionError(draft({ artwork: vector }), 600, 96),
+      artworkResolutionError(draft({ artwork: vector }), 600, {
+        widthInches: 96,
+        heightInches: 96,
+      }),
     ).toBeNull();
   });
 
   it("says nothing when there is no artwork to judge", () => {
-    expect(artworkResolutionError(draft(), 300, 8)).toBeNull();
+    expect(artworkResolutionError(draft(), 300, square)).toBeNull();
   });
 
-  it("says nothing when the ordered width is unknown", () => {
+  it("says nothing when the ordered size is unknown", () => {
     expect(
-      artworkResolutionError(draft({ artwork: ARTWORK }), 300, null),
+      artworkResolutionError(draft({ artwork: ARTWORK }), 300, NO_SIZE),
     ).toBeNull();
   });
 });
 
 describe("artworkGuidance", () => {
   it("names the pixels a shopper needs at the size they are ordering", () => {
-    expect(artworkGuidance(300, 3)).toContain("900 pixels across (300 DPI)");
+    expect(artworkGuidance(300, { widthInches: 3, heightInches: 3 })).toContain(
+      "900 pixels across (300 DPI)",
+    );
   });
 
-  it("falls back to the formats and the limit when no width is known", () => {
-    const guidance = artworkGuidance(300, null);
+  it("quotes the axis that asks the most, so meeting it is enough", () => {
+    // Quoting the 8" width of a 40" banner would have the shopper supply a
+    // file that still fails.
+    expect(
+      artworkGuidance(300, { widthInches: 8, heightInches: 40 }),
+    ).toContain("12,000 pixels down");
+  });
+
+  it("falls back to the formats and the limit when no size is known", () => {
+    const guidance = artworkGuidance(300, NO_SIZE);
 
     expect(guidance).toContain("PNG, JPG, WEBP, SVG, PDF or AI");
     expect(guidance).toContain("25 MB");
