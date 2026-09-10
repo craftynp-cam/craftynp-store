@@ -679,6 +679,25 @@ CNP-79.
   that one file:** Medusa throws on a second handler for a hook it has already
   registered, so a new guard is a call added inside the existing handler, never
   a new hook file.
+- **That hook rejects the save but cannot undo it, which is why
+  `src/api/admin/products/middlewares.ts` exists as well.** The only hooks
+  core exposes are `productsCreated` / `productsUpdated`, both of which run
+  _after_ the write, so a guard throwing there relies on the workflow
+  compensating. `updateProductsStep` compensates only its `products: [{ id }]`
+  branch; `POST /admin/products/:id` — the dashboard's own save — calls the
+  workflow with `selector` + `update`, whose compensation restores nothing.
+  The result was a 400 in the admin with the bad metadata written anyway, and
+  a product then wedged: the stored value failed the guard on every later save,
+  so it could not be corrected from the UI. Verified against a real container
+  in both shapes; the batch shape does roll back.
+  The middleware therefore re-runs **the same two `assert*` functions** on the
+  incoming update merged over the stored product, before the route reaches the
+  workflow. **It duplicates no rules** — the rules stay in `@craftynp/types`
+  and the `src/lib` guards — and it must keep merging rather than validating
+  the body alone, because Medusa merges product metadata (a patch of one key
+  leaves the rest in place). Deleting it does not fail a test that mocks the
+  workflow; it fails only against a real save, which is how this was found.
+  The hook stays as the catch-all for every path that never touches HTTP.
 - **A malformed customization declaration is rejected at any status; an
   incomplete one only on publish.** A contradictory record — the flag off with
   an input still on — or a value outside the registry's vocabulary is wrong

@@ -4,6 +4,7 @@ import { originGuard } from "../lib/origin-guard";
 import { adminSsoMiddlewares } from "./admin-sso/link/middlewares";
 import { fulfilmentMiddlewares } from "./admin/fulfilment/middlewares";
 import { orderStatusMiddlewares } from "./admin/orders/middlewares";
+import { productValidationMiddlewares } from "./admin/products/middlewares";
 import { siteContentMiddlewares } from "./admin/site-content/middlewares";
 import { shipstationTrackMiddlewares } from "./hooks/shipstation/track/middlewares";
 import { artworkUploadMiddlewares } from "./store/artwork/uploads/middlewares";
@@ -16,6 +17,7 @@ export default defineMiddlewares({
   routes: [
     { matcher: "/*", middlewares: [originGuard()] },
     ...siteContentMiddlewares,
+    ...productValidationMiddlewares,
     ...orderStatusMiddlewares,
     ...fulfilmentMiddlewares,
     ...adminSsoMiddlewares,
