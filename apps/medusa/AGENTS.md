@@ -33,6 +33,22 @@ tax provider), `notification-resend`, `auth-auth0`, and
   `product.details.side.after`) writes them, and **must spread the product's
   existing metadata into its update** for the same reason the category-image
   widget must.
+- **The custom size carries four more keys**, written by the same widget and
+  the same patch: `customization_size_min_inches` and
+  `customization_size_max_inches` are the bounds the shopper is held to, and
+  `customization_size_option` / `customization_size_option_value` name the
+  preset option group the storefront's custom-size toggle drives and the value
+  on it that means "custom". There is no price bound here — area pricing is
+  CNP-42. The two halves split the way the rest of the declaration does:
+  `resolveProductCustomization` is **tolerant** and falls back to
+  `CUSTOM_SIZE_FALLBACK_BOUNDS` on anything it cannot read, while
+  `validateProductCustomization` is **strict** and refuses to publish a product
+  that asks for a custom size and names no bounds of its own — so the fallback
+  is unreachable on a live product and the constant is not a hidden policy.
+  `validateCustomization` (`src/lib/validate-customization.ts`) takes those
+  bounds as an argument rather than a constant, so the message it throws names
+  the same range the shopper was shown. It still has no production caller;
+  CNP-45 wires the real `LineItemCustomization` payload through.
 - **`tsconfig.json` must keep `medusa-config.ts` in `include`, with `rootDir`
   at `./`.** `medusa build` emits exactly `tsConfig.fileNames`, so scoping the
   root to `src` leaves the built `.medusa/server` with no `medusa-config.js` and

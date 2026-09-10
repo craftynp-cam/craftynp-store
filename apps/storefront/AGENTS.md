@@ -219,6 +219,46 @@ guard that validates them).
   first — the registry is what the admin widget, the backend guard and the gate
   all walk.
 
+### Custom size
+
+The custom size is the one input that reaches back into the variant options.
+Its bounds and the option it drives are product metadata, read through the same
+`resolveProductCustomization` (see [apps/medusa/AGENTS.md](../medusa/AGENTS.md)
+for the keys).
+
+- **Checking the box selects a real `Custom` option value; it does not
+  deselect the size group and leave nothing.** Preset sizes are ordinary Medusa
+  options that variants hang off, so a group with no answer resolves no variant
+  — no variant id, no price, and a dead add-to-cart. The toggle therefore
+  remembers whatever preset the shopper had, selects the value
+  `customization_size_option_value` names, and puts the preset back on
+  unchecking. That is also why the price moves: it is the `Custom` variant's own
+  Medusa price, not a formula. **Area-based pricing is CNP-42** and there is
+  deliberately no price arithmetic here.
+- **`VariantSelector` is still not told what a size is.** It takes generic
+  `hiddenValueIds` and `disabledOptionIds`; `ProductPurchase` is the only thing
+  that knows one of them is the custom size. Keep it that way — the rule that
+  option groups are whatever Medusa returns is what makes the selector reusable.
+  The custom value is always hidden from the group, so a shopper reaches custom
+  mode only through the checkbox; note a size group needs **three** values for
+  the presets to survive hiding it, since the selector drops any group left with
+  fewer than two.
+- **The checkbox appears only when the mode is `optional`.** `required` means
+  the shopper must give dimensions, so there is no toggle and no preset to fall
+  back to — `usesCustomSize` is what encodes that, and it is what every other
+  read goes through.
+- **Field errors are not a second gate.** `customSizeErrors` feeds both the
+  `isInvalid`/`errorMessage` on each input and the one `canAddToCart` gate, and
+  adds one clause to the one hint. The wording of the range comes from
+  `checkCustomDimensions` in `@craftynp/types`, shared with the backend, so the
+  two cannot drift.
+- **`cartLineKey` (`src/lib/cart.ts`), not `line.id`, is a cart line's
+  identity.** Every custom size shares one `Custom` variant, so keying on the
+  variant alone merged two different sizes into one line and dropped the
+  second's `details`. `id` stays the variant id because that is what
+  `/checkout/prepare` is sent; the key adds the configuration on top, and the
+  quantity stepper, the remove button and every React `key` use it.
+
 ## Artwork upload
 
 `ArtworkUpload` (`src/components/product/artwork-upload.tsx`) is the shopper's
