@@ -21,10 +21,43 @@ export const artworkReferenceSchema = z.object({
 export type ArtworkReference = z.infer<typeof artworkReferenceSchema>;
 
 export const customDimensionsSchema = z.object({
-  widthInches: z.number().positive().max(96),
-  heightInches: z.number().positive().max(96),
+  widthInches: z.number().positive(),
+  heightInches: z.number().positive(),
 });
 export type CustomDimensions = z.infer<typeof customDimensionsSchema>;
+
+export type CustomSizeBounds = {
+  minInches: number;
+  maxInches: number;
+};
+
+export type CustomDimensionField = "widthInches" | "heightInches";
+
+export type CustomDimensionErrors = Partial<
+  Record<CustomDimensionField, string>
+>;
+
+const DIMENSION_LABELS: Record<CustomDimensionField, string> = {
+  widthInches: "width",
+  heightInches: "height",
+};
+
+export function checkCustomDimensions(
+  dimensions: CustomDimensions,
+  bounds: CustomSizeBounds,
+): CustomDimensionErrors {
+  const errors: CustomDimensionErrors = {};
+
+  for (const field of ["widthInches", "heightInches"] as const) {
+    const value = dimensions[field];
+    if (value < bounds.minInches || value > bounds.maxInches) {
+      errors[field] =
+        `Enter a ${DIMENSION_LABELS[field]} between ${bounds.minInches} and ${bounds.maxInches} inches.`;
+    }
+  }
+
+  return errors;
+}
 
 export const lineItemCustomizationSchema = z.object({
   customText: customTextSchema.optional(),

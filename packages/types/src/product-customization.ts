@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { CustomSizeBounds } from "./customization.js";
+
 export const CUSTOMIZATION_INPUT_MODES = [
   "off",
   "optional",
@@ -50,9 +52,26 @@ export const CUSTOMIZATION_INPUTS = [
   },
 ] as const satisfies readonly CustomizationInput[];
 
+export const CUSTOM_SIZE_MIN_METADATA_KEY = "customization_size_min_inches";
+export const CUSTOM_SIZE_MAX_METADATA_KEY = "customization_size_max_inches";
+export const CUSTOM_SIZE_OPTION_METADATA_KEY = "customization_size_option";
+export const CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY =
+  "customization_size_option_value";
+
+export const CUSTOM_SIZE_FALLBACK_BOUNDS: CustomSizeBounds = {
+  minInches: 1,
+  maxInches: 96,
+};
+
+export type CustomSizeConfig = CustomSizeBounds & {
+  optionTitle: string | null;
+  optionValue: string | null;
+};
+
 export type ProductCustomization = {
   isCustomizable: boolean;
   inputs: Record<CustomizationInputKey, CustomizationInputMode>;
+  size: CustomSizeConfig;
 };
 
 const NO_INPUTS: Record<CustomizationInputKey, CustomizationInputMode> = {
@@ -62,9 +81,16 @@ const NO_INPUTS: Record<CustomizationInputKey, CustomizationInputMode> = {
   orderNotes: "off",
 };
 
+const NO_CUSTOM_SIZE: CustomSizeConfig = {
+  ...CUSTOM_SIZE_FALLBACK_BOUNDS,
+  optionTitle: null,
+  optionValue: null,
+};
+
 export const READY_MADE_PRODUCT: ProductCustomization = {
   isCustomizable: false,
   inputs: NO_INPUTS,
+  size: NO_CUSTOM_SIZE,
 };
 
 type Metadata = Record<string, unknown> | null | undefined;
@@ -81,6 +107,45 @@ function readMode(value: unknown): CustomizationInputMode | null {
   return parsed.success ? parsed.data : null;
 }
 
+function isPresent(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== "";
+}
+
+function readInches(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function readName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+function readSizeConfig(metadata: Metadata): CustomSizeConfig {
+  const min = readInches(metadata?.[CUSTOM_SIZE_MIN_METADATA_KEY]);
+  const max = readInches(metadata?.[CUSTOM_SIZE_MAX_METADATA_KEY]);
+  const optionTitle = readName(metadata?.[CUSTOM_SIZE_OPTION_METADATA_KEY]);
+  const optionValue = readName(
+    metadata?.[CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY],
+  );
+
+  const bounds =
+    min !== null && max !== null && min < max
+      ? { minInches: min, maxInches: max }
+      : CUSTOM_SIZE_FALLBACK_BOUNDS;
+
+  return {
+    ...bounds,
+    optionTitle,
+    optionValue: optionTitle === null ? null : optionValue,
+  };
+}
+
 export function resolveProductCustomization(
   metadata: Metadata,
 ): ProductCustomization {
@@ -93,7 +158,7 @@ export function resolveProductCustomization(
     inputs[input.key] = readMode(metadata?.[input.metadataKey]) ?? "off";
   }
 
-  return { isCustomizable: true, inputs };
+  return { isCustomizable: true, inputs, size: readSizeConfig(metadata) };
 }
 
 export function customizationMetadataPatch(
@@ -108,6 +173,23 @@ export function customizationMetadataPatch(
       ? customization.inputs[input.key]
       : "off";
   }
+
+  const { size } = customization;
+  const asksForSize =
+    customization.isCustomizable && customization.inputs.dimensions !== "off";
+
+  patch[CUSTOM_SIZE_MIN_METADATA_KEY] = asksForSize
+    ? String(size.minInches)
+    : "";
+  patch[CUSTOM_SIZE_MAX_METADATA_KEY] = asksForSize
+    ? String(size.maxInches)
+    : "";
+  patch[CUSTOM_SIZE_OPTION_METADATA_KEY] = asksForSize
+    ? (size.optionTitle ?? "")
+    : "";
+  patch[CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY] = asksForSize
+    ? (size.optionValue ?? "")
+    : "";
 
   return patch;
 }
@@ -132,6 +214,62 @@ export function requiredCustomizationInputs(
 
 export type ProductCustomizationProblem =
   { ok: true } | { ok: false; message: string };
+
+function validateCustomSizeConfig(
+  metadata: Metadata,
+  { asksForSize, published }: { asksForSize: boolean; published: boolean },
+): ProductCustomizationProblem {
+  const bounds = [
+    {
+      key: CUSTOM_SIZE_MIN_METADATA_KEY,
+      raw: metadata?.[CUSTOM_SIZE_MIN_METADATA_KEY],
+    },
+    {
+      key: CUSTOM_SIZE_MAX_METADATA_KEY,
+      raw: metadata?.[CUSTOM_SIZE_MAX_METADATA_KEY],
+    },
+  ] as const;
+
+  for (const bound of bounds) {
+    if (isPresent(bound.raw) && readInches(bound.raw) === null) {
+      return {
+        ok: false,
+        message: `${bound.key} must be a positive number of inches`,
+      };
+    }
+  }
+
+  const min = readInches(metadata?.[CUSTOM_SIZE_MIN_METADATA_KEY]);
+  const max = readInches(metadata?.[CUSTOM_SIZE_MAX_METADATA_KEY]);
+
+  if (min !== null && max !== null && min >= max) {
+    return {
+      ok: false,
+      message: `${CUSTOM_SIZE_MIN_METADATA_KEY} must be smaller than ${CUSTOM_SIZE_MAX_METADATA_KEY}`,
+    };
+  }
+
+  const optionTitle = readName(metadata?.[CUSTOM_SIZE_OPTION_METADATA_KEY]);
+  const optionValue = readName(
+    metadata?.[CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY],
+  );
+
+  if (optionValue !== null && optionTitle === null) {
+    return {
+      ok: false,
+      message: `${CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY} needs ${CUSTOM_SIZE_OPTION_METADATA_KEY} to name the option it belongs to`,
+    };
+  }
+
+  if (published && asksForSize && (min === null || max === null)) {
+    return {
+      ok: false,
+      message: `custom size is on, so ${CUSTOM_SIZE_MIN_METADATA_KEY} and ${CUSTOM_SIZE_MAX_METADATA_KEY} must both be set`,
+    };
+  }
+
+  return { ok: true };
+}
 
 export function validateProductCustomization(
   metadata: Metadata,
@@ -162,6 +300,12 @@ export function validateProductCustomization(
     }
     if (mode !== "off") declared.push(input.key);
   }
+
+  const sizeProblem = validateCustomSizeConfig(metadata, {
+    asksForSize: declared.includes("dimensions"),
+    published,
+  });
+  if (!sizeProblem.ok) return sizeProblem;
 
   if (!isCustomizable && declared.length > 0) {
     return {
