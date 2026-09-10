@@ -1,7 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
-import { artworkMimeTypeSchema } from "@craftynp/types";
+import { MAX_ARTWORK_BYTES, artworkMimeTypeSchema } from "@craftynp/types";
 import type { ArtworkInspectResponse } from "@craftynp/types";
 
 import { ARTWORK_MODULE } from "../../../../../../modules/artwork";
@@ -66,13 +66,32 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     throw error;
   }
 
-  let head: Uint8Array;
+  let inspection;
   try {
-    head = await readArtworkHead(
+    const head = await readArtworkHead(
       asset.staging_key,
       ARTWORK_HEADER_BYTES,
       options,
     );
+
+    inspection = inspectArtworkBytes(head, declaredMimeType.data);
+
+    // A JPEG carrying a large colour profile or an embedded thumbnail can push
+    // its start-of-frame marker past the head we read, and rejecting a good
+    // file is the worst way for this gate to fail. A wrong signature at offset
+    // zero is not worth re-reading for; a size we could not find might be.
+    if (
+      !inspection.ok &&
+      inspection.reason === "unreadable" &&
+      head.length < asset.size_bytes
+    ) {
+      const whole = await readArtworkHead(
+        asset.staging_key,
+        Math.min(asset.size_bytes, MAX_ARTWORK_BYTES),
+        options,
+      );
+      inspection = inspectArtworkBytes(whole, declaredMimeType.data);
+    }
   } catch (error) {
     const reason = describeError(error);
     logger.error(`${ARTWORK_INSPECT_FAILED_LOG_TAG} ${reason}`);
@@ -82,8 +101,6 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       message: "Could not check that file. Please try again.",
     });
   }
-
-  const inspection = inspectArtworkBytes(head, declaredMimeType.data);
 
   if (!inspection.ok) {
     return res.status(422).json({

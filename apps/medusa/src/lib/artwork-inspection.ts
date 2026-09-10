@@ -45,10 +45,11 @@ function ascii(bytes: Uint8Array, start: number, length: number): string {
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 function looksLikeSvg(bytes: Uint8Array): boolean {
-  // An SVG may open with a BOM, an XML declaration, a doctype or comments, so
-  // the tag is looked for across the head rather than at offset zero.
-  const head = Buffer.from(bytes.subarray(0, 2048)).toString("utf8");
-  return /<svg[\s>]/i.test(head);
+  // An SVG may open with a BOM, an XML declaration, a doctype, or a licence
+  // header of any length, so the tag is looked for across everything we were
+  // given rather than at offset zero or within an arbitrary first slice. This
+  // runs only after every binary signature has already failed to match.
+  return /<svg[\s>]/i.test(Buffer.from(bytes).toString("utf8"));
 }
 
 export function sniffArtworkFormat(bytes: Uint8Array): ArtworkFormat | null {

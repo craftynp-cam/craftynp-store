@@ -129,6 +129,50 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     expect(recordDimensions).not.toHaveBeenCalled();
   });
 
+  it("re-reads the whole object when the head stopped short of the size", async () => {
+    // A JPEG's colour profile can push its frame marker past the head we read.
+    // Rejecting a good file is the worst way for this gate to fail.
+    const deepHeader = new Uint8Array(
+      Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(64, 0)]),
+    );
+    readHead
+      .mockResolvedValueOnce(deepHeader)
+      .mockResolvedValueOnce(new Uint8Array(PNG_7X3));
+
+    const { req, res, status, json, recordDimensions } = harness(
+      asset({ mime_type: "image/jpeg", size_bytes: 400_000 }),
+    );
+
+    await POST(req, res);
+
+    expect(readHead).toHaveBeenCalledTimes(2);
+    // The second read is bounded by the object's own size, not left open.
+    expect(readHead.mock.calls[1]?.[1]).toBe(400_000);
+    expect(status).toHaveBeenCalledWith(422);
+    expect(json.mock.calls[0]?.[0]).toMatchObject({
+      reason: "mismatched_type",
+    });
+    expect(recordDimensions).not.toHaveBeenCalled();
+  });
+
+  it("does not re-read when the head already held the whole object", async () => {
+    readHead.mockResolvedValue(new Uint8Array(Buffer.from("hello", "utf8")));
+    const { req, res } = harness(asset({ size_bytes: 5 }));
+
+    await POST(req, res);
+
+    expect(readHead).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not re-read for a wrong signature, which more bytes cannot fix", async () => {
+    readHead.mockResolvedValue(new Uint8Array(Buffer.from("not a picture")));
+    const { req, res } = harness(asset({ size_bytes: 5_000_000 }));
+
+    await POST(req, res);
+
+    expect(readHead).toHaveBeenCalledTimes(1);
+  });
+
   it("answers 404 for an upload it has no row for", async () => {
     const { req, res, status } = harness(null);
 

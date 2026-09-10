@@ -1,4 +1,5 @@
 import {
+  ARTWORK_HEADER_BYTES,
   inspectArtworkBytes,
   sniffArtworkFormat,
 } from "./artwork-inspection.js";
@@ -33,6 +34,32 @@ const POSTSCRIPT = text("%!PS-Adobe-3.0\n%%Creator: Adobe Illustrator\n");
 const SVG = text(
   '<?xml version="1.0" encoding="UTF-8"?>\n<!-- exported -->\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>',
 );
+
+// A colour profile or an embedded thumbnail rides in APP segments ahead of the
+// start-of-frame marker, and each segment caps at 64 KB, so a wide-gamut export
+// splits one profile across several. Real encoder bytes, only pushed further
+// down the file — the marker walk has to keep going to find them.
+function withLargeColourProfile(base64: string): Uint8Array {
+  const jpeg = bytes(base64);
+  const chunk = new Uint8Array(65_000);
+  const segment = new Uint8Array(chunk.length + 4);
+  segment.set([0xff, 0xe2, 0xfe, 0x0e]);
+  segment.set(chunk, 4);
+
+  const parts = [jpeg.subarray(0, 2)];
+  for (let i = 0; i < 6; i += 1) parts.push(segment);
+  parts.push(jpeg.subarray(2));
+
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const padded = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    padded.set(part, offset);
+    offset += part.length;
+  }
+
+  return padded;
+}
 
 describe("sniffArtworkFormat", () => {
   it.each([
@@ -128,6 +155,42 @@ describe("inspectArtworkBytes", () => {
     expect(inspectArtworkBytes(truncated, "image/png")).toEqual({
       ok: false,
       reason: "unreadable",
+    });
+  });
+
+  it("measures a JPEG whose colour profile pushes the frame marker far in", () => {
+    const padded = withLargeColourProfile(JPEG_7X3);
+
+    expect(padded.length).toBeGreaterThan(ARTWORK_HEADER_BYTES);
+    expect(inspectArtworkBytes(padded, "image/jpeg")).toMatchObject({
+      ok: true,
+      widthPx: 7,
+      heightPx: 3,
+    });
+  });
+
+  it("reports a JPEG cut short of its frame marker as unreadable, not mismatched", () => {
+    // The route relies on this distinction: unreadable is worth re-reading the
+    // whole object for, a wrong signature at offset zero is not.
+    const head = withLargeColourProfile(JPEG_7X3).subarray(
+      0,
+      ARTWORK_HEADER_BYTES,
+    );
+
+    expect(inspectArtworkBytes(head, "image/jpeg")).toEqual({
+      ok: false,
+      reason: "unreadable",
+    });
+  });
+
+  it("reads an SVG whose opening tag sits behind a long licence header", () => {
+    const svg = text(
+      `<?xml version="1.0"?>\n<!--${"licence ".repeat(1000)}-->\n<svg xmlns="http://www.w3.org/2000/svg"></svg>`,
+    );
+
+    expect(inspectArtworkBytes(svg, "image/svg+xml")).toMatchObject({
+      ok: true,
+      kind: "vector",
     });
   });
 
