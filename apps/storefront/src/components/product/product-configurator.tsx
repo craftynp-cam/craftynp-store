@@ -1,14 +1,15 @@
 "use client";
 
+import { ORDER_NOTES_MAX_LENGTH } from "@craftynp/types";
 import type {
   CustomDimensionErrors,
-  CustomizationInputMode,
   ProductCustomization,
 } from "@craftynp/types";
 
-import { Checkbox, TextInput, Textarea } from "../ui";
+import { Checkbox, TextInput } from "../ui";
 import { ArtworkUpload } from "./artwork-upload";
 import { CustomTextField } from "./custom-text-field";
+import { OrderNotesField } from "./order-notes-field";
 import {
   isCustomSizeOffered,
   usesCustomSize,
@@ -24,11 +25,8 @@ type ProductConfiguratorProps = {
   artworkError: string | null;
   artworkGuidance: string;
   customTextError: string | null;
+  orderNotesError: string | null;
 };
-
-function hint(mode: CustomizationInputMode): string | undefined {
-  return mode === "optional" ? "Optional." : undefined;
-}
 
 export function ProductConfigurator({
   customization,
@@ -39,8 +37,9 @@ export function ProductConfigurator({
   artworkError,
   artworkGuidance,
   customTextError,
+  orderNotesError,
 }: ProductConfiguratorProps) {
-  const { inputs, size } = customization;
+  const { inputs, size, text } = customization;
   const showsCustomSize = usesCustomSize(customization, value);
 
   function patch(change: Partial<CustomizationDraft>) {
@@ -70,6 +69,7 @@ export function ProductConfigurator({
           mode={inputs.customText}
           value={value.customText}
           onChange={(customText) => patch({ customText })}
+          maxLength={text.maxLength}
           errorMessage={customTextError}
         />
       ) : null}
@@ -117,13 +117,12 @@ export function ProductConfigurator({
       ) : null}
 
       {inputs.orderNotes !== "off" ? (
-        <Textarea
-          label="Order notes"
-          description={hint(inputs.orderNotes)}
-          isRequired={inputs.orderNotes === "required"}
+        <OrderNotesField
+          mode={inputs.orderNotes}
           value={value.orderNotes}
           onChange={(orderNotes) => patch({ orderNotes })}
-          maxLength={500}
+          maxLength={ORDER_NOTES_MAX_LENGTH}
+          errorMessage={orderNotesError}
         />
       ) : null}
     </div>

@@ -1,18 +1,23 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 
-import { CUSTOM_TEXT_MAX_LENGTH } from "@craftynp/types";
+import {
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  resolveProductCustomization,
+} from "@craftynp/types";
 
 import { CustomTextField } from "@/components";
-import { customTextError } from "@/lib/product-customization";
-import { resolveProductCustomization } from "@craftynp/types";
+import {
+  EMPTY_CUSTOMIZATION_DRAFT,
+  customTextError,
+} from "@/lib/product-customization";
 
 const REQUIRED = resolveProductCustomization({
   customizable: "true",
   customization_text: "required",
 });
 
-const AT_LIMIT = "a".repeat(CUSTOM_TEXT_MAX_LENGTH);
+const AT_LIMIT = "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH);
 
 // The field is controlled by ProductPurchase, and its length error is derived
 // there, so the harness closes that loop rather than freezing a value.
@@ -24,13 +29,10 @@ function Harness({ mode = "required" }: { mode?: "optional" | "required" }) {
       mode={mode}
       value={value}
       onChange={setValue}
+      maxLength={REQUIRED.text.maxLength}
       errorMessage={customTextError(REQUIRED, {
-        artwork: null,
+        ...EMPTY_CUSTOMIZATION_DRAFT,
         customText: value,
-        useCustomSize: false,
-        widthInches: "",
-        heightInches: "",
-        orderNotes: "",
       })}
     />
   );
@@ -91,6 +93,19 @@ describe("CustomTextField", () => {
     expect(
       screen.getByText(/enter the text you'd like on this piece/i),
     ).toBeInTheDocument();
+  });
+
+  it("warns a screen reader before the limit, not only after it", () => {
+    render(<Harness />);
+
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("");
+
+    type("a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH - 5));
+
+    expect(status).toHaveTextContent(
+      `You are close to the ${CUSTOM_TEXT_FALLBACK_MAX_LENGTH}-character limit.`,
+    );
   });
 
   it("does not demand text the product only offers", () => {
