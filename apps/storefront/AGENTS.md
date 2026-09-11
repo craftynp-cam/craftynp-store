@@ -303,6 +303,89 @@ for the keys).
   `/checkout/prepare` is sent; the key adds the configuration on top, and the
   quantity stepper, the remove button and every React `key` use it.
 
+### Counted text fields
+
+Custom text and order notes are the two fields a shopper types into, and they
+are one component: `CountedTextField`
+(`src/components/product/counted-text-field.tsx`), which
+`ProductConfigurator` renders twice with a different label, required message
+and row count. They differed by an echo panel until CNP-37's AC 1 was
+rewritten to drop it; what was left was the same field twice.
+
+- **Both are a `Textarea`, including the single line of engraving.** An
+  `<input>` clips a long value out of sight at its right-hand edge, and AC 1
+  is that the shopper can read the whole of what they typed. The field grows
+  with its content — `[field-sizing:content]` on the `Textarea` primitive —
+  with a `max-h-64` cap that only bites for a value far past any limit we
+  enforce.
+- **`field-sizing: content` makes the browser ignore `rows`, so the primitive
+  restores that floor itself.** Measured: with it on, `rows={4}` and `rows={2}`
+  both render at 39px, so order notes lost two-thirds of their height and read
+  as a single-line box. The `minHeight` inline style on the `Textarea` is what
+  puts it back — the element's own line heights plus HeroUI's padding and
+  border, because the box is `border-box` and HeroUI sets its own `min-height`
+  on `.textarea` that a utility class would have to fight. Keep `rows` as the
+  prop that drives it; it is also what a browser without `field-sizing` uses
+  natively.
+- **Custom text is one line, and `checkSingleLine` in `@craftynp/types` is what
+  says so.** A textarea means the shopper can press Enter, and what the
+  workshop makes is one line — so `customTextSchema` rejects a line break as
+  well, and the field blocks add-to-cart with "Keep this to one line." rather
+  than stripping the newline behind the shopper's back. **Order notes may run
+  to as many lines as the shopper likes**; they are instructions to the maker,
+  not something made into the piece.
+- **Do not re-add a preview of the value below the field.** It repeats an
+  input the shopper is already looking at, and rendering it in another face
+  promises a typeface the workshop does not cut. It was defended as showing
+  the trimming, which it cannot: trailing whitespace is invisible in both.
+- **Neither input carries a `maxLength`, deliberately.** A hard cap swallows
+  keystrokes with no explanation, which is what CNP-37's AC 4 rules out. The
+  limit is stated before the shopper types (`characterCountHint`), counted
+  while they do, and over-length text is kept and named rather than truncated.
+- **`textLength` in `@craftynp/types` is the one measure, and it counts
+  graphemes.** A thumbs-up carrying a skin tone is four UTF-16 code units and
+  one thing on the piece. `customTextSchema`, `checkTextLength` and the field's
+  counter all go through it, so the number the shopper is shown is the number
+  they are held to. Where `Intl.Segmenter` is missing it falls back to code
+  units, which over-counts — an old browser refuses a beat early rather than
+  sending text the backend rejects.
+- **`checkTextLength` is the one message**, shared the way
+  `checkCustomDimensions` is, so the field and the backend's rejection cannot
+  word the same failure differently.
+- **What is wrong with a field is derived in `ProductPurchase`, not in the
+  field.** `customTextProblem` and `orderNotesProblem` return a
+  `TextFieldProblem` — the message the field shows and the clause the one hint
+  adds — feeding `isInvalid`/`errorMessage` and the one `canAddToCart` gate.
+  The two travel together because the hint has to name what the shopper must
+  actually do: "shorten your custom text" is the wrong instruction for a line
+  break.
+- **The empty-required message is passed in per field, and it waits for a
+  blur.** What the piece needs is not what the maker needs to know, so the two
+  are worded differently. An untouched field is not yet wrong, so `isVisited`
+  gates it; a length error
+  needs no such wait, since text is already there. That is the half the
+  add-to-cart hint cannot do, because the hint names the field from across the
+  page while the field itself stayed silent. **Do not make it show on first
+  render** — that greets every shopper with an error they have not earned, and
+  the hint already names what is outstanding.
+- **A `role="status"` line warns before the limit, not on every keystroke.**
+  The count lives in the field's description, which a screen reader reads on
+  demand but never announces, so `nearLimitAnnouncement` returns one message
+  that does not change while the shopper types — the live region speaks once,
+  at the threshold, and going over is the field error's job to announce. A
+  counter wired straight to `aria-live` reads every letter aloud.
+
+**Custom text's limit is product configuration; order notes' is one shop-wide
+constant.** Text is made into the piece, so what fits varies by product;
+notes are instructions to the maker and do not. `customization.text.maxLength`
+comes off the product through `resolveProductCustomization`, falling back to
+`CUSTOM_TEXT_FALLBACK_MAX_LENGTH` (120) and capped by
+`CUSTOM_TEXT_LENGTH_CEILING` (1,000), which is what `customTextSchema` stores —
+the same tolerant-read, strict-write split the custom size bounds have (see
+[apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the metadata key and the admin
+field). `ORDER_NOTES_MAX_LENGTH` (500) is a plain constant in
+`@craftynp/types`, used by both the field and `lineItemCustomizationSchema`.
+
 ## Artwork upload
 
 `ArtworkUpload` (`src/components/product/artwork-upload.tsx`) is the shopper's

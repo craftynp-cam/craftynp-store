@@ -1,12 +1,18 @@
 import {
+  CUSTOM_TEXT_LENGTH_CEILING,
+  ORDER_NOTES_MAX_LENGTH,
+  SINGLE_LINE_MESSAGE,
   artworkReferenceSchema,
   checkArtworkResolution,
   checkCustomDimensions,
+  checkSingleLine,
+  checkTextLength,
   customDimensionsSchema,
   customTextSchema,
   effectiveDpi,
   lineItemCustomizationSchema,
   requiredPixels,
+  textLength,
 } from "./customization.js";
 
 const validArtwork = {
@@ -18,6 +24,57 @@ const validArtwork = {
   heightPx: 1200,
 };
 
+describe("textLength", () => {
+  it("counts what a shopper would point at, not UTF-16 code units", () => {
+    // Four code units, one thing on the piece.
+    expect("\u{1F44D}\u{1F3FD}".length).toBe(4);
+    expect(textLength("\u{1F44D}\u{1F3FD}")).toBe(1);
+  });
+
+  it("counts a combining accent with the letter it sits on", () => {
+    expect(textLength("e\u0301")).toBe(1);
+  });
+
+  it("measures the trimmed value, as the schemas store it", () => {
+    expect(textLength("  hello  ")).toBe(5);
+  });
+});
+
+describe("checkTextLength", () => {
+  it("passes text at exactly the limit", () => {
+    expect(checkTextLength("a".repeat(20), 20)).toBe(null);
+  });
+
+  it("says how far over the limit the text runs", () => {
+    expect(checkTextLength("a".repeat(23), 20)).toBe(
+      "Shorten this to 20 characters or fewer \u2014 3 characters over.",
+    );
+  });
+
+  it("counts one character over in the singular", () => {
+    expect(checkTextLength("a".repeat(21), 20)).toContain("1 character over");
+  });
+
+  it("holds an emoji to the same count the field showed", () => {
+    expect(checkTextLength("\u{1F44D}\u{1F3FD}".repeat(3), 3)).toBe(null);
+  });
+});
+
+describe("checkSingleLine", () => {
+  it("passes ordinary one-line text", () => {
+    expect(checkSingleLine("For Grandma")).toBe(null);
+  });
+
+  it.each([
+    ["a newline", "Happy\nBirthday"],
+    ["a carriage return", "Happy\rBirthday"],
+    ["a Windows line ending", "Happy\r\nBirthday"],
+    ["a trailing newline", "Happy Birthday\n"],
+  ])("refuses %s", (_label, value) => {
+    expect(checkSingleLine(value)).toBe(SINGLE_LINE_MESSAGE);
+  });
+});
+
 describe("customTextSchema", () => {
   it("trims surrounding whitespace", () => {
     const result = customTextSchema.parse({ value: "  For Grandma  " });
@@ -28,16 +85,37 @@ describe("customTextSchema", () => {
     expect(customTextSchema.safeParse({ value: "   " }).success).toBe(false);
   });
 
-  it("rejects text longer than 120 characters", () => {
-    expect(customTextSchema.safeParse({ value: "a".repeat(121) }).success).toBe(
-      false,
+  // The schema stops the absolute ceiling only; the product's own limit is
+  // checkTextLength's job, exactly as custom size bounds narrow a positive
+  // number of inches.
+  it("accepts text a product's own limit would refuse", () => {
+    expect(customTextSchema.safeParse({ value: "a".repeat(200) }).success).toBe(
+      true,
     );
   });
 
-  it("accepts text at exactly 120 characters", () => {
-    expect(customTextSchema.safeParse({ value: "a".repeat(120) }).success).toBe(
-      true,
-    );
+  // The storefront field is a textarea, so the shopper can press Enter in it.
+  // What the workshop makes is one line, and the backend has to agree.
+  it("rejects text carrying a line break", () => {
+    expect(
+      customTextSchema.safeParse({ value: "Happy\nBirthday" }).success,
+    ).toBe(false);
+  });
+
+  it("accepts text at exactly the ceiling", () => {
+    expect(
+      customTextSchema.safeParse({
+        value: "a".repeat(CUSTOM_TEXT_LENGTH_CEILING),
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects text one character past the ceiling", () => {
+    expect(
+      customTextSchema.safeParse({
+        value: "a".repeat(CUSTOM_TEXT_LENGTH_CEILING + 1),
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -286,9 +364,16 @@ describe("lineItemCustomizationSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects order notes longer than 500 characters", () => {
+  it("accepts order notes at exactly the limit", () => {
     const result = lineItemCustomizationSchema.safeParse({
-      orderNotes: "a".repeat(501),
+      orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects order notes past the limit", () => {
+    const result = lineItemCustomizationSchema.safeParse({
+      orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH + 1),
     });
     expect(result.success).toBe(false);
   });

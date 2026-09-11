@@ -18,15 +18,22 @@ export {
   resolveArtworkMimeType,
 } from "./artwork.js";
 export {
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  CUSTOM_TEXT_LENGTH_CEILING,
+  ORDER_NOTES_MAX_LENGTH,
+  SINGLE_LINE_MESSAGE,
   artworkReferenceSchema,
   artworkResolutionDemands,
   checkArtworkResolution,
   checkCustomDimensions,
+  checkSingleLine,
+  checkTextLength,
   customDimensionsSchema,
   customTextSchema,
   effectiveDpi,
   lineItemCustomizationSchema,
   requiredPixels,
+  textLength,
 } from "./customization.js";
 export {
   ARTWORK_MIN_DPI_METADATA_KEY,
@@ -38,6 +45,7 @@ export {
   CUSTOM_SIZE_MIN_METADATA_KEY,
   CUSTOM_SIZE_OPTION_METADATA_KEY,
   CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY,
+  CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
   DEFAULT_ARTWORK_MIN_DPI,
   OPTION_VALUE_HEIGHT_INCHES_KEYS,
   OPTION_VALUE_WIDTH_INCHES_KEYS,
@@ -158,6 +166,7 @@ export type {
 } from "./customization.js";
 export type {
   CustomSizeConfig,
+  CustomTextConfig,
   OptionLike,
   OptionValueLike,
   UnmeasuredOptions,

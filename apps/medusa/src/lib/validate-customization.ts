@@ -1,6 +1,7 @@
 import {
   checkArtworkResolution,
   checkCustomDimensions,
+  checkTextLength,
   lineItemCustomizationSchema,
   type CustomSizeBounds,
   type LineItemCustomization,
@@ -10,6 +11,10 @@ import { MedusaError } from "@medusajs/framework/utils";
 
 export type CustomizationRules = {
   bounds: CustomSizeBounds;
+  // The product's own limit, not a constant: customTextSchema only stops the
+  // absolute ceiling, exactly as customDimensionsSchema only stops a negative
+  // number of inches.
+  textMaxLength: number;
   minDpi: number;
   orderedSize?: Partial<OrderedSizeInches>;
 };
@@ -23,7 +28,7 @@ function reject(detail: string): never {
 
 export function validateCustomization(
   input: unknown,
-  { bounds, minDpi, orderedSize }: CustomizationRules,
+  { bounds, textMaxLength, minDpi, orderedSize }: CustomizationRules,
 ): LineItemCustomization {
   const result = lineItemCustomizationSchema.safeParse(input);
 
@@ -35,7 +40,12 @@ export function validateCustomization(
     );
   }
 
-  const { dimensions, artwork } = result.data;
+  const { customText, dimensions, artwork } = result.data;
+
+  if (customText) {
+    const detail = checkTextLength(customText.value, textMaxLength);
+    if (detail !== null) reject(`customText: ${detail}`);
+  }
 
   if (dimensions) {
     const detail = Object.entries(checkCustomDimensions(dimensions, bounds))

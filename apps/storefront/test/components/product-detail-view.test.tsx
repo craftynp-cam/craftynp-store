@@ -2,6 +2,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
 import {
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
+  ORDER_NOTES_MAX_LENGTH,
   READY_MADE_PRODUCT,
   resolveProductCustomization,
 } from "@craftynp/types";
@@ -639,6 +642,138 @@ describe("ProductDetailView", () => {
       });
 
       expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeEnabled();
+    });
+
+    it("holds the one gate shut while the custom text runs past its limit", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      chooseBlush();
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH + 1) },
+      });
+
+      expect(
+        screen.getByText("Shorten your custom text to continue."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH) },
+      });
+
+      expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeEnabled();
+    });
+
+    it("counts the custom text against the limit the owner configured", () => {
+      const shortLimit = resolveProductCustomization({
+        customizable: "true",
+        customization_text: "required",
+        [CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY]: "20",
+      });
+
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: shortLimit })}
+        />,
+      );
+
+      chooseBlush();
+      expect(screen.getByText("Up to 20 characters.")).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "a".repeat(21) },
+      });
+
+      expect(
+        screen.getByText("Shorten your custom text to continue."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+    });
+
+    // Both configurator fields are one component, so what is worth pinning is
+    // that each is wired to its own limit and its own words.
+    it("blocks a line break in the custom text, and says what to do", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      chooseBlush();
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "Happy\nBirthday" },
+      });
+
+      expect(
+        screen.getByText("Keep your custom text to one line to continue."),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Keep this to one line.")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+    });
+
+    it("gives each text field its own required message", () => {
+      const both = resolveProductCustomization({
+        customizable: "true",
+        customization_text: "required",
+        customization_notes: "required",
+      });
+
+      render(
+        <ProductDetailView product={makeProduct({ customization: both })} />,
+      );
+
+      const notes = screen.getByLabelText(/order notes/i);
+      act(() => notes.focus());
+      act(() => notes.blur());
+
+      expect(
+        screen.getByText(/tell us what you'd like us to know/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/enter the text you'd like/i)).toBeNull();
+    });
+
+    it("holds the same gate shut while the order notes run long", () => {
+      const notes = resolveProductCustomization({
+        customizable: "true",
+        customization_notes: "optional",
+      });
+
+      render(
+        <ProductDetailView product={makeProduct({ customization: notes })} />,
+      );
+
+      chooseBlush();
+      fireEvent.change(screen.getByLabelText(/order notes/i), {
+        target: { value: "a".repeat(ORDER_NOTES_MAX_LENGTH + 1) },
+      });
+
+      expect(
+        screen.getByText("Shorten your order notes to continue."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/order notes/i), {
+        target: { value: "Matte finish" },
+      });
+
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();

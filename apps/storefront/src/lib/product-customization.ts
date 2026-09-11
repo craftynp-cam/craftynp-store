@@ -1,14 +1,19 @@
 import {
   ARTWORK_ACCEPTED_LABEL,
   CUSTOMIZATION_INPUTS,
+  ORDER_NOTES_MAX_LENGTH,
   artworkResolutionDemands,
   checkArtworkResolution,
   checkCustomDimensions,
+  checkSingleLine,
+  checkTextLength,
   requiredCustomizationInputs,
+  textLength,
 } from "@craftynp/types";
 import type {
   CustomDimensionErrors,
   CustomizationInputKey,
+  CustomizationInputMode,
   OrderedSizeInches,
   ProductCustomization,
 } from "@craftynp/types";
@@ -92,6 +97,88 @@ export function customSizeErrors(
     { widthInches, heightInches },
     customization.size,
   );
+}
+
+// What is wrong with a text field, in the field's words and in the one
+// add-to-cart hint's. They travel together because the hint has to name what
+// the shopper must actually do, and "shorten" is the wrong instruction for a
+// line break.
+export type TextFieldProblem = {
+  message: string;
+  clause: string;
+};
+
+// Both counted fields measure through @craftynp/types' textLength, which is
+// what customTextSchema and the backend validator measure too, so the number
+// the shopper is shown is the number they are held to.
+export function customTextProblem(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+): TextFieldProblem | null {
+  if (customization.inputs.customText === "off") return null;
+
+  const singleLine = checkSingleLine(draft.customText);
+  if (singleLine !== null) {
+    return { message: singleLine, clause: "keep your custom text to one line" };
+  }
+
+  const tooLong = checkTextLength(
+    draft.customText,
+    customization.text.maxLength,
+  );
+  return tooLong === null
+    ? null
+    : { message: tooLong, clause: "shorten your custom text" };
+}
+
+// Order notes are instructions to the maker rather than something made into
+// the piece, so their limit is one number for the whole shop instead of
+// product configuration the way the custom text limit is — and unlike custom
+// text they may run to as many lines as the shopper wants.
+export function orderNotesProblem(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+): TextFieldProblem | null {
+  if (customization.inputs.orderNotes === "off") return null;
+
+  const tooLong = checkTextLength(draft.orderNotes, ORDER_NOTES_MAX_LENGTH);
+  return tooLong === null
+    ? null
+    : { message: tooLong, clause: "shorten your order notes" };
+}
+
+// The limit is stated before the shopper reaches it and counted while they
+// type, which is the whole reason neither field carries a maxLength: refusing
+// keystrokes silently is how a shopper loses the end of a sentence without
+// being told.
+export function characterCountHint(
+  mode: CustomizationInputMode,
+  value: string,
+  maxLength: number,
+): string {
+  const prefix = mode === "optional" ? "Optional. " : "";
+  const used = textLength(value);
+
+  return used === 0
+    ? `${prefix}Up to ${maxLength} characters.`
+    : `${prefix}${used} of ${maxLength} characters used.`;
+}
+
+// A count in the field's description is read on demand but never announced,
+// so a screen reader reaches the limit without warning. This says so once, on
+// the way in — the message does not change per keystroke, so the live region
+// speaks at the threshold rather than on every letter, and going over is the
+// field error's job to announce.
+export function nearLimitAnnouncement(
+  value: string,
+  maxLength: number,
+): string {
+  const remaining = maxLength - textLength(value);
+  const threshold = Math.min(20, Math.ceil(maxLength / 5));
+
+  return remaining > 0 && remaining <= threshold
+    ? `You are close to the ${maxLength}-character limit.`
+    : "";
 }
 
 function positiveNumber(value: string): number | null {

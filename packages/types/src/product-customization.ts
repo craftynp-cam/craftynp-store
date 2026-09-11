@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import {
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  CUSTOM_TEXT_LENGTH_CEILING,
+} from "./customization.js";
 import type { CustomSizeBounds } from "./customization.js";
 
 export const CUSTOMIZATION_INPUT_MODES = [
@@ -58,6 +62,9 @@ export const CUSTOM_SIZE_OPTION_METADATA_KEY = "customization_size_option";
 export const CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY =
   "customization_size_option_value";
 
+export const CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY =
+  "customization_text_max_length";
+
 export const ARTWORK_MIN_DPI_METADATA_KEY = "artwork_min_dpi";
 
 // Reachable, unlike CUSTOM_SIZE_FALLBACK_BOUNDS: a product need not belong to
@@ -85,10 +92,15 @@ export type CustomSizeConfig = CustomSizeBounds & {
   optionValue: string | null;
 };
 
+export type CustomTextConfig = {
+  maxLength: number;
+};
+
 export type ProductCustomization = {
   isCustomizable: boolean;
   inputs: Record<CustomizationInputKey, CustomizationInputMode>;
   size: CustomSizeConfig;
+  text: CustomTextConfig;
 };
 
 const NO_INPUTS: Record<CustomizationInputKey, CustomizationInputMode> = {
@@ -104,10 +116,15 @@ const NO_CUSTOM_SIZE: CustomSizeConfig = {
   optionValue: null,
 };
 
+const FALLBACK_CUSTOM_TEXT: CustomTextConfig = {
+  maxLength: CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+};
+
 export const READY_MADE_PRODUCT: ProductCustomization = {
   isCustomizable: false,
   inputs: NO_INPUTS,
   size: NO_CUSTOM_SIZE,
+  text: FALLBACK_CUSTOM_TEXT,
 };
 
 type Metadata = Record<string, unknown> | null | undefined;
@@ -135,6 +152,31 @@ function readInches(value: unknown): number | null {
   if (typeof value !== "string" || value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+// Unlike the size bounds, a text limit has a sane fallback, so a product that
+// names none is not misconfigured — it just gets CUSTOM_TEXT_FALLBACK_MAX_LENGTH.
+// Anything above the ceiling is refused here rather than clamped: a limit the
+// schema would not store is a mistake, and quietly honouring part of it hides it.
+function readTextLimit(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isInteger(parsed)) return null;
+  if (parsed < 1 || parsed > CUSTOM_TEXT_LENGTH_CEILING) return null;
+  return parsed;
+}
+
+function readTextConfig(metadata: Metadata): CustomTextConfig {
+  return {
+    maxLength:
+      readTextLimit(metadata?.[CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY]) ??
+      CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  };
 }
 
 function readName(value: unknown): string | null {
@@ -175,7 +217,12 @@ export function resolveProductCustomization(
     inputs[input.key] = readMode(metadata?.[input.metadataKey]) ?? "off";
   }
 
-  return { isCustomizable: true, inputs, size: readSizeConfig(metadata) };
+  return {
+    isCustomizable: true,
+    inputs,
+    size: readSizeConfig(metadata),
+    text: readTextConfig(metadata),
+  };
 }
 
 export function customizationMetadataPatch(
@@ -206,6 +253,13 @@ export function customizationMetadataPatch(
     : "";
   patch[CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY] = asksForSize
     ? (size.optionValue ?? "")
+    : "";
+
+  const asksForText =
+    customization.isCustomizable && customization.inputs.customText !== "off";
+
+  patch[CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY] = asksForText
+    ? String(customization.text.maxLength)
     : "";
 
   return patch;
@@ -323,6 +377,14 @@ export function validateProductCustomization(
     published,
   });
   if (!sizeProblem.ok) return sizeProblem;
+
+  const rawTextLimit = metadata?.[CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY];
+  if (isPresent(rawTextLimit) && readTextLimit(rawTextLimit) === null) {
+    return {
+      ok: false,
+      message: `${CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY} must be a whole number of characters between 1 and ${CUSTOM_TEXT_LENGTH_CEILING}`,
+    };
+  }
 
   if (!isCustomizable && declared.length > 0) {
     return {

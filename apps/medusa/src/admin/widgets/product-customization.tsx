@@ -20,6 +20,8 @@ import type {
 import {
   CUSTOMIZATION_INPUTS,
   CUSTOMIZATION_INPUT_MODES,
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  CUSTOM_TEXT_LENGTH_CEILING,
   READY_MADE_PRODUCT,
   activeCustomizationInputs,
   customizationMetadataPatch,
@@ -71,6 +73,14 @@ const SIZE_FIELDS = [
   hint: string;
 }[];
 
+const TEXT_LIMIT_HINT = `How many characters the shopper may enter, up to ${CUSTOM_TEXT_LENGTH_CEILING}. Blank falls back to ${CUSTOM_TEXT_FALLBACK_MAX_LENGTH}. The storefront counts against this and the backend refuses anything longer.`;
+
+function readTextLimitDraft(value: string): number | null {
+  const parsed = Number(value.trim());
+  if (!Number.isInteger(parsed)) return null;
+  return parsed >= 1 && parsed <= CUSTOM_TEXT_LENGTH_CEILING ? parsed : null;
+}
+
 const ProductCustomizationWidget = ({
   data,
 }: DetailWidgetProps<AdminProduct>) => {
@@ -85,6 +95,7 @@ const ProductCustomizationWidget = ({
     optionTitle: "",
     optionValue: "",
   });
+  const [textMaxLength, setTextMaxLength] = useState("");
 
   const { data: product, isLoading } = useQuery({
     queryKey,
@@ -112,6 +123,11 @@ const ProductCustomizationWidget = ({
       optionTitle: resolved.size.optionTitle ?? "",
       optionValue: resolved.size.optionValue ?? "",
     });
+    setTextMaxLength(
+      resolved.inputs.customText === "off"
+        ? ""
+        : String(resolved.text.maxLength),
+    );
   }, [product]);
 
   const save = useMutation({
@@ -135,6 +151,11 @@ const ProductCustomizationWidget = ({
               maxInches: Number(size.maxInches),
               optionTitle: size.optionTitle.trim() || null,
               optionValue: size.optionValue.trim() || null,
+            },
+            text: {
+              maxLength:
+                readTextLimitDraft(textMaxLength) ??
+                CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
             },
           }),
         },
@@ -168,6 +189,14 @@ const ProductCustomizationWidget = ({
   const boundsAreSet = [size.minInches, size.maxInches].every(
     (bound) => Number(bound) > 0,
   );
+
+  const asksForText =
+    customization.isCustomizable && customization.inputs.customText !== "off";
+
+  const textLimitIsBroken =
+    asksForText &&
+    textMaxLength.trim() !== "" &&
+    readTextLimitDraft(textMaxLength) === null;
 
   const asksForArtwork =
     customization.isCustomizable && customization.inputs.artwork !== "off";
@@ -246,6 +275,20 @@ const ProductCustomizationWidget = ({
                 </Select>
                 <Hint>{input.description}</Hint>
 
+                {input.key === "customText" && asksForText ? (
+                  <div className="flex flex-col gap-y-2">
+                    <Label htmlFor="customization_text_max_length">
+                      Character limit
+                    </Label>
+                    <Input
+                      id="customization_text_max_length"
+                      value={textMaxLength}
+                      onChange={(event) => setTextMaxLength(event.target.value)}
+                    />
+                    <Hint>{TEXT_LIMIT_HINT}</Hint>
+                  </div>
+                ) : null}
+
                 {input.key === "dimensions" && asksForSize
                   ? SIZE_FIELDS.map((field) => (
                       <div key={field.key} className="flex flex-col gap-y-2">
@@ -272,6 +315,14 @@ const ProductCustomizationWidget = ({
           <Hint variant="error">
             A custom size needs both bounds. Publishing it like this is
             rejected.
+          </Hint>
+        ) : null}
+
+        {textLimitIsBroken ? (
+          <Hint variant="error">
+            The character limit must be a whole number between 1 and{" "}
+            {CUSTOM_TEXT_LENGTH_CEILING}. Saving it like this falls back to{" "}
+            {CUSTOM_TEXT_FALLBACK_MAX_LENGTH}.
           </Hint>
         ) : null}
 

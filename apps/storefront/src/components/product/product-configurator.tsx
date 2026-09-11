@@ -1,13 +1,14 @@
 "use client";
 
+import { ORDER_NOTES_MAX_LENGTH } from "@craftynp/types";
 import type {
   CustomDimensionErrors,
-  CustomizationInputMode,
   ProductCustomization,
 } from "@craftynp/types";
 
-import { Checkbox, TextInput, Textarea } from "../ui";
+import { Checkbox, TextInput } from "../ui";
 import { ArtworkUpload } from "./artwork-upload";
+import { CountedTextField } from "./counted-text-field";
 import {
   isCustomSizeOffered,
   usesCustomSize,
@@ -22,11 +23,9 @@ type ProductConfiguratorProps = {
   onCustomSizeChange: (useCustomSize: boolean) => void;
   artworkError: string | null;
   artworkGuidance: string;
+  customTextError: string | null;
+  orderNotesError: string | null;
 };
-
-function hint(mode: CustomizationInputMode): string | undefined {
-  return mode === "optional" ? "Optional." : undefined;
-}
 
 export function ProductConfigurator({
   customization,
@@ -36,8 +35,10 @@ export function ProductConfigurator({
   onCustomSizeChange,
   artworkError,
   artworkGuidance,
+  customTextError,
+  orderNotesError,
 }: ProductConfiguratorProps) {
-  const { inputs, size } = customization;
+  const { inputs, size, text } = customization;
   const showsCustomSize = usesCustomSize(customization, value);
 
   function patch(change: Partial<CustomizationDraft>) {
@@ -63,13 +64,14 @@ export function ProductConfigurator({
       ) : null}
 
       {inputs.customText !== "off" ? (
-        <TextInput
+        <CountedTextField
           label="Custom text"
-          description={hint(inputs.customText)}
-          isRequired={inputs.customText === "required"}
+          mode={inputs.customText}
           value={value.customText}
           onChange={(customText) => patch({ customText })}
-          maxLength={120}
+          maxLength={text.maxLength}
+          requiredMessage="Enter the text you'd like on this piece."
+          errorMessage={customTextError}
         />
       ) : null}
 
@@ -116,13 +118,15 @@ export function ProductConfigurator({
       ) : null}
 
       {inputs.orderNotes !== "off" ? (
-        <Textarea
+        <CountedTextField
           label="Order notes"
-          description={hint(inputs.orderNotes)}
-          isRequired={inputs.orderNotes === "required"}
+          mode={inputs.orderNotes}
           value={value.orderNotes}
           onChange={(orderNotes) => patch({ orderNotes })}
-          maxLength={500}
+          maxLength={ORDER_NOTES_MAX_LENGTH}
+          requiredMessage="Tell us what you'd like us to know about this piece."
+          rows={4}
+          errorMessage={orderNotesError}
         />
       ) : null}
     </div>

@@ -1,13 +1,22 @@
-import { resolveProductCustomization } from "@craftynp/types";
+import {
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
+  ORDER_NOTES_MAX_LENGTH,
+  resolveProductCustomization,
+} from "@craftynp/types";
 
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
   artworkGuidance,
   artworkResolutionError,
   customSizeErrors,
+  characterCountHint,
+  customTextProblem,
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
+  nearLimitAnnouncement,
+  orderNotesProblem,
   orderedSizeInches,
   resolveCustomSizeOption,
   type CustomizationDraft,
@@ -171,6 +180,195 @@ describe("customizationDetails", () => {
         draft({ customText: "Ellie" }),
       ),
     ).toEqual([]);
+  });
+});
+
+const AT_LIMIT = "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH);
+
+describe("customTextProblem", () => {
+  it("accepts text at exactly the limit", () => {
+    expect(
+      customTextProblem(ALL_REQUIRED, draft({ customText: AT_LIMIT })),
+    ).toBe(null);
+  });
+
+  it("measures the trimmed value, as the schema does", () => {
+    expect(
+      customTextProblem(ALL_REQUIRED, draft({ customText: `  ${AT_LIMIT}  ` })),
+    ).toBe(null);
+  });
+
+  it("says how far over the limit the text runs, and what to do about it", () => {
+    expect(
+      customTextProblem(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}abc` })),
+    ).toEqual({
+      message: `Shorten this to ${CUSTOM_TEXT_FALLBACK_MAX_LENGTH} characters or fewer \u2014 3 characters over.`,
+      clause: "shorten your custom text",
+    });
+  });
+
+  it("counts one character over in the singular", () => {
+    expect(
+      customTextProblem(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}a` }))
+        ?.message,
+    ).toContain("1 character over");
+  });
+
+  // The field is a textarea, so Enter now inserts a newline. Custom text is
+  // one line — and "shorten" would be the wrong instruction for this.
+  it("refuses a line break, and says so rather than saying shorten", () => {
+    expect(
+      customTextProblem(ALL_REQUIRED, draft({ customText: "Happy\nBirthday" })),
+    ).toEqual({
+      message: "Keep this to one line.",
+      clause: "keep your custom text to one line",
+    });
+  });
+
+  it("refuses a carriage return the same way", () => {
+    expect(
+      customTextProblem(
+        ALL_REQUIRED,
+        draft({ customText: "Happy\r\nBirthday" }),
+      )?.message,
+    ).toBe("Keep this to one line.");
+  });
+
+  it("holds the shopper to the limit the owner configured", () => {
+    const shortLimit = resolveProductCustomization({
+      customizable: "true",
+      customization_text: "required",
+      [CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY]: "20",
+    });
+
+    expect(
+      customTextProblem(shortLimit, draft({ customText: "a".repeat(20) })),
+    ).toBe(null);
+    expect(
+      customTextProblem(shortLimit, draft({ customText: "a".repeat(21) }))
+        ?.message,
+    ).toBe("Shorten this to 20 characters or fewer \u2014 1 character over.");
+  });
+
+  it("stays quiet on a product that never asks for text", () => {
+    const notesOnly = resolveProductCustomization({
+      customizable: "true",
+      customization_notes: "optional",
+    });
+
+    expect(
+      customTextProblem(notesOnly, draft({ customText: `${AT_LIMIT}a` })),
+    ).toBe(null);
+  });
+});
+
+describe("characterCountHint", () => {
+  const LIMIT = CUSTOM_TEXT_FALLBACK_MAX_LENGTH;
+
+  it("states the limit before the shopper has typed anything", () => {
+    expect(characterCountHint("required", "", LIMIT)).toBe(
+      `Up to ${LIMIT} characters.`,
+    );
+  });
+
+  it("counts what is used once there is text", () => {
+    expect(characterCountHint("required", "Ellie", LIMIT)).toBe(
+      `5 of ${LIMIT} characters used.`,
+    );
+  });
+
+  it("keeps counting past the limit rather than stopping at it", () => {
+    expect(characterCountHint("required", `${AT_LIMIT}ab`, LIMIT)).toBe(
+      `${LIMIT + 2} of ${LIMIT} characters used.`,
+    );
+  });
+
+  it("counts an emoji as the one character the shopper sees", () => {
+    expect(characterCountHint("required", "\u{1F44D}\u{1F3FD}", LIMIT)).toBe(
+      `1 of ${LIMIT} characters used.`,
+    );
+  });
+
+  it("marks an optional input as optional", () => {
+    expect(characterCountHint("optional", "", LIMIT)).toBe(
+      `Optional. Up to ${LIMIT} characters.`,
+    );
+  });
+
+  it("counts against the product's own limit", () => {
+    expect(characterCountHint("required", "Ellie", 40)).toBe(
+      "5 of 40 characters used.",
+    );
+  });
+});
+
+describe("nearLimitAnnouncement", () => {
+  it("says nothing while the limit is far off", () => {
+    expect(nearLimitAnnouncement("Ellie", 120)).toBe("");
+  });
+
+  it("warns once the shopper is within reach of it", () => {
+    expect(nearLimitAnnouncement("a".repeat(105), 120)).toBe(
+      "You are close to the 120-character limit.",
+    );
+  });
+
+  it("does not repeat itself for the error to say", () => {
+    expect(nearLimitAnnouncement("a".repeat(121), 120)).toBe("");
+  });
+
+  // Twenty characters of warning on a 15-character limit would fire on the
+  // first keystroke, which is a warning about nothing.
+  it("scales its threshold to a small limit", () => {
+    expect(nearLimitAnnouncement("a".repeat(5), 15)).toBe("");
+    expect(nearLimitAnnouncement("a".repeat(13), 15)).toBe(
+      "You are close to the 15-character limit.",
+    );
+  });
+});
+
+describe("orderNotesProblem", () => {
+  it("holds notes to the shop-wide limit", () => {
+    expect(
+      orderNotesProblem(
+        ALL_REQUIRED,
+        draft({ orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH) }),
+      ),
+    ).toBe(null);
+    expect(
+      orderNotesProblem(
+        ALL_REQUIRED,
+        draft({ orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH + 2) }),
+      ),
+    ).toEqual({
+      message: expect.stringContaining("2 characters over"),
+      clause: "shorten your order notes",
+    });
+  });
+
+  // Notes are instructions to the maker, not something made into the piece,
+  // so a shopper may lay them out over as many lines as they want.
+  it("lets notes run to several lines", () => {
+    expect(
+      orderNotesProblem(
+        ALL_REQUIRED,
+        draft({ orderNotes: "Matte finish\nGift wrap, please" }),
+      ),
+    ).toBe(null);
+  });
+
+  it("stays quiet on a product that never asks for notes", () => {
+    const textOnly = resolveProductCustomization({
+      customizable: "true",
+      customization_text: "optional",
+    });
+
+    expect(
+      orderNotesProblem(
+        textOnly,
+        draft({ orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH + 2) }),
+      ),
+    ).toBe(null);
   });
 });
 

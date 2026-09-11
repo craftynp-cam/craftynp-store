@@ -62,10 +62,25 @@ tax provider), `notification-resend`, `auth-auth0`, and
   is unreachable on a live product and the constant is not a hidden policy.
   `validateCustomization` (`src/lib/validate-customization.ts`) takes those
   bounds as an argument rather than a constant, so the message it throws names
-  the same range the shopper was shown. It takes the artwork resolution floor
-  and the ordered width the same way, for the same reason. It still has no
-  production caller; CNP-45 wires the real `LineItemCustomization` payload
-  through.
+  the same range the shopper was shown. It takes the artwork resolution floor,
+  the ordered width and the custom text limit the same way, for the same
+  reason. It still has no production caller; CNP-45 wires the real
+  `LineItemCustomization` payload through.
+- **Custom text carries a fifth key, `customization_text_max_length`**, written
+  by the same widget and patch — how many characters that product allows.
+  It splits the same way the size bounds do, but the halves sit differently:
+  `resolveProductCustomization` falls back to
+  `CUSTOM_TEXT_FALLBACK_MAX_LENGTH` (120) on anything it cannot read, and
+  `validateProductCustomization` refuses only a value it could not honour —
+  a non-integer, or one past `CUSTOM_TEXT_LENGTH_CEILING` (1,000), which is
+  what `customTextSchema` will store. **It does not insist the key be set**,
+  because unlike a size bound the fallback is a sane answer rather than a
+  hidden policy, so a product may publish without naming one. A limit past the
+  ceiling is refused rather than clamped: honouring part of it would hide the
+  mistake. `checkTextLength` in `@craftynp/types` holds the comparison and the
+  message, so the storefront's counter and this rejection cannot disagree —
+  and both count graphemes through `textLength`, not UTF-16 code units, so an
+  emoji is one character on both sides.
 - **`tsconfig.json` must keep `medusa-config.ts` in `include`, with `rootDir`
   at `./`.** `medusa build` emits exactly `tsConfig.fileNames`, so scoping the
   root to `src` leaves the built `.medusa/server` with no `medusa-config.js` and

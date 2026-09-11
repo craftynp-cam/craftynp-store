@@ -1,6 +1,11 @@
 import {
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  CUSTOM_TEXT_LENGTH_CEILING,
+} from "./customization.js";
+import {
   CUSTOMIZATION_INPUTS,
   CUSTOM_SIZE_FALLBACK_BOUNDS,
+  CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
   READY_MADE_PRODUCT,
   DEFAULT_ARTWORK_MIN_DPI,
   activeCustomizationInputs,
@@ -35,6 +40,8 @@ const NO_SIZE_CONFIG = {
   optionValue: null,
 };
 
+const FALLBACK_TEXT_CONFIG = { maxLength: CUSTOM_TEXT_FALLBACK_MAX_LENGTH };
+
 describe("resolveProductCustomization", () => {
   it("reads a declaration off product metadata", () => {
     expect(resolveProductCustomization(CUSTOM)).toEqual({
@@ -46,6 +53,7 @@ describe("resolveProductCustomization", () => {
         orderNotes: "off",
       },
       size: NO_SIZE_CONFIG,
+      text: FALLBACK_TEXT_CONFIG,
     });
   });
 
@@ -105,6 +113,32 @@ describe("resolveProductCustomization", () => {
     ).toMatchObject({ optionTitle: null, optionValue: null });
   });
 
+  it("reads the character limit the owner configured", () => {
+    expect(
+      resolveProductCustomization({
+        ...CUSTOM,
+        [CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY]: "40",
+      }).text,
+    ).toEqual({ maxLength: 40 });
+  });
+
+  it.each([
+    ["nothing at all", undefined],
+    ["a number that is not whole", "40.5"],
+    ["zero", "0"],
+    ["something that is not a number", "forty"],
+    // Refused rather than clamped: the schema would not store it, and
+    // honouring part of it would hide the mistake.
+    ["a limit past the ceiling", String(CUSTOM_TEXT_LENGTH_CEILING + 1)],
+  ])("falls back to the shared limit on %s", (_label, raw) => {
+    expect(
+      resolveProductCustomization({
+        ...CUSTOM,
+        [CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY]: raw,
+      }).text,
+    ).toEqual(FALLBACK_TEXT_CONFIG);
+  });
+
   it("drops a mode it does not understand rather than throwing", () => {
     expect(
       resolveProductCustomization({
@@ -129,6 +163,7 @@ describe("customizationMetadataPatch", () => {
       customization_size_max_inches: "",
       customization_size_option: "",
       customization_size_option_value: "",
+      customization_text_max_length: String(CUSTOM_TEXT_FALLBACK_MAX_LENGTH),
     });
   });
 
@@ -158,9 +193,11 @@ describe("customizationMetadataPatch", () => {
         optionTitle: "Size",
         optionValue: "Custom",
       },
+      text: { maxLength: 40 },
     });
 
     expect(patch.customizable).toBe("false");
+    expect(patch[CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY]).toBe("");
     for (const input of CUSTOMIZATION_INPUTS) {
       expect(patch[input.metadataKey]).toBe("off");
     }
@@ -237,6 +274,26 @@ describe("validateProductCustomization", () => {
       ok: false,
       message: expect.stringContaining("orderNotes"),
     });
+  });
+
+  it("rejects a character limit the schema could not store", () => {
+    const result = validateProductCustomization(
+      {
+        ...CUSTOM,
+        [CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY]: String(
+          CUSTOM_TEXT_LENGTH_CEILING + 1,
+        ),
+      },
+      { published: true },
+    );
+
+    expect(result.ok).toBe(false);
+  });
+
+  it("accepts a product that names no character limit of its own", () => {
+    expect(validateProductCustomization(CUSTOM, { published: true }).ok).toBe(
+      true,
+    );
   });
 
   it("rejects publishing a customizable product that asks for nothing", () => {
