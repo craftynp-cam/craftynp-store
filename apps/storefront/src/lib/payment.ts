@@ -15,8 +15,15 @@ export function isReadyForPayment(
 }
 
 export function paymentPrepareKey(draft: CheckoutDraft, cart: Cart): string {
+  // Dimensions are part of a line's identity here for taxQuoteKey's reason:
+  // every custom size shares one variant, so two different sizes of the same
+  // variant and quantity are the same `id:quantity` and would not re-prepare —
+  // leaving the shopper charged the PaymentIntent minted for the old size.
   const items = [...cart.lines]
-    .map((line) => `${line.id}:${line.quantity}`)
+    .map(
+      (line) =>
+        `${line.id}:${line.quantity}:${line.dimensions?.widthInches ?? ""}x${line.dimensions?.heightInches ?? ""}`,
+    )
     .sort()
     .join(",");
 
