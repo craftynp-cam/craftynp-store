@@ -1,8 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import {
-  ContainerRegistrationKeys,
-  QueryContext,
-} from "@medusajs/framework/utils";
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type { TaxQuoteRequest } from "@craftynp/types";
 
@@ -17,14 +14,10 @@ import {
   verifyShippingQuote,
 } from "../../../lib/shipping-quote";
 import { signTaxQuote, taxSignature } from "../../../lib/tax-quote";
+import { resolveLinePrice } from "../../../lib/resolve-line-price";
+import { pricedVariantQuery } from "../price-quote/route";
 
-type VariantWithPrice = {
-  id: string;
-  calculated_price?: {
-    calculated_amount: number | null;
-    currency_code: string | null;
-  } | null;
-};
+type Region = { id: string; currency_code: string };
 
 type RegionWithCountries = {
   id: string;
@@ -55,7 +48,6 @@ export async function POST(
     req.scope.resolve<StripeTaxModuleService>(STRIPE_TAX_MODULE);
 
   const { destination, items, shippingQuoteToken } = req.validatedBody;
-  const variantIds = items.map((item) => item.variantId);
 
   const shippingCartSig = cartSignature({
     items,
@@ -77,7 +69,7 @@ export async function POST(
   }
 
   let region: RegionWithCountries | null;
-  let variants: unknown[];
+  let priced: Awaited<ReturnType<typeof resolveLinePrice>>[];
 
   try {
     const { data: regions } = await query.graph({
@@ -100,18 +92,15 @@ export async function POST(
         .json({ error: "tax_unavailable", reason: "misconfigured" });
     }
 
-    const variantsResult = await query.graph({
-      entity: "variant",
-      fields: ["id", "calculated_price.calculated_amount"],
-      filters: { id: variantIds },
-      context: {
-        calculated_price: QueryContext({
-          region_id: region.id,
-          currency_code: region.currency_code,
+    priced = await Promise.all(
+      items.map((item) =>
+        resolveLinePrice(pricedVariantQuery(query, region as Region), {
+          variantId: item.variantId,
+          quantity: item.quantity,
+          dimensions: item.dimensions,
         }),
-      },
-    });
-    variants = variantsResult.data;
+      ),
+    );
   } catch (error) {
     logger.error(
       `${STRIPE_TAX_UNAVAILABLE_LOG_TAG} reason=misconfigured postal=${destination.postalCode} error=${error instanceof Error ? error.message : String(error)}`,
@@ -121,38 +110,42 @@ export async function POST(
       .json({ error: "tax_unavailable", reason: "misconfigured" });
   }
 
-  const variantsById = new Map(
-    (variants as VariantWithPrice[]).map((variant) => [variant.id, variant]),
-  );
+  const unknownVariantIds = items
+    .filter((item, index) => {
+      const result = priced[index];
+      return result && !result.ok && result.reason === "unknown_variant";
+    })
+    .map((item) => item.variantId);
 
-  const unknownVariantIds = variantIds.filter((id) => !variantsById.has(id));
   if (unknownVariantIds.length > 0) {
     return res.status(400).json({
       error: "unknown_variant",
       variantIds: unknownVariantIds,
+      message: `unknown_variant:${unknownVariantIds.join(",")}`,
     });
   }
 
-  const missingPriceIds: string[] = [];
-  const lineItems = items.map((item) => {
-    const variant = variantsById.get(item.variantId);
-    const amount = variant?.calculated_price?.calculated_amount;
-    if (typeof amount !== "number") missingPriceIds.push(item.variantId);
-    return {
-      reference: item.variantId,
-      amount: amount ?? 0,
-      quantity: item.quantity,
-    };
-  });
+  const unpricedIds = items
+    .filter((_item, index) => priced[index]?.ok !== true)
+    .map((item) => item.variantId);
 
-  if (missingPriceIds.length > 0) {
+  if (unpricedIds.length > 0) {
     logger.error(
-      `${STRIPE_TAX_UNAVAILABLE_LOG_TAG} reason=missing_price variants=${missingPriceIds.join(",")} postal=${destination.postalCode}`,
+      `${STRIPE_TAX_UNAVAILABLE_LOG_TAG} reason=missing_price variants=${unpricedIds.join(",")} postal=${destination.postalCode}`,
     );
     return res
       .status(502)
       .json({ error: "tax_unavailable", reason: "misconfigured" });
   }
+
+  const lineItems = items.map((item, index) => {
+    const result = priced[index];
+    return {
+      reference: item.variantId,
+      amount: result?.ok ? result.price.unitAmount : 0,
+      quantity: item.quantity,
+    };
+  });
 
   const startedAt = Date.now();
 

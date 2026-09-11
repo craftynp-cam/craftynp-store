@@ -85,7 +85,11 @@ export {
   shippingRateSchema,
   shippingRatesResponseSchema,
 } from "./shipping-rates.js";
-export { taxQuoteRequestSchema, taxQuoteResponseSchema } from "./tax.js";
+export {
+  taxQuoteItemSchema,
+  taxQuoteRequestSchema,
+  taxQuoteResponseSchema,
+} from "./tax.js";
 export {
   priceQuoteRequestSchema,
   priceQuoteResponseSchema,
@@ -204,7 +208,11 @@ export type {
 } from "./shipping-rates.js";
 export type { AreaPriceInput } from "./area-price.js";
 export type { PriceQuoteRequest, PriceQuoteResponse } from "./price-quote.js";
-export type { TaxQuoteRequest, TaxQuoteResponse } from "./tax.js";
+export type {
+  TaxQuoteItem,
+  TaxQuoteRequest,
+  TaxQuoteResponse,
+} from "./tax.js";
 export type {
   CheckoutAddress,
   CheckoutCompleteRequest,

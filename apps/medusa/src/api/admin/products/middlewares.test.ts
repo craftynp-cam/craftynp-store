@@ -15,6 +15,8 @@ const STORED = {
     customization_size: "optional",
     customization_size_min_inches: "2",
     customization_size_max_inches: "48",
+    customization_size_rate_per_sq_inch: "0.055",
+    customization_size_price_floor: "4",
   },
   weight: 900,
   length: 45,
@@ -94,6 +96,15 @@ describe("validateProductUpdate", () => {
     });
 
     expect(error).toBeUndefined();
+  });
+
+  it("refuses to publish a custom size whose pricing was cleared", async () => {
+    const { error } = await runMiddleware({
+      metadata: { customization_size_rate_per_sq_inch: "" },
+    });
+
+    expect(error).toBeInstanceOf(MedusaError);
+    expect(String(error)).toMatch(/customization_size_rate_per_sq_inch/);
   });
 
   it("repairs a product whose stored declaration is already broken", async () => {

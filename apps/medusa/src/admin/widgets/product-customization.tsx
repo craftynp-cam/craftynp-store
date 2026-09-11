@@ -47,6 +47,8 @@ type SizeDraft = {
   maxInches: string;
   optionTitle: string;
   optionValue: string;
+  ratePerSquareInch: string;
+  priceFloor: string;
 };
 
 const SIZE_FIELDS = [
@@ -70,6 +72,16 @@ const SIZE_FIELDS = [
     label: "Custom option value",
     hint: "The value on that group the storefront selects while the shopper is entering their own size.",
   },
+  {
+    key: "ratePerSquareInch",
+    label: "Price per square inch",
+    hint: "Multiplied by the area and by the chosen variant's own price, so a premium finish stays a premium. Required before a custom-size product can be published.",
+  },
+  {
+    key: "priceFloor",
+    label: "Lowest price for a custom size",
+    hint: "The least you will make one for. A small size or a volume discount can never price below this.",
+  },
 ] as const satisfies readonly {
   key: keyof SizeDraft;
   label: string;
@@ -82,6 +94,13 @@ function readTextLimitDraft(value: string): number | null {
   const parsed = Number(value.trim());
   if (!Number.isInteger(parsed)) return null;
   return parsed >= 1 && parsed <= CUSTOM_TEXT_LENGTH_CEILING ? parsed : null;
+}
+
+function readRateDraft(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function readOrderMinimumDraft(value: string): number | null {
@@ -103,6 +122,8 @@ const ProductCustomizationWidget = ({
     maxInches: "",
     optionTitle: "",
     optionValue: "",
+    ratePerSquareInch: "",
+    priceFloor: "",
   });
   const [textMaxLength, setTextMaxLength] = useState("");
   const [orderMinimum, setOrderMinimum] = useState("");
@@ -132,6 +153,14 @@ const ProductCustomizationWidget = ({
           : String(resolved.size.maxInches),
       optionTitle: resolved.size.optionTitle ?? "",
       optionValue: resolved.size.optionValue ?? "",
+      ratePerSquareInch:
+        resolved.size.ratePerSquareInch === null
+          ? ""
+          : String(resolved.size.ratePerSquareInch),
+      priceFloor:
+        resolved.size.priceFloor === null
+          ? ""
+          : String(resolved.size.priceFloor),
     });
     setTextMaxLength(
       resolved.inputs.customText === "off"
@@ -166,6 +195,8 @@ const ProductCustomizationWidget = ({
               maxInches: Number(size.maxInches),
               optionTitle: size.optionTitle.trim() || null,
               optionValue: size.optionValue.trim() || null,
+              ratePerSquareInch: readRateDraft(size.ratePerSquareInch),
+              priceFloor: readRateDraft(size.priceFloor),
             },
             text: {
               maxLength:
@@ -205,6 +236,10 @@ const ProductCustomizationWidget = ({
   const boundsAreSet = [size.minInches, size.maxInches].every(
     (bound) => Number(bound) > 0,
   );
+
+  const pricingIsSet =
+    readRateDraft(size.ratePerSquareInch) !== null &&
+    readRateDraft(size.priceFloor) !== null;
 
   const asksForText =
     customization.isCustomizable && customization.inputs.customText !== "off";
@@ -356,6 +391,14 @@ const ProductCustomizationWidget = ({
         {asksForSize && !boundsAreSet ? (
           <Hint variant="error">
             A custom size needs both bounds. Publishing it like this is
+            rejected.
+          </Hint>
+        ) : null}
+
+        {asksForSize && !pricingIsSet ? (
+          <Hint variant="error">
+            A custom size needs a price per square inch and a lowest price.
+            There is no default to fall back on, so publishing it like this is
             rejected.
           </Hint>
         ) : null}
