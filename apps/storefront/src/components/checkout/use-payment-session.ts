@@ -96,6 +96,8 @@ export function usePaymentSession(
             quantity: line.quantity,
             isCustomizable: line.isCustomizable,
             details: line.details,
+            dimensions: line.dimensions,
+            priceQuoteToken: line.priceQuoteToken,
           })),
           shippingRateId: latestDraft.shippingRateId,
           shippingServiceCode: latestDraft.shippingServiceCode,

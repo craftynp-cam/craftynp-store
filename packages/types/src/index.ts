@@ -1,3 +1,4 @@
+export { areaUnitPrice } from "./area-price.js";
 export {
   ARTWORK_ACCEPT,
   ARTWORK_ACCEPTED_LABEL,
@@ -41,10 +42,12 @@ export {
   CUSTOMIZATION_INPUTS,
   CUSTOMIZATION_INPUT_MODES,
   CUSTOM_SIZE_FALLBACK_BOUNDS,
+  CUSTOM_SIZE_FLOOR_METADATA_KEY,
   CUSTOM_SIZE_MAX_METADATA_KEY,
   CUSTOM_SIZE_MIN_METADATA_KEY,
   CUSTOM_SIZE_OPTION_METADATA_KEY,
   CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY,
+  CUSTOM_SIZE_RATE_METADATA_KEY,
   CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
   DEFAULT_ARTWORK_MIN_DPI,
   DEFAULT_MIN_ORDER_QUANTITY,
@@ -82,7 +85,15 @@ export {
   shippingRateSchema,
   shippingRatesResponseSchema,
 } from "./shipping-rates.js";
-export { taxQuoteRequestSchema, taxQuoteResponseSchema } from "./tax.js";
+export {
+  taxQuoteItemSchema,
+  taxQuoteRequestSchema,
+  taxQuoteResponseSchema,
+} from "./tax.js";
+export {
+  priceQuoteRequestSchema,
+  priceQuoteResponseSchema,
+} from "./price-quote.js";
 export {
   checkoutAddressSchema,
   checkoutCompleteRequestSchema,
@@ -195,7 +206,9 @@ export type {
   ShippingRateRequest,
   ShippingRatesResponse,
 } from "./shipping-rates.js";
-export type { TaxQuoteRequest, TaxQuoteResponse } from "./tax.js";
+export type { AreaPriceInput } from "./area-price.js";
+export type { PriceQuoteRequest, PriceQuoteResponse } from "./price-quote.js";
+export type { TaxQuoteItem, TaxQuoteRequest, TaxQuoteResponse } from "./tax.js";
 export type {
   CheckoutAddress,
   CheckoutCompleteRequest,

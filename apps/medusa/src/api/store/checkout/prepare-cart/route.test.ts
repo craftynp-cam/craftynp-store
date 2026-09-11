@@ -7,6 +7,7 @@ import {
   signShippingQuote,
 } from "../../../../lib/shipping-quote";
 import { signTaxQuote, taxSignature } from "../../../../lib/tax-quote";
+import { priceSignature, signPriceQuote } from "../../../../lib/price-quote";
 
 const mockCreateCartRun = jest.fn();
 const mockUpdateCartRun = jest.fn();
@@ -28,6 +29,7 @@ import { POST } from "./route";
 
 const SHIPPING_SECRET = "shipping-secret";
 const TAX_SECRET = "tax-secret";
+const PRICE_SECRET = "price-secret";
 const CART_ID = "cart_01";
 const SHIPPING_AMOUNT = 8.45;
 
@@ -44,6 +46,38 @@ const ADDRESS = {
 };
 
 const ITEMS = [{ variantId: "variant_01", quantity: 2 }];
+
+const AREA_METADATA = {
+  customizable: "true",
+  customization_size: "optional",
+  customization_size_min_inches: "2",
+  customization_size_max_inches: "48",
+  customization_size_rate_per_sq_inch: "0.055",
+  customization_size_price_floor: "4",
+};
+
+const DIMENSIONS = { widthInches: 8, heightInches: 10 };
+
+// 1.15 * 0.055 * 80, with no tier in play since the mock prices every quantity
+// the same.
+const AREA_UNIT_PRICE = 5.06;
+
+function priceQuoteToken(overrides: { quantity?: number } = {}) {
+  return signPriceQuote(
+    {
+      amt: AREA_UNIT_PRICE,
+      cur: "usd",
+      ps: priceSignature({
+        variantId: "variant_01",
+        quantity: overrides.quantity ?? 2,
+        widthInches: DIMENSIONS.widthInches,
+        heightInches: DIMENSIONS.heightInches,
+      }),
+      exp: Date.now() + 60_000,
+    },
+    PRICE_SECRET,
+  );
+}
 
 function buildBody(
   overrides: Partial<CheckoutPrepareRequest> = {},
@@ -102,9 +136,18 @@ type PaymentSession = {
   data: { client_secret: string };
 };
 
+type CartItemRow = {
+  variant_id: string;
+  quantity: number;
+  unit_price?: number;
+  is_custom_price?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
 type CartRow = {
   id: string;
   completed_at?: string | null;
+  items?: CartItemRow[];
   currency_code: string;
   item_subtotal: number;
   shipping_subtotal: number;
@@ -122,6 +165,9 @@ function cartRow(overrides: Partial<CartRow> = {}): CartRow {
   return {
     id: CART_ID,
     completed_at: null,
+    // Matches ITEMS, because a cart this route created always does. Leave it
+    // off and every reuse test silently exercises the fresh-cart branch.
+    items: [{ variant_id: "variant_01", quantity: 2 }],
     currency_code: "usd",
     item_subtotal: 100,
     shipping_subtotal: SHIPPING_AMOUNT,
@@ -179,6 +225,21 @@ function buildHarness(options: {
     if (entity === "shipping_option") {
       return { data: [{ id: "so_01" }] };
     }
+    if (entity === "variant") {
+      return {
+        data: [
+          {
+            id: "variant_01",
+            product: { metadata: AREA_METADATA },
+            calculated_price: {
+              calculated_amount: 1.15,
+              original_amount: 1.15,
+              currency_code: "usd",
+            },
+          },
+        ],
+      };
+    }
     if (!mutated) {
       return { data: options.before ? [options.before] : [] };
     }
@@ -208,12 +269,155 @@ beforeEach(() => {
   jest.clearAllMocks();
   process.env.SHIPPING_QUOTE_SECRET = SHIPPING_SECRET;
   process.env.TAX_QUOTE_SECRET = TAX_SECRET;
+  process.env.PRICE_QUOTE_SECRET = PRICE_SECRET;
 
   mockCreatePaymentCollectionRun.mockResolvedValue({
     result: { id: "paycol_01" },
   });
   mockCreatePaymentSessionsRun.mockResolvedValue({
     result: { id: "payses_new", data: { client_secret: "pi_new_secret" } },
+  });
+});
+
+describe("POST /store/checkout/prepare-cart area pricing", () => {
+  const areaItems = [
+    {
+      variantId: "variant_01",
+      quantity: 2,
+      dimensions: DIMENSIONS,
+      priceQuoteToken: priceQuoteToken(),
+    },
+  ];
+
+  it("re-derives the area price and sets it on the line itself", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({ items: areaItems }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0]).toMatchObject({
+      variant_id: "variant_01",
+      quantity: 2,
+      unit_price: AREA_UNIT_PRICE,
+      metadata: expect.objectContaining({ dimensions: DIMENSIONS }),
+    });
+  });
+
+  it("prices from the product, not from the amount the token carries", async () => {
+    // A validly-signed token naming a penny. The signature only says which
+    // line was quoted; the amount charged is the one re-derived here, so a
+    // token minted against a rate the owner has since raised cannot hold.
+    const stale = signPriceQuote(
+      {
+        amt: 0.01,
+        cur: "usd",
+        ps: priceSignature({
+          variantId: "variant_01",
+          quantity: 2,
+          widthInches: DIMENSIONS.widthInches,
+          heightInches: DIMENSIONS.heightInches,
+        }),
+        exp: Date.now() + 60_000,
+      },
+      PRICE_SECRET,
+    );
+
+    const { req, res } = buildHarness({
+      body: buildBody({
+        items: [{ ...areaItems[0]!, priceQuoteToken: stale }],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0].unit_price).toBe(AREA_UNIT_PRICE);
+  });
+
+  it("leaves an ordinary line for Medusa to price, so its tier still applies", async () => {
+    const { req, res } = buildHarness({ body: buildBody(), before: null });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0]).not.toHaveProperty("unit_price");
+  });
+
+  it("refuses a quote replayed against a different quantity", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            ...areaItems[0]!,
+            priceQuoteToken: priceQuoteToken({ quantity: 99 }),
+          },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "invalid_price_quote" }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses an area-priced line that carries no quote at all", async () => {
+    const { req, res, status } = buildHarness({
+      body: buildBody({
+        items: [
+          { variantId: "variant_01", quantity: 2, dimensions: DIMENSIONS },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses dimensions outside the product's own bounds", async () => {
+    const outOfBounds = { widthInches: 8, heightInches: 500 };
+    const { req, res, status } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            dimensions: outOfBounds,
+            priceQuoteToken: signPriceQuote(
+              {
+                amt: 1,
+                cur: "usd",
+                ps: priceSignature({
+                  variantId: "variant_01",
+                  quantity: 2,
+                  widthInches: outOfBounds.widthInches,
+                  heightInches: outOfBounds.heightInches,
+                }),
+                exp: Date.now() + 60_000,
+              },
+              PRICE_SECRET,
+            ),
+          },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 });
 
@@ -340,6 +544,129 @@ describe("POST /store/checkout/prepare-cart", () => {
         ],
       },
     });
+  });
+
+  it("reuses the cart while only the address has changed", async () => {
+    // This is what reuse is for: an address edit keeps the shopper's
+    // PaymentIntent alive rather than minting a new one on every keystroke.
+    const { req, res } = buildHarness({
+      body: buildBody({ cartId: CART_ID }),
+      before: cartRow(),
+    });
+
+    await POST(req, res);
+
+    expect(mockUpdateCartRun).toHaveBeenCalled();
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh cart when the line items no longer match", async () => {
+    // updateCartWorkflow cannot change line items, so reusing here would
+    // prepare — and charge — the configuration the cart was created with.
+    const { req, res } = buildHarness({
+      body: buildBody({ cartId: CART_ID }),
+      before: cartRow({
+        items: [{ variant_id: "variant_01", quantity: 5 }],
+      }),
+    });
+
+    await POST(req, res);
+
+    expect(mockCreateCartRun).toHaveBeenCalled();
+    expect(mockUpdateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh cart when only the custom size changed", async () => {
+    // Every custom size shares one variant, so the variant and quantity are
+    // unchanged and the dimensions are the only thing that says otherwise.
+    const areaItem = {
+      variantId: "variant_01",
+      quantity: 2,
+      dimensions: DIMENSIONS,
+      priceQuoteToken: priceQuoteToken(),
+    };
+
+    const { req, res } = buildHarness({
+      body: buildBody({ cartId: CART_ID, items: [areaItem] }),
+      before: cartRow({
+        items: [
+          {
+            variant_id: "variant_01",
+            quantity: 2,
+            unit_price: AREA_UNIT_PRICE,
+            is_custom_price: true,
+            metadata: {
+              dimensions: { widthInches: 12, heightInches: 16 },
+            },
+          },
+        ],
+      }),
+    });
+
+    await POST(req, res);
+
+    expect(mockCreateCartRun).toHaveBeenCalled();
+    expect(mockUpdateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("reuses a cart whose area-priced line is unchanged", async () => {
+    const areaItem = {
+      variantId: "variant_01",
+      quantity: 2,
+      dimensions: DIMENSIONS,
+      priceQuoteToken: priceQuoteToken(),
+    };
+
+    const { req, res } = buildHarness({
+      body: buildBody({ cartId: CART_ID, items: [areaItem] }),
+      before: cartRow({
+        items: [
+          {
+            variant_id: "variant_01",
+            quantity: 2,
+            unit_price: AREA_UNIT_PRICE,
+            is_custom_price: true,
+            metadata: { dimensions: DIMENSIONS },
+          },
+        ],
+      }),
+    });
+
+    await POST(req, res);
+
+    expect(mockUpdateCartRun).toHaveBeenCalled();
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh cart when the owner has changed the rate since", async () => {
+    // Same variant, quantity and size, but the price this backend now derives
+    // differs from the one frozen on the line — so the cart is out of date.
+    const areaItem = {
+      variantId: "variant_01",
+      quantity: 2,
+      dimensions: DIMENSIONS,
+      priceQuoteToken: priceQuoteToken(),
+    };
+
+    const { req, res } = buildHarness({
+      body: buildBody({ cartId: CART_ID, items: [areaItem] }),
+      before: cartRow({
+        items: [
+          {
+            variant_id: "variant_01",
+            quantity: 2,
+            unit_price: 1.23,
+            is_custom_price: true,
+            metadata: { dimensions: DIMENSIONS },
+          },
+        ],
+      }),
+    });
+
+    await POST(req, res);
+
+    expect(mockCreateCartRun).toHaveBeenCalled();
+    expect(mockUpdateCartRun).not.toHaveBeenCalled();
   });
 
   it("starts a fresh cart when the draft's cart was already completed", async () => {

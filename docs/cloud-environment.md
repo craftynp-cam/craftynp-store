@@ -80,7 +80,8 @@ laptop. It leaves the session with:
   fails without the file and the placeholders are enough for it.
 - `apps/medusa/.env`, copied from `.env.example` with `JWT_SECRET`,
   `COOKIE_SECRET`, `MFA_ENCRYPTION_KEY`, `SHIPPING_QUOTE_SECRET`,
-  `TAX_QUOTE_SECRET` and `ORDER_ACCESS_SECRET` replaced by generated random
+  `TAX_QUOTE_SECRET`, `PRICE_QUOTE_SECRET` and `ORDER_ACCESS_SECRET` replaced
+  by generated random
   values. Both files are gitignored.
 - `pnpm install --frozen-lockfile`, then `pnpm run build`. The build is not
   optional: turbo's `typecheck` task depends on `^build` — upstream packages

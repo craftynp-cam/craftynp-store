@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { customDimensionsSchema } from "./customization.js";
 import { shippingRateItemSchema } from "./shipping-rates.js";
 
 export const checkoutAddressSchema = z.object({
@@ -26,6 +27,11 @@ export type CheckoutLineItemDetail = z.infer<
 export const checkoutLineItemSchema = shippingRateItemSchema.extend({
   isCustomizable: z.boolean().optional(),
   details: z.array(checkoutLineItemDetailSchema).optional(),
+  // Both carried so prepare-cart can re-derive an area price rather than
+  // trusting one. Neither reaches cartSignature or taxSignature, which
+  // canonicalise variantId and quantity alone.
+  dimensions: customDimensionsSchema.optional(),
+  priceQuoteToken: z.string().min(1).optional(),
 });
 export type CheckoutLineItem = z.infer<typeof checkoutLineItemSchema>;
 

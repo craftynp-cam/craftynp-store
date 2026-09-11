@@ -15,6 +15,11 @@ import {
   verifyShippingQuote,
 } from "../../../../lib/shipping-quote";
 import { taxSignature, verifyTaxQuote } from "../../../../lib/tax-quote";
+import { describeError } from "../../../../lib/describe-error";
+import { toAmount } from "../../../../lib/money";
+import { priceSignature, verifyPriceQuote } from "../../../../lib/price-quote";
+import { resolveLinePrice } from "../../../../lib/resolve-line-price";
+import { pricedVariantQuery } from "../../price-quote/route";
 
 const STRIPE_PAYMENT_PROVIDER_ID = "pp_stripe_stripe";
 const LIVE_SHIPPING_OPTION_NAME = "Live USPS Rate";
@@ -50,6 +55,45 @@ function toCartAddress(address: CheckoutAddress) {
     postal_code: address.postalCode,
     country_code: address.countryCode.toLowerCase(),
   };
+}
+
+type CartItemRow = {
+  variant_id?: string | null;
+  quantity?: unknown;
+  unit_price?: unknown;
+  is_custom_price?: boolean | null;
+  metadata?: {
+    dimensions?: { widthInches?: number; heightInches?: number } | null;
+  } | null;
+};
+
+type CartWithItems = {
+  id: string;
+  completed_at?: string | Date | null;
+  items?: CartItemRow[] | null;
+};
+
+function lineSignature(input: {
+  variantId: string;
+  quantity: number;
+  widthInches: number | null;
+  heightInches: number | null;
+  // Only an area-priced line carries one. Medusa prices every other line
+  // itself and refreshes it, so comparing those would report a change the
+  // shopper never made.
+  unitPrice: number | null;
+}): string {
+  return [
+    input.variantId,
+    input.quantity,
+    input.widthInches ?? "",
+    input.heightInches ?? "",
+    input.unitPrice ?? "",
+  ].join(":");
+}
+
+function itemsSignature(lines: readonly string[]): string {
+  return [...lines].sort().join(",");
 }
 
 type PaymentSessionWithData = {
@@ -165,23 +209,119 @@ export async function POST(
     });
   }
 
+  // An area-priced line cannot be left to Medusa: the amount depends on the
+  // dimensions, which no price set knows about. The token proves which line the
+  // shopper was quoted for; the amount is re-derived here rather than read off
+  // the request, so a tampered quote buys nothing.
+  const unitPrices = new Map<number, number>();
+
+  for (const [index, item] of items.entries()) {
+    if (item.dimensions == null) continue;
+
+    const expected = priceSignature({
+      variantId: item.variantId,
+      quantity: item.quantity,
+      widthInches: item.dimensions.widthInches,
+      heightInches: item.dimensions.heightInches,
+    });
+    const quoteResult = verifyPriceQuote(
+      item.priceQuoteToken ?? "",
+      process.env.PRICE_QUOTE_SECRET as string,
+      { priceSignature: expected },
+    );
+
+    if (!quoteResult.valid) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: quoteResult.reason,
+        message: `invalid_price_quote:${quoteResult.reason}`,
+      });
+    }
+
+    let priced: Awaited<ReturnType<typeof resolveLinePrice>>;
+
+    try {
+      priced = await resolveLinePrice(pricedVariantQuery(query, region), {
+        variantId: item.variantId,
+        quantity: item.quantity,
+        dimensions: item.dimensions,
+      });
+    } catch (error) {
+      logger.error(
+        `[checkout:unavailable] reason=pricing_failed variant=${item.variantId} error=${describeError(error)}`,
+      );
+      return res.status(502).json({
+        error: "checkout_unavailable",
+        reason: "pricing_failed",
+        message: "checkout_unavailable:pricing_failed",
+      });
+    }
+
+    if (!priced.ok) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: priced.reason,
+        message: `invalid_price_quote:${priced.reason}`,
+      });
+    }
+
+    unitPrices.set(index, priced.price.unitAmount);
+  }
+
+  const requestedItems = itemsSignature(
+    items.map((item, index) =>
+      lineSignature({
+        variantId: item.variantId,
+        quantity: item.quantity,
+        widthInches: item.dimensions?.widthInches ?? null,
+        heightInches: item.dimensions?.heightInches ?? null,
+        unitPrice: unitPrices.get(index) ?? null,
+      }),
+    ),
+  );
+
   let reusableCartId: string | null = null;
 
   if (cartId) {
     const { data: existingCarts } = await query.graph({
       entity: "cart",
-      fields: ["id", "completed_at"],
+      fields: ["id", "completed_at", "items.*"],
       filters: { id: cartId },
     });
-    const existingCart = existingCarts[0] as
-      { id: string; completed_at?: string | Date | null } | undefined;
+    const existingCart = existingCarts[0] as CartWithItems | undefined;
 
-    if (existingCart && !existingCart.completed_at) {
+    // Reuse is only for an address edit, which is what keeps the shopper's
+    // PaymentIntent alive across one. updateCartWorkflow cannot change line
+    // items, so a cart whose lines no longer match the request would be
+    // prepared — and charged — at the configuration it was created with.
+    const storedItems = existingCart
+      ? itemsSignature(
+          (existingCart.items ?? []).map((item) =>
+            lineSignature({
+              variantId: item.variant_id ?? "",
+              quantity: toAmount(item.quantity),
+              widthInches: item.metadata?.dimensions?.widthInches ?? null,
+              heightInches: item.metadata?.dimensions?.heightInches ?? null,
+              unitPrice: item.is_custom_price
+                ? toAmount(item.unit_price)
+                : null,
+            }),
+          ),
+        )
+      : null;
+
+    const reason = !existingCart
+      ? "not_found"
+      : existingCart.completed_at
+        ? "completed"
+        : storedItems !== requestedItems
+          ? "items_changed"
+          : null;
+
+    if (reason === null && existingCart) {
       reusableCartId = existingCart.id;
     } else {
-      logger.warn(
-        `[checkout:cart-superseded] reason=${existingCart ? "completed" : "not_found"} cart=${cartId}`,
-      );
+      logger.warn(`[checkout:cart-superseded] reason=${reason} cart=${cartId}`);
     }
   }
 
@@ -206,12 +346,20 @@ export async function POST(
         email,
         shipping_address: toCartAddress(shippingAddress),
         billing_address: toCartAddress(billingAddress),
-        items: items.map((item) => ({
+        items: items.map((item, index) => ({
           variant_id: item.variantId,
           quantity: item.quantity,
+          // Set only for an area-priced line. Medusa marks such a line
+          // is_custom_price and stops re-pricing it, which is wanted here and
+          // wrong everywhere else — an ordinary line must keep picking up its
+          // quantity break on every cart refresh.
+          ...(unitPrices.has(index)
+            ? { unit_price: unitPrices.get(index) }
+            : {}),
           metadata: {
             isCustomizable: item.isCustomizable ?? false,
             details: item.details ?? [],
+            ...(item.dimensions ? { dimensions: item.dimensions } : {}),
           },
         })),
       },

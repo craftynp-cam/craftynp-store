@@ -81,6 +81,84 @@ jest.mock("../../src/lib/artwork-upload", () => {
 
 const uploadArtworkMock = jest.mocked(uploadArtwork);
 
+// The configurator is priced by the backend now, so the quote is doubled the
+// way the artwork transport is. The debounce is flattened because the wait is
+// the component's, not the assertion's — leaving it in makes every add-to-cart
+// test sleep for no extra coverage.
+jest.mock("../../src/lib/price-quote", () => ({
+  ...jest.requireActual("../../src/lib/price-quote"),
+  PRICE_QUOTE_DEBOUNCE_MS: 0,
+}));
+
+// Stands in for Medusa: the variant's own amount, and an area price when the
+// line carries dimensions, so a test can tell the two apart.
+const AREA_RATE_PER_SQ_INCH = 0.5;
+
+function quoteFor(body: {
+  variantId: string;
+  quantity: number;
+  dimensions?: { widthInches: number; heightInches: number };
+}) {
+  const priced = quotedVariants.find(
+    (candidate) => candidate.id === body.variantId,
+  );
+  const base = priced?.calculatedAmount ?? 0;
+  const unitAmount = body.dimensions
+    ? Math.round(
+        base *
+          AREA_RATE_PER_SQ_INCH *
+          body.dimensions.widthInches *
+          body.dimensions.heightInches *
+          100,
+      ) / 100
+    : base;
+
+  return {
+    unitAmount,
+    lineTotal: Math.round(unitAmount * body.quantity * 100) / 100,
+    originalUnitAmount: null,
+    currencyCode: priced?.currencyCode ?? "usd",
+    isAreaPriced: body.dimensions != null,
+    quoteToken: `quote-${body.variantId}-${body.quantity}`,
+  };
+}
+
+// Every variant any test in this file renders, so the double can price the one
+// that was actually chosen rather than guessing from the default fixture.
+let quotedVariants: ProductDetailVariant[] = [];
+
+function mockPriceQuote(priced: ProductDetailVariant[] = variants) {
+  quotedVariants = priced;
+  global.fetch = jest.fn(async (_url: unknown, init?: { body?: unknown }) => {
+    const body: {
+      variantId: string;
+      quantity: number;
+      dimensions?: { widthInches: number; heightInches: number };
+    } = JSON.parse(String(init?.body ?? "{}"));
+
+    return {
+      ok: true,
+      json: () => Promise.resolve(quoteFor(body)),
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+}
+
+// Lets the debounced quote fire and its answer land. The debounce is a real
+// timer even at zero, so a microtask flush alone never reaches it.
+async function settlePrice() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+// Add to cart waits on the price quote now, so every click settles it first.
+async function clickAddToCart() {
+  await settlePrice();
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+  });
+}
+
 function uploadedReference(widthPx: number) {
   return {
     uploadId: "upload-1",
@@ -122,6 +200,7 @@ describe("ProductDetailView", () => {
     window.localStorage.clear();
     clearCart();
     setCartDrawerOpen(false);
+    mockPriceQuote();
   });
 
   it("leaves a multi-value option unchosen and prices the product from its cheapest variant (AC 5)", () => {
@@ -133,7 +212,7 @@ describe("ProductDetailView", () => {
     expect(screen.getByText("$9.00")).toBeInTheDocument();
   });
 
-  it("answers a no-choice option itself and draws no group for it", () => {
+  it("answers a no-choice option itself and draws no group for it", async () => {
     const singleValue = [
       { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
     ];
@@ -149,10 +228,12 @@ describe("ProductDetailView", () => {
 
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
     expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+
+    await settlePrice();
     expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
   });
 
-  it("still carries a no-choice option through to the cart line", () => {
+  it("still carries a no-choice option through to the cart line", async () => {
     const singleValue = [
       { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
     ];
@@ -166,14 +247,14 @@ describe("ProductDetailView", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+    await clickAddToCart();
 
     expect(readCart().lines[0]?.details).toEqual([
       { label: "Color", value: "Blush" },
     ]);
   });
 
-  it("holds add to cart shut until every option is chosen, naming what is left (AC 5)", () => {
+  it("holds add to cart shut until every option is chosen, naming what is left (AC 5)", async () => {
     const twoOptions = [
       ...options,
       {
@@ -209,6 +290,7 @@ describe("ProductDetailView", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Small" }));
 
     expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+    await settlePrice();
     expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
   });
 
@@ -254,11 +336,11 @@ describe("ProductDetailView", () => {
     expect(screen.getByText(/ready to ship/i)).toBeInTheDocument();
   });
 
-  it("adds the selected variant to the cart and opens the drawer", () => {
+  it("adds the selected variant to the cart and opens the drawer", async () => {
     render(<ProductDetailView product={makeProduct()} />);
 
     chooseBlush();
-    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+    await clickAddToCart();
 
     const cart = readCart();
     expect(cart.lines).toHaveLength(1);
@@ -291,12 +373,12 @@ describe("ProductDetailView", () => {
     expect(screen.getByText("$12.00")).toBeInTheDocument();
   });
 
-  it("adds the quantity selected in the stepper", () => {
+  it("adds the quantity selected in the stepper", async () => {
     render(<ProductDetailView product={makeProduct()} />);
 
     chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
-    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+    await clickAddToCart();
 
     expect(readCart().lines[0]?.quantity).toBe(2);
   });
@@ -328,34 +410,105 @@ describe("ProductDetailView", () => {
     ).toHaveAccessibleDescription("Minimum order: 50");
   });
 
-  it("carries the minimum onto the cart line, so the drawer holds it too", () => {
+  it("carries the minimum onto the cart line, so the drawer holds it too", async () => {
     render(
       <ProductDetailView product={makeProduct({ minOrderQuantity: 50 })} />,
     );
 
     chooseBlush();
-    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+    await clickAddToCart();
 
     expect(readCart().lines[0]?.quantity).toBe(50);
     expect(readCart().lines[0]?.minOrderQuantity).toBe(50);
   });
 
-  it("shows the unit price on the add to cart button at quantity 1", () => {
+  it("shows the quoted price on the add to cart button at quantity 1", async () => {
     render(<ProductDetailView product={makeProduct()} />);
 
     chooseBlush();
+    await settlePrice();
 
     expect(
       screen.getByRole("button", { name: "Add to cart · $9.00" }),
     ).toBeInTheDocument();
   });
 
-  it("multiplies the add to cart button's price by the selected quantity", () => {
+  it("disables add to cart and dims the price while a quote is in flight", async () => {
+    render(<ProductDetailView product={makeProduct()} />);
+
+    chooseBlush();
+
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    // The last good price stays on screen rather than blanking, so the panel
+    // never reads as broken while it recalculates.
+    expect(screen.getByText("$9.00")).toBeInTheDocument();
+
+    await settlePrice();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+  });
+
+  it("shows the unit price beside the line total once more than one is ordered", async () => {
+    render(<ProductDetailView product={makeProduct()} />);
+
+    chooseBlush();
+    fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    await settlePrice();
+
+    expect(screen.getByText("$9.00 each")).toBeInTheDocument();
+    expect(screen.getByText("2 for $18.00")).toBeInTheDocument();
+  });
+
+  it("takes the quantity break the backend quotes rather than multiplying itself", async () => {
+    // Half price from two up — a tier the panel could not have worked out on
+    // its own, which is the point: the number comes from the backend.
+    global.fetch = jest.fn(async (_url: unknown, init?: { body?: unknown }) => {
+      const body: { quantity: number } = JSON.parse(String(init?.body ?? "{}"));
+      const unitAmount = body.quantity > 1 ? 4.5 : 9;
+      return {
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            unitAmount,
+            lineTotal: unitAmount * body.quantity,
+            originalUnitAmount: null,
+            currencyCode: "usd",
+            isAreaPriced: false,
+            quoteToken: "tiered",
+          }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    render(<ProductDetailView product={makeProduct()} />);
+
+    chooseBlush();
+    fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    await clickAddToCart();
+
+    expect(screen.getByText("$4.50 each")).toBeInTheDocument();
+    expect(readCart().lines[0]?.unitPrice).toBe(4.5);
+  });
+
+  it("keeps add to cart shut when the backend cannot price the line", async () => {
+    global.fetch = jest.fn(async () =>
+      Promise.resolve({ ok: false } as unknown as Response),
+    ) as unknown as typeof fetch;
+
+    render(<ProductDetailView product={makeProduct()} />);
+
+    chooseBlush();
+    await settlePrice();
+
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(screen.getByText(/could not price this/i)).toBeInTheDocument();
+  });
+
+  it("re-quotes the line total when the quantity changes", async () => {
     render(<ProductDetailView product={makeProduct()} />);
 
     chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    await settlePrice();
 
     expect(
       screen.getByRole("button", { name: "Add to cart · $27.00" }),
@@ -388,11 +541,11 @@ describe("ProductDetailView", () => {
     expect(screen.getByAltText("Keychain, blush")).toBeInTheDocument();
   });
 
-  it("adds the selected variant's image to the cart line", () => {
+  it("adds the selected variant's image to the cart line", async () => {
     render(<ProductDetailView product={makeProduct()} />);
 
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
-    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+    await clickAddToCart();
 
     expect(readCart().lines[0]?.imageUrl).toBe("https://example.com/sage.png");
   });
@@ -433,6 +586,10 @@ describe("ProductDetailView", () => {
       customization_size_max_inches: "48",
       customization_size_option: "Size",
       customization_size_option_value: "Custom",
+    });
+
+    beforeEach(() => {
+      mockPriceQuote(sizeVariants);
     });
 
     function renderProduct() {
@@ -482,9 +639,10 @@ describe("ProductDetailView", () => {
       expect(screen.getByText("$11.00")).toBeInTheDocument();
     });
 
-    it("will not add a custom size the shopper never entered", () => {
+    it("will not add a custom size the shopper never entered", async () => {
       renderProduct();
       fireEvent.click(screen.getByRole("radio", { name: "Small" }));
+      await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();
@@ -508,7 +666,7 @@ describe("ProductDetailView", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("shows the range on the field and blocks add-to-cart while it is broken", () => {
+    it("shows the range on the field and blocks add-to-cart while it is broken", async () => {
       renderProduct();
       fireEvent.click(toggle());
 
@@ -533,12 +691,13 @@ describe("ProductDetailView", () => {
       expect(
         screen.queryByText("Enter a width between 2 and 48 inches."),
       ).not.toBeInTheDocument();
+      await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();
     });
 
-    it("names the size once, as the dimensions rather than the Custom value", () => {
+    it("names the size once, as the dimensions rather than the Custom value", async () => {
       renderProduct();
       fireEvent.click(toggle());
       fireEvent.change(screen.getByLabelText(/width/i), {
@@ -547,14 +706,14 @@ describe("ProductDetailView", () => {
       fireEvent.change(screen.getByLabelText(/height/i), {
         target: { value: "10" },
       });
-      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+      await clickAddToCart();
 
       expect(readCart().lines[0]?.details).toEqual([
         { label: "Size", value: "8\u2033 \u00d7 10\u2033" },
       ]);
     });
 
-    it("prices and sells the custom variant when the size is required outright", () => {
+    it("prices and sells the custom variant when the size is required outright", async () => {
       const required = resolveProductCustomization({
         customizable: "true",
         customization_size: "required",
@@ -586,17 +745,20 @@ describe("ProductDetailView", () => {
       fireEvent.change(screen.getByLabelText(/height/i), {
         target: { value: "10" },
       });
-      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+      await clickAddToCart();
 
       const line = readCart().lines[0];
       expect(line?.id).toBe("var_custom");
-      expect(line?.unitPrice).toBe(12);
+      // The area price the backend quoted for 8 x 10, not the Custom
+      // variant's own $12 — that variant price is only the formula's base.
+      expect(line?.unitPrice).toBe(12 * AREA_RATE_PER_SQ_INCH * 8 * 10);
+      expect(line?.priceQuoteToken).toBe("quote-var_custom-1");
       expect(line?.details).toEqual([
         { label: "Size", value: "8\u2033 \u00d7 10\u2033" },
       ]);
     });
 
-    it("keeps two custom sizes of one variant as two cart lines", () => {
+    it("keeps two custom sizes of one variant as two cart lines", async () => {
       renderProduct();
       fireEvent.click(toggle());
 
@@ -607,7 +769,7 @@ describe("ProductDetailView", () => {
         fireEvent.change(screen.getByLabelText(/height/i), {
           target: { value: "10" },
         });
-        fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+        await clickAddToCart();
       }
 
       expect(readCart().lines).toHaveLength(2);
@@ -642,17 +804,18 @@ describe("ProductDetailView", () => {
       expect(screen.queryByLabelText(/width/i)).not.toBeInTheDocument();
     });
 
-    it("renders nothing extra for a product that declares nothing (AC 6)", () => {
+    it("renders nothing extra for a product that declares nothing (AC 6)", async () => {
       render(<ProductDetailView product={makeProduct()} />);
       chooseBlush();
 
       expect(screen.queryByText(/make it yours/i)).not.toBeInTheDocument();
+      await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();
     });
 
-    it("names the outstanding option and the missing input in one sentence", () => {
+    it("names the outstanding option and the missing input in one sentence", async () => {
       render(
         <ProductDetailView
           product={makeProduct({ customization: textOnly })}
@@ -682,12 +845,13 @@ describe("ProductDetailView", () => {
       });
 
       expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+      await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();
     });
 
-    it("holds the one gate shut while the custom text runs past its limit", () => {
+    it("holds the one gate shut while the custom text runs past its limit", async () => {
       render(
         <ProductDetailView
           product={makeProduct({ customization: textOnly })}
@@ -711,6 +875,7 @@ describe("ProductDetailView", () => {
       });
 
       expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
+      await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();
@@ -788,7 +953,7 @@ describe("ProductDetailView", () => {
       expect(screen.queryByText(/enter the text you'd like/i)).toBeNull();
     });
 
-    it("holds the same gate shut while the order notes run long", () => {
+    it("holds the same gate shut while the order notes run long", async () => {
       const notes = resolveProductCustomization({
         customizable: "true",
         customization_notes: "optional",
@@ -814,12 +979,13 @@ describe("ProductDetailView", () => {
         target: { value: "Matte finish" },
       });
 
+      await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
       ).toBeEnabled();
     });
 
-    it("carries the shopper's answers onto the cart line", () => {
+    it("carries the shopper's answers onto the cart line", async () => {
       const everything = resolveProductCustomization({
         customizable: "true",
         customization_text: "required",
@@ -839,7 +1005,7 @@ describe("ProductDetailView", () => {
       fireEvent.change(screen.getByLabelText(/order notes/i), {
         target: { value: "Matte finish" },
       });
-      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+      await clickAddToCart();
 
       expect(readCart().lines[0]).toMatchObject({
         isCustomizable: true,
@@ -851,7 +1017,7 @@ describe("ProductDetailView", () => {
       });
     });
 
-    it("carries a multi-line order note through to the cart line", () => {
+    it("carries a multi-line order note through to the cart line", async () => {
       const withNotes = resolveProductCustomization({
         customizable: "true",
         customization_notes: "optional",
@@ -869,7 +1035,7 @@ describe("ProductDetailView", () => {
           value: "Match the sage green.\r\n\r\nNeeded before the 14th.",
         },
       });
-      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+      await clickAddToCart();
 
       expect(readCart().lines[0]?.details).toEqual([
         { label: "Color", value: "Blush" },
@@ -998,6 +1164,7 @@ describe("ProductDetailView", () => {
         await uploadArtworkOfWidth(900);
 
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
         ).toBeEnabled();
@@ -1055,6 +1222,7 @@ describe("ProductDetailView", () => {
         fireEvent.click(screen.getByRole("button", { name: /remove file/i }));
 
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
         ).toBeEnabled();
@@ -1078,6 +1246,7 @@ describe("ProductDetailView", () => {
         await uploadArtworkOfWidth(10);
 
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
         ).toBeEnabled();

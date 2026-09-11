@@ -85,8 +85,30 @@ describe("taxQuoteKey", () => {
     });
 
     expect(taxQuoteKey(draft, cart)).toBe(
-      "us|62704|il|springfield|rate_1|a:1,b:2",
+      "us|62704|il|springfield|rate_1|a:1:x,b:2:x",
     );
+  });
+
+  it("changes when a line's custom size changes, so a resize is re-taxed", () => {
+    const draft = makeDraft();
+    const line = {
+      id: "a",
+      href: "/a",
+      title: "A",
+      unitPrice: 1,
+      currencyCode: "usd",
+      quantity: 1,
+    };
+
+    const base = taxQuoteKey(draft, makeCart({ lines: [line] }));
+    const resized = taxQuoteKey(
+      draft,
+      makeCart({
+        lines: [{ ...line, dimensions: { widthInches: 8, heightInches: 10 } }],
+      }),
+    );
+
+    expect(resized).not.toBe(base);
   });
 
   it("changes when the shipping rate changes", () => {

@@ -65,6 +65,26 @@ describe("cart", () => {
     expect(readCart().lines[0]?.quantity).toBe(1);
   });
 
+  it("drops a stale price quote when the quantity changes", () => {
+    // The quote was issued for the old quantity, and a quantity break makes
+    // that a different unit price. Keeping it would let prepare-cart charge a
+    // tier the shopper no longer qualifies for.
+    addCartLine(makeLine({ quantity: 10, priceQuoteToken: "quote-for-10" }));
+
+    setCartLineQuantity("sticker", 50);
+
+    expect(readCart().lines[0]?.quantity).toBe(50);
+    expect(readCart().lines[0]?.priceQuoteToken).toBeUndefined();
+  });
+
+  it("keeps the quote when the quantity is set to what it already was", () => {
+    addCartLine(makeLine({ quantity: 10, priceQuoteToken: "quote-for-10" }));
+
+    setCartLineQuantity("sticker", 10);
+
+    expect(readCart().lines[0]?.priceQuoteToken).toBe("quote-for-10");
+  });
+
   it("holds a line at its own minimum, not at one", () => {
     addCartLine(makeLine({ quantity: 50, minOrderQuantity: 50 }));
 
