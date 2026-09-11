@@ -111,15 +111,47 @@ describe("CartCard", () => {
       name: "Show full order notes",
     });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveAttribute(
-      "aria-controls",
-      screen.getByText(note, verbatim).getAttribute("id"),
-    );
+
+    const valueId = toggle.getAttribute("aria-controls");
+    expect(valueId).not.toBeNull();
+    expect(document.getElementById(valueId!)).toBeInTheDocument();
 
     fireEvent.click(toggle);
 
     const expanded = screen.getByRole("button", { name: "Show less" });
     expect(expanded).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(note, verbatim)).toBeInTheDocument();
+  });
+
+  it("spends both clamped lines on text, not on a blank line", () => {
+    const note = "Line one of the note.\n\nLine two after a blank line.";
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "Order notes", value: note }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    const verbatim = { normalizer: (value: string) => value };
+    const toggle = screen.getByRole("button", {
+      name: "Show full order notes",
+    });
+
+    // Collapsed, the blank line is closed up so the clamp shows two lines of
+    // the note rather than one and an ellipsis on its own.
+    expect(
+      screen.getByText(
+        "Line one of the note.\nLine two after a blank line.",
+        verbatim,
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
     expect(screen.getByText(note, verbatim)).toBeInTheDocument();
   });
 

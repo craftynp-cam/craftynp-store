@@ -14,6 +14,14 @@ export function isExpandableDetail(value: string): boolean {
   return value.includes("\n") || value.length > EXPANDABLE_LENGTH;
 }
 
+// A blank line is a rendered line, so a note whose second line is blank spent
+// one of its two clamped lines on nothing and showed the ellipsis alone. The
+// collapsed view closes the gaps up; the note itself is untouched, and
+// expanding shows the paragraphs the shopper actually typed.
+export function collapsedDetail(value: string): string {
+  return value.replace(/\n{2,}/g, "\n");
+}
+
 export type CartLineDetailValueProps = {
   label: string;
   value: string;
@@ -45,7 +53,7 @@ export function CartLineDetailValue({
         // expanded state is the only one that supplies a display of its own.
         className={`whitespace-pre-line ${isExpanded ? "block" : "line-clamp-2"}`}
       >
-        {value}
+        {isExpanded ? value : collapsedDetail(value)}
       </span>
       <button
         type="button"

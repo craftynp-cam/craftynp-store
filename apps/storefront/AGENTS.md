@@ -311,7 +311,11 @@ for the keys).
   replaces was reachable by neither keyboard nor touch. Measuring the rendered
   box would make a note expandable in a browser and not in jsdom, which is the
   wrong way round for the guarantee. A short single-line value keeps the plain
-  truncation and its `title`.
+  truncation and its `title`. **The collapsed view closes up blank
+  lines** (`collapsedDetail`): a blank line is a rendered line, so a note whose
+  second line was blank spent one of its two clamped lines on nothing and
+  showed the ellipsis on its own. Expanding shows the paragraphs the shopper
+  actually typed — the stored note is never touched.
 
 ### Counted text fields
 
