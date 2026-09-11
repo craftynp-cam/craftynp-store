@@ -70,6 +70,11 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
   };
 }
 
+const processNotes = {
+  turnaroundNote: "Made to order in 3–5 business days.",
+  shippingWindowNote: "Delivery takes another 2–5 business days.",
+};
+
 // The only way artwork reaches the configurator draft is a real upload, so the
 // transport is doubled and the file is chosen through the control itself.
 // Mocked by its own path rather than the @/ alias: this jest config maps the
@@ -204,7 +209,7 @@ describe("ProductDetailView", () => {
   });
 
   it("leaves a multi-value option unchosen and prices the product from its cheapest variant (AC 5)", () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     expect(screen.getByRole("radio", { name: "Blush" })).not.toBeChecked();
     expect(screen.getByRole("radio", { name: "Sage" })).not.toBeChecked();
@@ -219,6 +224,7 @@ describe("ProductDetailView", () => {
 
     render(
       <ProductDetailView
+        {...processNotes}
         product={makeProduct({
           options: singleValue,
           variants: [variants[0]!],
@@ -240,6 +246,7 @@ describe("ProductDetailView", () => {
 
     render(
       <ProductDetailView
+        {...processNotes}
         product={makeProduct({
           options: singleValue,
           variants: [variants[0]!],
@@ -273,6 +280,7 @@ describe("ProductDetailView", () => {
 
     render(
       <ProductDetailView
+        {...processNotes}
         product={makeProduct({ options: twoOptions, variants: sized })}
       />,
     );
@@ -301,7 +309,10 @@ describe("ProductDetailView", () => {
     ];
 
     render(
-      <ProductDetailView product={makeProduct({ variants: soldOutSage })} />,
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({ variants: soldOutSage })}
+      />,
     );
 
     expect(
@@ -317,6 +328,7 @@ describe("ProductDetailView", () => {
 
     render(
       <ProductDetailView
+        {...processNotes}
         product={makeProduct({
           options: singleValue,
           variants: [
@@ -331,13 +343,13 @@ describe("ProductDetailView", () => {
   });
 
   it("shows the ready-to-ship badge", () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     expect(screen.getByText(/ready to ship/i)).toBeInTheDocument();
   });
 
   it("adds the selected variant to the cart and opens the drawer", async () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     await clickAddToCart();
@@ -364,7 +376,10 @@ describe("ProductDetailView", () => {
     ];
 
     render(
-      <ProductDetailView product={makeProduct({ variants: saleVariants })} />,
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({ variants: saleVariants })}
+      />,
     );
 
     chooseBlush();
@@ -374,7 +389,7 @@ describe("ProductDetailView", () => {
   });
 
   it("adds the quantity selected in the stepper", async () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
@@ -385,7 +400,10 @@ describe("ProductDetailView", () => {
 
   it("starts the quantity at the product's minimum (AC 2)", () => {
     render(
-      <ProductDetailView product={makeProduct({ minOrderQuantity: 50 })} />,
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({ minOrderQuantity: 50 })}
+      />,
     );
 
     expect(
@@ -400,7 +418,10 @@ describe("ProductDetailView", () => {
 
   it("names the minimum to the shopper rather than only disabling decrement (AC 2)", () => {
     render(
-      <ProductDetailView product={makeProduct({ minOrderQuantity: 50 })} />,
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({ minOrderQuantity: 50 })}
+      />,
     );
 
     expect(
@@ -412,7 +433,10 @@ describe("ProductDetailView", () => {
 
   it("carries the minimum onto the cart line, so the drawer holds it too", async () => {
     render(
-      <ProductDetailView product={makeProduct({ minOrderQuantity: 50 })} />,
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({ minOrderQuantity: 50 })}
+      />,
     );
 
     chooseBlush();
@@ -423,7 +447,7 @@ describe("ProductDetailView", () => {
   });
 
   it("shows the quoted price on the add to cart button at quantity 1", async () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     await settlePrice();
@@ -434,7 +458,7 @@ describe("ProductDetailView", () => {
   });
 
   it("disables add to cart and dims the price while a quote is in flight", async () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
 
@@ -448,7 +472,7 @@ describe("ProductDetailView", () => {
   });
 
   it("shows the unit price beside the line total once more than one is ordered", async () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
@@ -478,7 +502,7 @@ describe("ProductDetailView", () => {
       } as unknown as Response;
     }) as unknown as typeof fetch;
 
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
@@ -493,7 +517,7 @@ describe("ProductDetailView", () => {
       Promise.resolve({ ok: false } as unknown as Response),
     ) as unknown as typeof fetch;
 
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     await settlePrice();
@@ -503,7 +527,7 @@ describe("ProductDetailView", () => {
   });
 
   it("re-quotes the line total when the quantity changes", async () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
@@ -516,7 +540,7 @@ describe("ProductDetailView", () => {
   });
 
   it("shows the selected variant's image as the main image", () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     chooseBlush();
     expect(screen.getByAltText("Keychain, blush")).toBeInTheDocument();
@@ -533,7 +557,10 @@ describe("ProductDetailView", () => {
     );
 
     render(
-      <ProductDetailView product={makeProduct({ variants: unthumbnailed })} />,
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({ variants: unthumbnailed })}
+      />,
     );
 
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
@@ -542,7 +569,7 @@ describe("ProductDetailView", () => {
   });
 
   it("adds the selected variant's image to the cart line", async () => {
-    render(<ProductDetailView product={makeProduct()} />);
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
 
     fireEvent.click(screen.getByRole("radio", { name: "Sage" }));
     await clickAddToCart();
@@ -595,6 +622,7 @@ describe("ProductDetailView", () => {
     function renderProduct() {
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({
             options: sizeOptions,
             variants: sizeVariants,
@@ -725,6 +753,7 @@ describe("ProductDetailView", () => {
 
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({
             options: sizeOptions,
             variants: sizeVariants,
@@ -788,6 +817,7 @@ describe("ProductDetailView", () => {
     it("renders only the inputs the product declares", () => {
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({
             customization: resolveProductCustomization({
               customizable: "true",
@@ -798,14 +828,15 @@ describe("ProductDetailView", () => {
         />,
       );
 
-      expect(screen.getByText(/your artwork/i)).toBeInTheDocument();
+      // Anchored: the process panel's first step also says "your artwork".
+      expect(screen.getByText(/^your artwork/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/order notes/i)).toBeInTheDocument();
       expect(screen.queryByLabelText(/custom text/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/width/i)).not.toBeInTheDocument();
     });
 
     it("renders nothing extra for a product that declares nothing (AC 6)", async () => {
-      render(<ProductDetailView product={makeProduct()} />);
+      render(<ProductDetailView {...processNotes} product={makeProduct()} />);
       chooseBlush();
 
       expect(screen.queryByText(/make it yours/i)).not.toBeInTheDocument();
@@ -818,6 +849,7 @@ describe("ProductDetailView", () => {
     it("names the outstanding option and the missing input in one sentence", async () => {
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({ customization: textOnly })}
         />,
       );
@@ -854,6 +886,7 @@ describe("ProductDetailView", () => {
     it("holds the one gate shut while the custom text runs past its limit", async () => {
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({ customization: textOnly })}
         />,
       );
@@ -890,6 +923,7 @@ describe("ProductDetailView", () => {
 
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({ customization: shortLimit })}
         />,
       );
@@ -914,6 +948,7 @@ describe("ProductDetailView", () => {
     it("blocks a line break in the custom text, and says what to do", () => {
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({ customization: textOnly })}
         />,
       );
@@ -940,7 +975,10 @@ describe("ProductDetailView", () => {
       });
 
       render(
-        <ProductDetailView product={makeProduct({ customization: both })} />,
+        <ProductDetailView
+          {...processNotes}
+          product={makeProduct({ customization: both })}
+        />,
       );
 
       const notes = screen.getByLabelText(/order notes/i);
@@ -960,7 +998,10 @@ describe("ProductDetailView", () => {
       });
 
       render(
-        <ProductDetailView product={makeProduct({ customization: notes })} />,
+        <ProductDetailView
+          {...processNotes}
+          product={makeProduct({ customization: notes })}
+        />,
       );
 
       chooseBlush();
@@ -994,6 +1035,7 @@ describe("ProductDetailView", () => {
 
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({ customization: everything })}
         />,
       );
@@ -1025,6 +1067,7 @@ describe("ProductDetailView", () => {
 
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({ customization: withNotes })}
         />,
       );
@@ -1118,6 +1161,7 @@ describe("ProductDetailView", () => {
       function renderSized() {
         render(
           <ProductDetailView
+            {...processNotes}
             product={makeProduct({
               customization: artworkAndSize,
               options: sizeOptions,
@@ -1201,6 +1245,7 @@ describe("ProductDetailView", () => {
         // optional one needs a way out that is not "upload something better".
         render(
           <ProductDetailView
+            {...processNotes}
             product={makeProduct({
               customization: resolveProductCustomization({
                 customizable: "true",
@@ -1233,6 +1278,7 @@ describe("ProductDetailView", () => {
         // every upload on a product mid-setup would be worse than not gating.
         render(
           <ProductDetailView
+            {...processNotes}
             product={makeProduct({
               customization: resolveProductCustomization({
                 customizable: "true",
@@ -1256,11 +1302,13 @@ describe("ProductDetailView", () => {
     it("shows the made-to-order badge in place of ready to ship", () => {
       render(
         <ProductDetailView
+          {...processNotes}
           product={makeProduct({ customization: textOnly })}
         />,
       );
 
-      expect(screen.getByText(/made to order/i)).toBeInTheDocument();
+      // Exact: the process panel explains being made to order in prose too.
+      expect(screen.getByText("Made to order")).toBeInTheDocument();
       expect(screen.queryByText(/ready to ship/i)).not.toBeInTheDocument();
     });
   });

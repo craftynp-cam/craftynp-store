@@ -238,6 +238,31 @@ export function missingInputLabels(
   return missing.map((key) => MISSING_LABELS[key]);
 }
 
+export function joinLabels(labels: readonly string[]): string {
+  const last = labels.at(-1);
+  if (last == null) return "";
+  if (labels.length === 1) return last;
+  return `${labels.slice(0, -1).join(", ")} and ${last}`;
+}
+
+const OFFERED_LABELS: Record<CustomizationInputKey, string> = {
+  artwork: "upload your artwork",
+  customText: "add the text you want on it",
+  dimensions: "set the size you need",
+  orderNotes: "tell us anything else about the piece",
+};
+
+// Walks CUSTOMIZATION_INPUTS rather than the customization's own key order so
+// the sentence reads in the same order the configurator asks, and so a new
+// input cannot be offered on the product page without a phrase for it.
+export function offeredInputLabels(
+  customization: ProductCustomization,
+): string[] {
+  return CUSTOMIZATION_INPUTS.filter(
+    (input) => customization.inputs[input.key] !== "off",
+  ).map((input) => OFFERED_LABELS[input.key]);
+}
+
 // Order notes are the one detail that may carry line breaks, so they are the
 // one that has to agree on what a line break is. A Windows textarea submits
 // \r\n and a Mac one \n, and cartLineKey builds the cart line's identity out

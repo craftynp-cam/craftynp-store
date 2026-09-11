@@ -287,10 +287,10 @@ export const SITE_CONTENT_FIELDS = [
   {
     key: "order_turnaround_note",
     type: "text",
-    group: "Order confirmation",
+    group: "Turnaround and shipping",
     label: "Production turnaround",
     description:
-      "How long making the order takes. Shown on the confirmation page and in the confirmation email.",
+      "How long making the order takes. Shown on every product page, on the confirmation page and in the confirmation email.",
     defaultValue:
       "Most pieces are made to order and leave the workshop in 3–5 business days.",
     maxLength: 160,
@@ -298,10 +298,10 @@ export const SITE_CONTENT_FIELDS = [
   {
     key: "order_shipping_window_note",
     type: "text",
-    group: "Order confirmation",
+    group: "Turnaround and shipping",
     label: "Shipping window",
     description:
-      "How long delivery takes once the order ships. Shown beside the turnaround note.",
+      "How long delivery takes once the order ships. Shown beside the turnaround note everywhere it appears.",
     defaultValue:
       "Once shipped, delivery usually takes another 2–5 business days.",
     maxLength: 160,

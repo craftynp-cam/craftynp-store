@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { ProcessPanel } from "./process-panel";
 import { ProductDetails } from "./product-details";
 import { ProductGallery } from "./product-gallery";
 import { ProductPurchase } from "./product-purchase";
@@ -16,6 +17,8 @@ import { findVariant } from "@/lib/variant";
 
 type ProductDetailViewProps = {
   product: ProductDetail;
+  turnaroundNote: string;
+  shippingWindowNote: string;
 };
 
 function defaultSelection(product: ProductDetail): Record<string, string> {
@@ -40,7 +43,11 @@ function defaultSelection(product: ProductDetail): Record<string, string> {
   return selection;
 }
 
-export function ProductDetailView({ product }: ProductDetailViewProps) {
+export function ProductDetailView({
+  product,
+  turnaroundNote,
+  shippingWindowNote,
+}: ProductDetailViewProps) {
   const [selected, setSelected] = useState<Record<string, string>>(() =>
     defaultSelection(product),
   );
@@ -63,12 +70,14 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           : ({ "--cta-bar-height": `${ctaHeight}px` } as CSSProperties)
       }
     >
-      <ProductGallery
-        key={variantImageUrl ?? ""}
-        images={product.images}
-        productTitle={product.title}
-        variantImageUrl={variantImageUrl}
-      />
+      <div className="lg:sticky lg:top-[calc(var(--chrome-height)+1.5rem)] lg:max-h-[calc(100svh-var(--chrome-height)-3rem)] lg:self-start lg:overflow-y-auto">
+        <ProductGallery
+          key={variantImageUrl ?? ""}
+          images={product.images}
+          productTitle={product.title}
+          variantImageUrl={variantImageUrl}
+        />
+      </div>
 
       <div className="flex flex-col gap-8">
         <ProductPurchase
@@ -93,6 +102,11 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           onCtaHeightChange={setCtaHeight}
         />
         <ProductDetails description={product.description} />
+        <ProcessPanel
+          customization={product.customization}
+          turnaroundNote={turnaroundNote}
+          shippingWindowNote={shippingWindowNote}
+        />
       </div>
     </div>
   );

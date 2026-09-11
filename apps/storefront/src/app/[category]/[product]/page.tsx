@@ -10,6 +10,7 @@ import {
 import { MedusaUnavailableError } from "@/lib/medusa-error";
 import { fetchProductByHandle } from "@/lib/product";
 import { fetchRegion } from "@/lib/region";
+import { fetchSiteContent } from "@/lib/site-content";
 import { serializeJsonLd, toProductJsonLd } from "@/lib/structured-data";
 
 type ProductPageProps = {
@@ -48,6 +49,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
   if (!product) notFound();
 
+  const content = await fetchSiteContent();
+
   return (
     <>
       <script
@@ -61,7 +64,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <Container>
           <Breadcrumbs />
 
-          <ProductDetailView product={product} />
+          <ProductDetailView
+            product={product}
+            turnaroundNote={content.order_turnaround_note}
+            shippingWindowNote={content.order_shipping_window_note}
+          />
         </Container>
       </main>
     </>

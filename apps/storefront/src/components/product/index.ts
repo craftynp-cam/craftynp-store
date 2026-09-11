@@ -2,6 +2,8 @@ export { ArtworkUpload } from "./artwork-upload";
 export type { ArtworkUploadProps } from "./artwork-upload";
 export { CountedTextField } from "./counted-text-field";
 export type { CountedTextFieldProps } from "./counted-text-field";
+export { ProcessPanel } from "./process-panel";
+export type { ProcessPanelProps } from "./process-panel";
 export { ProductConfigurator } from "./product-configurator";
 export { ProductDetailView } from "./product-detail-view";
 export { ProductDetails } from "./product-details";

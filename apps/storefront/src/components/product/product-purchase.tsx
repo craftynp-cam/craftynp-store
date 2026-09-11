@@ -22,6 +22,7 @@ import {
   customSizeErrors,
   customTextProblem,
   customizationDetails,
+  joinLabels,
   missingInputLabels,
   missingRequiredInputs,
   orderNotesProblem,
@@ -45,13 +46,6 @@ type ProductPurchaseProps = {
   onOptionChange: (optionId: string, valueId: string | null) => void;
   onCtaHeightChange?: (height: number) => void;
 };
-
-function joinTitles(titles: readonly string[]): string {
-  const last = titles.at(-1);
-  if (last == null) return "";
-  if (titles.length === 1) return last;
-  return `${titles.slice(0, -1).join(", ")} and ${last}`;
-}
 
 function asSentence(clauses: readonly string[]): string {
   const joined = clauses.join(", then ");
@@ -194,11 +188,11 @@ export function ProductPurchase({
   const clauses: string[] = [];
   if (outstanding.length > 0) {
     clauses.push(
-      `choose ${joinTitles(outstanding.map((option) => option.title))}`,
+      `choose ${joinLabels(outstanding.map((option) => option.title))}`,
     );
   }
   if (missingInputs.length > 0) {
-    clauses.push(`add ${joinTitles(missingInputLabels(missingInputs))}`);
+    clauses.push(`add ${joinLabels(missingInputLabels(missingInputs))}`);
   }
   if (textProblem !== null) {
     clauses.push(textProblem.clause);
