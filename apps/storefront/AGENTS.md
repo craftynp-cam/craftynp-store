@@ -154,7 +154,9 @@ nothing here knows that a product might have a size or a material.
   _purchasable_ variant** (`From …`), falling back to the cheapest priced one
   only when every variant is out of stock. Taking the minimum over all priced
   variants advertises a number no reachable combination can match. A blank where
-  the price goes reads as broken, which is why there is a `From` at all.
+  the price goes reads as broken, which is why there is a `From` at all. This is
+  the one price the panel still works out itself, and it needs no round trip —
+  there is no line to quote until a variant resolves.
 - **A value's sub-label comes from the Medusa option value's `metadata`**, under
   `subLabel` or `sub_label` — Medusa has no native field for it. A blank or
   non-string entry is ignored, so a half-filled metadata row renders nothing
@@ -194,6 +196,41 @@ nothing here knows that a product might have a size or a material.
   and where there is no `ResizeObserver`. It is one element positioned two ways,
   never a second button: a duplicate would double every add-to-cart query in the
   tests.
+
+### Pricing
+
+**The panel does no price arithmetic.** `usePriceQuote`
+(`src/components/product/use-price-quote.ts`) posts the resolved variant, the
+quantity and — only for a custom size — the dimensions to
+`/checkout/price-quote`, which proxies Medusa's `/store/price-quote`. What comes
+back is what is shown and what `addCartLine` stores. The backend half, and why
+the product query cannot answer this, is in
+[apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+
+- **It is debounced, abortable and keyed**, modelled on
+  `use-tax-quote.ts`. A quote for a configuration the shopper has already moved
+  on from reads as `loading`, never as this line's answer — the key is compared
+  on render rather than the last response winning.
+- **Only the fetch lives in the effect.** Everything the render needs is still
+  derived, the way `artworkResolutionError` and the clamped quantity are.
+- **The last good price stays on screen while a new one loads**, dimmed and
+  `aria-busy`. Blanking it reads as broken, which is the same reason `From …`
+  exists.
+- **A quote in flight gets no clause in the hint.** It blocks add-to-cart like
+  everything else in the one gate, but a hint that appears and vanishes within a
+  second of every option change is noise, and the dimming already says it. Only
+  a **failed** quote earns a clause, because that one is persistent and
+  actionable.
+- **Nothing is quoted while a custom size is half-typed or out of range.** The
+  backend would only refuse it and the shopper is already being told by the
+  field itself.
+- **The cart line carries the quote token and the dimensions**, and
+  `setCartLineQuantity` **drops the token** when the drawer changes a quantity:
+  the quote was issued for the old quantity and a tier makes that a different
+  unit price, so `prepare-cart` asks for a fresh one rather than charging a
+  stale tier.
+- **`taxQuoteKey` includes each line's dimensions**, or a resized line reuses
+  the cached tax for the size it used to be.
 
 ## Product customization
 
@@ -264,9 +301,10 @@ for the keys).
   — no variant id, no price, and a dead add-to-cart. The toggle therefore
   remembers whatever preset the shopper had, selects the value
   `customization_size_option_value` names, and puts the preset back on
-  unchecking. That is also why the price moves: it is the `Custom` variant's own
-  Medusa price, not a formula. **Area-based pricing is CNP-42** and there is
-  deliberately no price arithmetic here.
+  unchecking. The resolved variant is what the area formula is applied to — its
+  Medusa price is the base the rate multiplies, not the price charged. There is
+  deliberately no price arithmetic here either way: the amount comes from
+  `/store/price-quote` (see **Pricing** below).
 - **`VariantSelector` is still not told what a size is.** It takes generic
   `hiddenValueIds` and `disabledOptionIds`; `ProductPurchase` is the only thing
   that knows one of them is the custom size. Keep it that way — the rule that

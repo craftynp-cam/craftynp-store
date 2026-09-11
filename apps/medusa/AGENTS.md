@@ -53,8 +53,8 @@ tax provider), `notification-resend`, `auth-auth0`, and
   `customization_size_max_inches` are the bounds the shopper is held to, and
   `customization_size_option` / `customization_size_option_value` name the
   preset option group the storefront's custom-size toggle drives and the value
-  on it that means "custom". There is no price bound here — area pricing is
-  CNP-42. The two halves split the way the rest of the declaration does:
+  on it that means "custom". The two halves split the way the rest of the
+  declaration does:
   `resolveProductCustomization` is **tolerant** and falls back to
   `CUSTOM_SIZE_FALLBACK_BOUNDS` on anything it cannot read, while
   `validateProductCustomization` is **strict** and refuses to publish a product
@@ -66,6 +66,17 @@ tax provider), `notification-resend`, `auth-auth0`, and
   the ordered width and the custom text limit the same way, for the same
   reason. It still has no production caller; CNP-45 wires the real
   `LineItemCustomization` payload through.
+- **The custom size carries two more keys again, and they are money:**
+  `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
+  written by the same widget and patch. They are what `areaUnitPrice` in
+  `@craftynp/types` multiplies and floors. They split like the bounds rather
+  than like the text limit — `resolveProductCustomization` reads them as
+  **null** where the bounds fall back to `CUSTOM_SIZE_FALLBACK_BOUNDS`, and
+  `validateProductCustomization` refuses to publish a custom-size product that
+  names neither. **There is deliberately no fallback rate**: a bound is a guard
+  and has a sane default, a price does not, and a constant here would be the
+  hidden pricing policy the story exists to remove. An unconfigured rate makes
+  `/store/price-quote` refuse to price rather than invent a number.
 - **Custom text carries a fifth customization key,
   `customization_text_max_length`**, written
   by the same widget and patch — how many characters that product allows.
@@ -294,8 +305,9 @@ limiter.
   place minor units exist, crossed solely by `toMinorUnits` / `fromMinorUnits`
   in its `lib.ts`. Leaking cents outside that module multiplies money by 100.
 - **Resolve weight, dimensions, and `calculated_price` server-side via
-  `query.graph`.** Store request bodies carry only `{ variantId, quantity }` —
-  never accept a client-supplied weight or price on a `/store` route. The one
+  `query.graph`.** Store request bodies carry only `{ variantId, quantity }`
+  plus, since CNP-42, the `dimensions` an area price is computed from — never
+  accept a client-supplied weight or price on a `/store` route. The one
   exception is the authenticated admin parcel override on
   `/admin/orders/:id/shipment/rates` and `/buy`: the shop owner is looking at
   the packed box and the product defaults are only a guess, so she may correct
@@ -385,6 +397,42 @@ limiter.
 
 `pnpm run list-carriers` prints every connected carrier's `carrier_id`, for
 finding `SHIPSTATION_USPS_CARRIER_ID`.
+
+## Pricing the configurator
+
+`POST /store/price-quote` is the only thing that prices a configured line, and
+`resolveLinePrice` (`src/lib/resolve-line-price.ts`) is the one derivation
+behind it — shared with `/store/tax-quote` and `prepare-cart` so a shopper
+cannot be shown one number and charged another.
+
+- **`GET /store/products` can never carry a quantity-break price.** Core's
+  `setPricingContext` middleware builds `{ region_id, currency_code, customer
+groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
+  always returns the `min_quantity <= 1` tier. That is why this route exists;
+  do not try to move quantity pricing back onto the product query.
+- **The quantity goes in the `QueryContext`.** `@medusajs/pricing` pulls it out
+  and matches `min_quantity <= q <= max_quantity`, which is how a price list's
+  tiers apply. Quantity breaks are otherwise stock Medusa — the admin's own
+  Pricing section creates the price lists and there is no custom code for them.
+- **A Medusa cart already applies tiers by itself**, per item, so an ordinary
+  line must be left alone. Only an **area-priced** line gets an explicit
+  `unit_price` in `prepare-cart`, because Medusa then marks it
+  `is_custom_price` and stops re-pricing it — wanted for an area price, wrong
+  for everything else.
+- **The tier is baked into the area price rather than left to Medusa**, for
+  that reason: `resolveLinePrice` prices the variant twice, at the ordered
+  quantity and at one, and passes the ratio to `areaUnitPrice`. The ratio
+  multiplies the rate term and **the floor is applied last**, so a volume
+  discount can never undercut the floor.
+- **The quote token is not the price.** `src/lib/price-quote.ts` signs which
+  line was quoted — variant, quantity and dimensions — and `prepare-cart`
+  re-derives the amount from the product's metadata rather than reading
+  `payload.amt`. A token minted against a rate the owner has since changed
+  buys nothing. The client never names a price, here as everywhere.
+- **`/store/tax-quote` must keep passing the quantity and the dimensions.**
+  Without the quantity it taxes every line at the single-unit tier; without the
+  dimensions it taxes a custom size at its variant's price rather than its own.
+- `PRICE_QUOTE_SECRET` is its own secret, like the shipping and tax ones.
 
 ## Cart, payments, and order placement
 
