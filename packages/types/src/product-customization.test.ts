@@ -35,12 +35,16 @@ const CUSTOM_SIZE = {
   customization_size_max_inches: "48",
   customization_size_option: "Size",
   customization_size_option_value: "Custom",
+  customization_size_rate_per_sq_inch: "0.055",
+  customization_size_price_floor: "4",
 } as const;
 
 const NO_SIZE_CONFIG = {
   ...CUSTOM_SIZE_FALLBACK_BOUNDS,
   optionTitle: null,
   optionValue: null,
+  ratePerSquareInch: null,
+  priceFloor: null,
 };
 
 const FALLBACK_TEXT_CONFIG = { maxLength: CUSTOM_TEXT_FALLBACK_MAX_LENGTH };
@@ -90,6 +94,8 @@ describe("resolveProductCustomization", () => {
       maxInches: 48,
       optionTitle: "Size",
       optionValue: "Custom",
+      ratePerSquareInch: 0.055,
+      priceFloor: 4,
     });
   });
 
@@ -166,6 +172,8 @@ describe("customizationMetadataPatch", () => {
       customization_size_max_inches: "",
       customization_size_option: "",
       customization_size_option_value: "",
+      customization_size_rate_per_sq_inch: "",
+      customization_size_price_floor: "",
       customization_text_max_length: String(CUSTOM_TEXT_FALLBACK_MAX_LENGTH),
     });
   });
@@ -178,6 +186,8 @@ describe("customizationMetadataPatch", () => {
       customization_size_max_inches: "48",
       customization_size_option: "Size",
       customization_size_option_value: "Custom",
+      customization_size_rate_per_sq_inch: "0.055",
+      customization_size_price_floor: "4",
     });
   });
 
@@ -195,6 +205,8 @@ describe("customizationMetadataPatch", () => {
         maxInches: 48,
         optionTitle: "Size",
         optionValue: "Custom",
+        ratePerSquareInch: 0.055,
+        priceFloor: 4,
       },
       text: { maxLength: 40 },
     });
@@ -277,6 +289,55 @@ describe("validateProductCustomization", () => {
       ok: false,
       message: expect.stringContaining("orderNotes"),
     });
+  });
+
+  it("accepts a published custom size that names a rate and a floor", () => {
+    expect(
+      validateProductCustomization(CUSTOM_SIZE, { published: true }),
+    ).toEqual({ ok: true });
+  });
+
+  it.each([
+    [
+      "customization_size_rate_per_sq_inch",
+      "customization_size_rate_per_sq_inch",
+    ],
+    ["customization_size_price_floor", "customization_size_price_floor"],
+  ])("refuses to publish a custom size missing %s", (_label, key) => {
+    const result = validateProductCustomization(
+      { ...CUSTOM_SIZE, [key]: "" },
+      { published: true },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      message: expect.stringContaining(key),
+    });
+  });
+
+  it("lets a draft custom size be saved before its pricing is filled in", () => {
+    expect(
+      validateProductCustomization(
+        { ...CUSTOM_SIZE, customization_size_rate_per_sq_inch: "" },
+        { published: false },
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it.each([
+    [
+      "a rate that is not a number",
+      { customization_size_rate_per_sq_inch: "a lot" },
+    ],
+    ["a rate of zero", { customization_size_rate_per_sq_inch: "0" }],
+    ["a negative floor", { customization_size_price_floor: "-4" }],
+  ])("rejects %s at any status", (_label, override) => {
+    const result = validateProductCustomization(
+      { ...CUSTOM_SIZE, ...override },
+      { published: false },
+    );
+
+    expect(result.ok).toBe(false);
   });
 
   it("rejects a character limit the schema could not store", () => {

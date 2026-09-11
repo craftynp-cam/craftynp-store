@@ -61,6 +61,9 @@ export const CUSTOM_SIZE_MAX_METADATA_KEY = "customization_size_max_inches";
 export const CUSTOM_SIZE_OPTION_METADATA_KEY = "customization_size_option";
 export const CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY =
   "customization_size_option_value";
+export const CUSTOM_SIZE_RATE_METADATA_KEY =
+  "customization_size_rate_per_sq_inch";
+export const CUSTOM_SIZE_FLOOR_METADATA_KEY = "customization_size_price_floor";
 
 export const CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY =
   "customization_text_max_length";
@@ -97,6 +100,11 @@ export const CUSTOM_SIZE_FALLBACK_BOUNDS: CustomSizeBounds = {
 export type CustomSizeConfig = CustomSizeBounds & {
   optionTitle: string | null;
   optionValue: string | null;
+  // Null rather than a fallback, unlike CUSTOM_SIZE_FALLBACK_BOUNDS: a bound is
+  // a guard and has a sane default, a price does not. An unconfigured rate must
+  // make the server refuse to price rather than invent a number.
+  ratePerSquareInch: number | null;
+  priceFloor: number | null;
 };
 
 export type CustomTextConfig = {
@@ -121,6 +129,8 @@ const NO_CUSTOM_SIZE: CustomSizeConfig = {
   ...CUSTOM_SIZE_FALLBACK_BOUNDS,
   optionTitle: null,
   optionValue: null,
+  ratePerSquareInch: null,
+  priceFloor: null,
 };
 
 const FALLBACK_CUSTOM_TEXT: CustomTextConfig = {
@@ -153,6 +163,18 @@ function isPresent(value: unknown): boolean {
 }
 
 function readInches(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+// Money and a per-square-inch rate are both positive decimals rather than whole
+// inches, so readInches' shape fits but its name does not. A rate of 0 would
+// price every custom size at the floor, which is a mistake worth refusing.
+function readRate(value: unknown): number | null {
   if (typeof value === "number") {
     return Number.isFinite(value) && value > 0 ? value : null;
   }
@@ -224,6 +246,8 @@ function readSizeConfig(metadata: Metadata): CustomSizeConfig {
     ...bounds,
     optionTitle,
     optionValue: optionTitle === null ? null : optionValue,
+    ratePerSquareInch: readRate(metadata?.[CUSTOM_SIZE_RATE_METADATA_KEY]),
+    priceFloor: readRate(metadata?.[CUSTOM_SIZE_FLOOR_METADATA_KEY]),
   };
 }
 
@@ -276,6 +300,12 @@ export function customizationMetadataPatch(
   patch[CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY] = asksForSize
     ? (size.optionValue ?? "")
     : "";
+  patch[CUSTOM_SIZE_RATE_METADATA_KEY] =
+    asksForSize && size.ratePerSquareInch !== null
+      ? String(size.ratePerSquareInch)
+      : "";
+  patch[CUSTOM_SIZE_FLOOR_METADATA_KEY] =
+    asksForSize && size.priceFloor !== null ? String(size.priceFloor) : "";
 
   const asksForText =
     customization.isCustomizable && customization.inputs.customText !== "off";
@@ -358,6 +388,38 @@ function validateCustomSizeConfig(
     return {
       ok: false,
       message: `custom size is on, so ${CUSTOM_SIZE_MIN_METADATA_KEY} and ${CUSTOM_SIZE_MAX_METADATA_KEY} must both be set`,
+    };
+  }
+
+  const pricing = [
+    {
+      key: CUSTOM_SIZE_RATE_METADATA_KEY,
+      raw: metadata?.[CUSTOM_SIZE_RATE_METADATA_KEY],
+    },
+    {
+      key: CUSTOM_SIZE_FLOOR_METADATA_KEY,
+      raw: metadata?.[CUSTOM_SIZE_FLOOR_METADATA_KEY],
+    },
+  ] as const;
+
+  for (const field of pricing) {
+    if (isPresent(field.raw) && readRate(field.raw) === null) {
+      return { ok: false, message: `${field.key} must be a positive number` };
+    }
+  }
+
+  // Insisted on where the text limit is not, for the size bounds' reason: there
+  // is no fallback rate in code to fall back to, so a published custom size
+  // with no rate is a product the storefront cannot price at all.
+  if (
+    published &&
+    asksForSize &&
+    (readRate(metadata?.[CUSTOM_SIZE_RATE_METADATA_KEY]) === null ||
+      readRate(metadata?.[CUSTOM_SIZE_FLOOR_METADATA_KEY]) === null)
+  ) {
+    return {
+      ok: false,
+      message: `custom size is on, so ${CUSTOM_SIZE_RATE_METADATA_KEY} and ${CUSTOM_SIZE_FLOOR_METADATA_KEY} must both be set`,
     };
   }
 
