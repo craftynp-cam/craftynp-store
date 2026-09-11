@@ -25,7 +25,14 @@ export function Textarea({
   return (
     <TextField {...rest}>
       <Label>{label}</Label>
-      <HeroTextArea placeholder={placeholder} rows={rows} />
+      <HeroTextArea
+        placeholder={placeholder}
+        rows={rows}
+        // The field grows with what is typed instead of scrolling it out of
+        // sight; `rows` is the floor, and the cap only bites for a value far
+        // past any limit a field of ours enforces.
+        className="[field-sizing:content] max-h-64"
+      />
       {description ? <Description>{description}</Description> : null}
       {errorMessage ? <FieldError>{errorMessage}</FieldError> : null}
     </TextField>

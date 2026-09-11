@@ -306,11 +306,23 @@ for the keys).
 ### Counted text fields
 
 Custom text and order notes are the two fields a shopper types into, and they
-share one arrangement: `useCountedField`
-(`src/components/product/use-counted-field.ts`) holds the counter, the blur
-timing and the near-limit announcement; `CustomTextField` and `OrderNotesField`
-add only what differs between them.
+are one component: `CountedTextField`
+(`src/components/product/counted-text-field.tsx`), which
+`ProductConfigurator` renders twice with a different label, required message
+and row count. They differed by an echo panel until CNP-37's AC 1 was
+rewritten to drop it; what was left was the same field twice.
 
+- **Both are a `Textarea`, including the single line of engraving.** An
+  `<input>` clips a long value out of sight at its right-hand edge, and AC 1
+  is that the shopper can read the whole of what they typed. The field grows
+  with its content — `[field-sizing:content]` on the `Textarea` primitive,
+  with `rows` as the floor and a `max-h-64` cap that only bites for a value far
+  past any limit we enforce. The stored value is still one string; nothing
+  adds line breaks.
+- **Do not re-add a preview of the value below the field.** It repeats an
+  input the shopper is already looking at, and rendering it in another face
+  promises a typeface the workshop does not cut. It was defended as showing
+  the trimming, which it cannot: trailing whitespace is invisible in both.
 - **Neither input carries a `maxLength`, deliberately.** A hard cap swallows
   keystrokes with no explanation, which is what CNP-37's AC 4 rules out. The
   limit is stated before the shopper types (`characterCountHint`), counted
@@ -329,8 +341,10 @@ add only what differs between them.
   `customTextError` and `orderNotesError` feed the field's
   `isInvalid`/`errorMessage` and the one `canAddToCart` gate, adding one clause
   each to the one hint — one gate, one hint, no second gate.
-- **The empty-required message is the field's own, and it waits for a blur.**
-  An untouched field is not yet wrong, so `isVisited` gates it; a length error
+- **The empty-required message is passed in per field, and it waits for a
+  blur.** What the piece needs is not what the maker needs to know, so the two
+  are worded differently. An untouched field is not yet wrong, so `isVisited`
+  gates it; a length error
   needs no such wait, since text is already there. That is the half the
   add-to-cart hint cannot do, because the hint names the field from across the
   page while the field itself stayed silent. **Do not make it show on first
@@ -353,11 +367,6 @@ the same tolerant-read, strict-write split the custom size bounds have (see
 [apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the metadata key and the admin
 field). `ORDER_NOTES_MAX_LENGTH` (500) is a plain constant in
 `@craftynp/types`, used by both the field and `lineItemCustomizationSchema`.
-
-- **Only custom text is echoed back.** `CustomTextField` renders the trimmed
-  value in the display face, so what the shopper checks is the string the cart
-  line carries rather than what is still in the box. Notes have nothing to
-  echo — they are not made into anything.
 
 ## Artwork upload
 

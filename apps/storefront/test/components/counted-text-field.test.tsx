@@ -6,7 +6,7 @@ import {
   resolveProductCustomization,
 } from "@craftynp/types";
 
-import { CustomTextField } from "@/components";
+import { CountedTextField } from "@/components";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
   customTextError,
@@ -18,6 +18,7 @@ const REQUIRED = resolveProductCustomization({
 });
 
 const AT_LIMIT = "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH);
+const REQUIRED_MESSAGE = "Enter the text you'd like on this piece.";
 
 // The field is controlled by ProductPurchase, and its length error is derived
 // there, so the harness closes that loop rather than freezing a value.
@@ -25,11 +26,13 @@ function Harness({ mode = "required" }: { mode?: "optional" | "required" }) {
   const [value, setValue] = useState("");
 
   return (
-    <CustomTextField
+    <CountedTextField
+      label="Custom text"
       mode={mode}
       value={value}
       onChange={setValue}
       maxLength={REQUIRED.text.maxLength}
+      requiredMessage={REQUIRED_MESSAGE}
       errorMessage={customTextError(REQUIRED, {
         ...EMPTY_CUSTOMIZATION_DRAFT,
         customText: value,
@@ -38,41 +41,36 @@ function Harness({ mode = "required" }: { mode?: "optional" | "required" }) {
   );
 }
 
+function field() {
+  return screen.getByLabelText(/custom text/i);
+}
+
 function type(text: string) {
-  fireEvent.change(screen.getByLabelText(/custom text/i), {
-    target: { value: text },
-  });
+  fireEvent.change(field(), { target: { value: text } });
 }
 
 function leaveTheField() {
-  const input = screen.getByLabelText(/custom text/i);
-  act(() => input.focus());
-  act(() => input.blur());
+  act(() => field().focus());
+  act(() => field().blur());
 }
 
-describe("CustomTextField", () => {
-  it("echoes back the text that will be made, trimmed as the cart will carry it", () => {
+describe("CountedTextField", () => {
+  // A single-line input clips a long value out of sight at its right-hand
+  // edge, which is what AC 1 rules out. Whether it grows is CSS and invisible
+  // to jsdom; that it is a textarea at all is not.
+  it("is a textarea, so a long value wraps instead of scrolling away", () => {
     render(<Harness />);
-    type("  For Grandma  ");
+    type(AT_LIMIT);
 
-    expect(
-      screen.getByRole("group", { name: /what we.ll make/i }),
-    ).toHaveTextContent("For Grandma");
-  });
-
-  it("shows nothing to check before there is text to check", () => {
-    render(<Harness />);
-
-    expect(
-      screen.queryByRole("group", { name: /what we.ll make/i }),
-    ).toBeNull();
+    expect(field().tagName).toBe("TEXTAREA");
+    expect(field()).toHaveValue(AT_LIMIT);
   });
 
   it("keeps text past the limit instead of refusing the keystrokes", () => {
     render(<Harness />);
     type(`${AT_LIMIT}abc`);
 
-    expect(screen.getByLabelText(/custom text/i)).toHaveValue(`${AT_LIMIT}abc`);
+    expect(field()).toHaveValue(`${AT_LIMIT}abc`);
     expect(screen.getByText(/3 characters over/i)).toBeInTheDocument();
   });
 
@@ -86,13 +84,18 @@ describe("CustomTextField", () => {
   it("names an empty required field once the shopper leaves it", () => {
     render(<Harness />);
 
-    expect(screen.queryByText(/enter the text you'd like/i)).toBeNull();
+    expect(screen.queryByText(REQUIRED_MESSAGE)).toBeNull();
 
     leaveTheField();
 
-    expect(
-      screen.getByText(/enter the text you'd like on this piece/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(REQUIRED_MESSAGE)).toBeInTheDocument();
+  });
+
+  it("does not demand text the product only offers", () => {
+    render(<Harness mode="optional" />);
+    leaveTheField();
+
+    expect(screen.queryByText(REQUIRED_MESSAGE)).toBeNull();
   });
 
   it("warns a screen reader before the limit, not only after it", () => {
@@ -106,12 +109,5 @@ describe("CustomTextField", () => {
     expect(status).toHaveTextContent(
       `You are close to the ${CUSTOM_TEXT_FALLBACK_MAX_LENGTH}-character limit.`,
     );
-  });
-
-  it("does not demand text the product only offers", () => {
-    render(<Harness mode="optional" />);
-    leaveTheField();
-
-    expect(screen.queryByText(/enter the text you'd like/i)).toBeNull();
   });
 });

@@ -704,6 +704,29 @@ describe("ProductDetailView", () => {
       ).toBeDisabled();
     });
 
+    // Both configurator fields are one component, so what is worth pinning is
+    // that each is wired to its own limit and its own words.
+    it("gives each text field its own required message", () => {
+      const both = resolveProductCustomization({
+        customizable: "true",
+        customization_text: "required",
+        customization_notes: "required",
+      });
+
+      render(
+        <ProductDetailView product={makeProduct({ customization: both })} />,
+      );
+
+      const notes = screen.getByLabelText(/order notes/i);
+      act(() => notes.focus());
+      act(() => notes.blur());
+
+      expect(
+        screen.getByText(/tell us what you'd like us to know/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/enter the text you'd like/i)).toBeNull();
+    });
+
     it("holds the same gate shut while the order notes run long", () => {
       const notes = resolveProductCustomization({
         customizable: "true",

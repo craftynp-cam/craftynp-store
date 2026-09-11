@@ -1,12 +1,10 @@
 export { ArtworkUpload } from "./artwork-upload";
 export type { ArtworkUploadProps } from "./artwork-upload";
-export { CustomTextField } from "./custom-text-field";
-export type { CustomTextFieldProps } from "./custom-text-field";
+export { CountedTextField } from "./counted-text-field";
+export type { CountedTextFieldProps } from "./counted-text-field";
 export { ProductConfigurator } from "./product-configurator";
 export { ProductDetailView } from "./product-detail-view";
 export { ProductDetails } from "./product-details";
-export { OrderNotesField } from "./order-notes-field";
-export type { OrderNotesFieldProps } from "./order-notes-field";
 export { ProductGallery } from "./product-gallery";
 export { ProductPrice } from "./product-price";
 export { ProductPurchase } from "./product-purchase";

@@ -8,8 +8,7 @@ import type {
 
 import { Checkbox, TextInput } from "../ui";
 import { ArtworkUpload } from "./artwork-upload";
-import { CustomTextField } from "./custom-text-field";
-import { OrderNotesField } from "./order-notes-field";
+import { CountedTextField } from "./counted-text-field";
 import {
   isCustomSizeOffered,
   usesCustomSize,
@@ -65,11 +64,13 @@ export function ProductConfigurator({
       ) : null}
 
       {inputs.customText !== "off" ? (
-        <CustomTextField
+        <CountedTextField
+          label="Custom text"
           mode={inputs.customText}
           value={value.customText}
           onChange={(customText) => patch({ customText })}
           maxLength={text.maxLength}
+          requiredMessage="Enter the text you'd like on this piece."
           errorMessage={customTextError}
         />
       ) : null}
@@ -117,11 +118,14 @@ export function ProductConfigurator({
       ) : null}
 
       {inputs.orderNotes !== "off" ? (
-        <OrderNotesField
+        <CountedTextField
+          label="Order notes"
           mode={inputs.orderNotes}
           value={value.orderNotes}
           onChange={(orderNotes) => patch({ orderNotes })}
           maxLength={ORDER_NOTES_MAX_LENGTH}
+          requiredMessage="Tell us what you'd like us to know about this piece."
+          rows={4}
           errorMessage={orderNotesError}
         />
       ) : null}
