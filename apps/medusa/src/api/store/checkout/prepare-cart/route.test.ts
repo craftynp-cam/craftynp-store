@@ -7,6 +7,7 @@ import {
   signShippingQuote,
 } from "../../../../lib/shipping-quote";
 import { signTaxQuote, taxSignature } from "../../../../lib/tax-quote";
+import { priceSignature, signPriceQuote } from "../../../../lib/price-quote";
 
 const mockCreateCartRun = jest.fn();
 const mockUpdateCartRun = jest.fn();
@@ -28,6 +29,7 @@ import { POST } from "./route";
 
 const SHIPPING_SECRET = "shipping-secret";
 const TAX_SECRET = "tax-secret";
+const PRICE_SECRET = "price-secret";
 const CART_ID = "cart_01";
 const SHIPPING_AMOUNT = 8.45;
 
@@ -44,6 +46,38 @@ const ADDRESS = {
 };
 
 const ITEMS = [{ variantId: "variant_01", quantity: 2 }];
+
+const AREA_METADATA = {
+  customizable: "true",
+  customization_size: "optional",
+  customization_size_min_inches: "2",
+  customization_size_max_inches: "48",
+  customization_size_rate_per_sq_inch: "0.055",
+  customization_size_price_floor: "4",
+};
+
+const DIMENSIONS = { widthInches: 8, heightInches: 10 };
+
+// 1.15 * 0.055 * 80, with no tier in play since the mock prices every quantity
+// the same.
+const AREA_UNIT_PRICE = 5.06;
+
+function priceQuoteToken(overrides: { quantity?: number } = {}) {
+  return signPriceQuote(
+    {
+      amt: AREA_UNIT_PRICE,
+      cur: "usd",
+      ps: priceSignature({
+        variantId: "variant_01",
+        quantity: overrides.quantity ?? 2,
+        widthInches: DIMENSIONS.widthInches,
+        heightInches: DIMENSIONS.heightInches,
+      }),
+      exp: Date.now() + 60_000,
+    },
+    PRICE_SECRET,
+  );
+}
 
 function buildBody(
   overrides: Partial<CheckoutPrepareRequest> = {},
@@ -179,6 +213,21 @@ function buildHarness(options: {
     if (entity === "shipping_option") {
       return { data: [{ id: "so_01" }] };
     }
+    if (entity === "variant") {
+      return {
+        data: [
+          {
+            id: "variant_01",
+            product: { metadata: AREA_METADATA },
+            calculated_price: {
+              calculated_amount: 1.15,
+              original_amount: 1.15,
+              currency_code: "usd",
+            },
+          },
+        ],
+      };
+    }
     if (!mutated) {
       return { data: options.before ? [options.before] : [] };
     }
@@ -208,12 +257,155 @@ beforeEach(() => {
   jest.clearAllMocks();
   process.env.SHIPPING_QUOTE_SECRET = SHIPPING_SECRET;
   process.env.TAX_QUOTE_SECRET = TAX_SECRET;
+  process.env.PRICE_QUOTE_SECRET = PRICE_SECRET;
 
   mockCreatePaymentCollectionRun.mockResolvedValue({
     result: { id: "paycol_01" },
   });
   mockCreatePaymentSessionsRun.mockResolvedValue({
     result: { id: "payses_new", data: { client_secret: "pi_new_secret" } },
+  });
+});
+
+describe("POST /store/checkout/prepare-cart area pricing", () => {
+  const areaItems = [
+    {
+      variantId: "variant_01",
+      quantity: 2,
+      dimensions: DIMENSIONS,
+      priceQuoteToken: priceQuoteToken(),
+    },
+  ];
+
+  it("re-derives the area price and sets it on the line itself", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({ items: areaItems }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0]).toMatchObject({
+      variant_id: "variant_01",
+      quantity: 2,
+      unit_price: AREA_UNIT_PRICE,
+      metadata: expect.objectContaining({ dimensions: DIMENSIONS }),
+    });
+  });
+
+  it("prices from the product, not from the amount the token carries", async () => {
+    // A validly-signed token naming a penny. The signature only says which
+    // line was quoted; the amount charged is the one re-derived here, so a
+    // token minted against a rate the owner has since raised cannot hold.
+    const stale = signPriceQuote(
+      {
+        amt: 0.01,
+        cur: "usd",
+        ps: priceSignature({
+          variantId: "variant_01",
+          quantity: 2,
+          widthInches: DIMENSIONS.widthInches,
+          heightInches: DIMENSIONS.heightInches,
+        }),
+        exp: Date.now() + 60_000,
+      },
+      PRICE_SECRET,
+    );
+
+    const { req, res } = buildHarness({
+      body: buildBody({
+        items: [{ ...areaItems[0]!, priceQuoteToken: stale }],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0].unit_price).toBe(AREA_UNIT_PRICE);
+  });
+
+  it("leaves an ordinary line for Medusa to price, so its tier still applies", async () => {
+    const { req, res } = buildHarness({ body: buildBody(), before: null });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0]).not.toHaveProperty("unit_price");
+  });
+
+  it("refuses a quote replayed against a different quantity", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            ...areaItems[0]!,
+            priceQuoteToken: priceQuoteToken({ quantity: 99 }),
+          },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "invalid_price_quote" }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses an area-priced line that carries no quote at all", async () => {
+    const { req, res, status } = buildHarness({
+      body: buildBody({
+        items: [
+          { variantId: "variant_01", quantity: 2, dimensions: DIMENSIONS },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses dimensions outside the product's own bounds", async () => {
+    const outOfBounds = { widthInches: 8, heightInches: 500 };
+    const { req, res, status } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            dimensions: outOfBounds,
+            priceQuoteToken: signPriceQuote(
+              {
+                amt: 1,
+                cur: "usd",
+                ps: priceSignature({
+                  variantId: "variant_01",
+                  quantity: 2,
+                  widthInches: outOfBounds.widthInches,
+                  heightInches: outOfBounds.heightInches,
+                }),
+                exp: Date.now() + 60_000,
+              },
+              PRICE_SECRET,
+            ),
+          },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 });
 

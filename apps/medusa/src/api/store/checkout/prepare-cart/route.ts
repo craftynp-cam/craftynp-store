@@ -15,6 +15,10 @@ import {
   verifyShippingQuote,
 } from "../../../../lib/shipping-quote";
 import { taxSignature, verifyTaxQuote } from "../../../../lib/tax-quote";
+import { describeError } from "../../../../lib/describe-error";
+import { priceSignature, verifyPriceQuote } from "../../../../lib/price-quote";
+import { resolveLinePrice } from "../../../../lib/resolve-line-price";
+import { pricedVariantQuery } from "../../price-quote/route";
 
 const STRIPE_PAYMENT_PROVIDER_ID = "pp_stripe_stripe";
 const LIVE_SHIPPING_OPTION_NAME = "Live USPS Rate";
@@ -185,6 +189,65 @@ export async function POST(
     }
   }
 
+  // An area-priced line cannot be left to Medusa: the amount depends on the
+  // dimensions, which no price set knows about. The token proves which line the
+  // shopper was quoted for; the amount is re-derived here rather than read off
+  // the request, so a tampered quote buys nothing.
+  const unitPrices = new Map<number, number>();
+
+  for (const [index, item] of items.entries()) {
+    if (item.dimensions == null) continue;
+
+    const expected = priceSignature({
+      variantId: item.variantId,
+      quantity: item.quantity,
+      widthInches: item.dimensions.widthInches,
+      heightInches: item.dimensions.heightInches,
+    });
+    const quoteResult = verifyPriceQuote(
+      item.priceQuoteToken ?? "",
+      process.env.PRICE_QUOTE_SECRET as string,
+      { priceSignature: expected },
+    );
+
+    if (!quoteResult.valid) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: quoteResult.reason,
+        message: `invalid_price_quote:${quoteResult.reason}`,
+      });
+    }
+
+    let priced: Awaited<ReturnType<typeof resolveLinePrice>>;
+
+    try {
+      priced = await resolveLinePrice(pricedVariantQuery(query, region), {
+        variantId: item.variantId,
+        quantity: item.quantity,
+        dimensions: item.dimensions,
+      });
+    } catch (error) {
+      logger.error(
+        `[checkout:unavailable] reason=pricing_failed variant=${item.variantId} error=${describeError(error)}`,
+      );
+      return res.status(502).json({
+        error: "checkout_unavailable",
+        reason: "pricing_failed",
+        message: "checkout_unavailable:pricing_failed",
+      });
+    }
+
+    if (!priced.ok) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: priced.reason,
+        message: `invalid_price_quote:${priced.reason}`,
+      });
+    }
+
+    unitPrices.set(index, priced.price.unitAmount);
+  }
+
   let cartIdToPrepare: string;
 
   if (reusableCartId) {
@@ -206,12 +269,20 @@ export async function POST(
         email,
         shipping_address: toCartAddress(shippingAddress),
         billing_address: toCartAddress(billingAddress),
-        items: items.map((item) => ({
+        items: items.map((item, index) => ({
           variant_id: item.variantId,
           quantity: item.quantity,
+          // Set only for an area-priced line. Medusa marks such a line
+          // is_custom_price and stops re-pricing it, which is wanted here and
+          // wrong everywhere else — an ordinary line must keep picking up its
+          // quantity break on every cart refresh.
+          ...(unitPrices.has(index)
+            ? { unit_price: unitPrices.get(index) }
+            : {}),
           metadata: {
             isCustomizable: item.isCustomizable ?? false,
             details: item.details ?? [],
+            ...(item.dimensions ? { dimensions: item.dimensions } : {}),
           },
         })),
       },
