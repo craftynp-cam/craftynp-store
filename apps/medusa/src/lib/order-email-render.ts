@@ -15,21 +15,37 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function detailLine(line: OrderConfirmationLine): string {
+// Order notes may run to several lines (CNP-38), and a detail joined onto one
+// line is where those line breaks used to die. Each detail gets its own line in
+// both bodies, and the breaks inside a value are carried rather than collapsed.
+function detailsHtml(line: OrderConfirmationLine): string {
   return line.details
-    .map((detail) => `${detail.label}: ${detail.value}`)
-    .join(" · ");
+    .map(
+      (detail) =>
+        `${escapeHtml(detail.label)}: ${escapeHtml(detail.value).replace(/\n/g, "<br>")}`,
+    )
+    .join("<br>");
+}
+
+// Two spaces indent the detail block under its item, so a value's own newlines
+// have to re-indent or the rest of the note reads as a new item.
+function detailsText(line: OrderConfirmationLine): string {
+  return line.details
+    .map(
+      (detail) => `  ${detail.label}: ${detail.value.replace(/\n/g, "\n  ")}`,
+    )
+    .join("\n");
 }
 
 function renderRow(line: OrderConfirmationLine, currencyCode: string): string {
-  const details = detailLine(line);
+  const details = detailsHtml(line);
 
   return [
     '<tr><td align="left" style="padding-top:12px; padding-bottom:12px; border-bottom:1px solid #e6e0d6;">',
     `<span style="${CELL} font-size:14px; line-height:20px; color:#04133b; font-weight:bold;">${escapeHtml(line.title)}</span><br>`,
     `<span style="${CELL} font-size:13px; line-height:19px; color:#5a6377;">Qty ${line.quantity}</span>`,
     details
-      ? `<br><span style="${CELL} font-size:13px; line-height:19px; color:#5a6377;">${escapeHtml(details)}</span>`
+      ? `<br><span style="${CELL} font-size:13px; line-height:19px; color:#5a6377;">${details}</span>`
       : "",
     `</td><td align="right" valign="top" style="padding-top:12px; padding-bottom:12px; border-bottom:1px solid #e6e0d6; ${CELL} font-size:14px; line-height:20px; color:#04133b; font-weight:bold;">`,
     escapeHtml(formatMoney(line.lineTotal, currencyCode)),
@@ -79,10 +95,10 @@ export function renderOrderItemsText(
   let used = 0;
 
   for (const [index, line] of lines.entries()) {
-    const details = detailLine(line);
+    const details = detailsText(line);
     const row = [
       `${line.title} — Qty ${line.quantity} — ${formatMoney(line.lineTotal, currencyCode)}`,
-      details ? `  ${details}` : "",
+      details,
     ]
       .filter(Boolean)
       .join("\n");

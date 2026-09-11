@@ -54,16 +54,12 @@ describe("CartCard", () => {
     expect(screen.queryByRole("term")).not.toBeInTheDocument();
   });
 
-  it("renders customization details as key/value pairs, truncated with the full value in title", () => {
-    const longValue = "a".repeat(200);
+  it("renders customization details as key/value pairs", () => {
     render(
       <CartCard
         line={makeLine({
           isCustomizable: true,
-          details: [
-            { label: "Size", value: '3" · matte' },
-            { label: "File", value: longValue },
-          ],
+          details: [{ label: "Size", value: '3" \u00b7 matte' }],
         })}
         onQuantityChange={jest.fn()}
         onRemove={jest.fn()}
@@ -71,10 +67,78 @@ describe("CartCard", () => {
     );
 
     expect(screen.getByText("Size:")).toBeInTheDocument();
-    expect(screen.getByText('3" · matte')).toBeInTheDocument();
-    const truncated = screen.getByText(longValue);
-    expect(truncated).toHaveClass("truncate");
-    expect(truncated).toHaveAttribute("title", longValue);
+    expect(screen.getByText('3" \u00b7 matte')).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /show full/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no disclosure for a short single-line detail", () => {
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "Order notes", value: "Gift wrap it" }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /show full order notes/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reveals a multi-line detail in full behind a labelled disclosure", () => {
+    const note = "Match the sage green.\n\nNeeded before the 14th.";
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "Order notes", value: note }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    // The default normalizer collapses whitespace, which would pass whether or
+    // not the line breaks survived — the one thing this test is for.
+    const verbatim = { normalizer: (value: string) => value };
+
+    const toggle = screen.getByRole("button", {
+      name: "Show full order notes",
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveAttribute(
+      "aria-controls",
+      screen.getByText(note, verbatim).getAttribute("id"),
+    );
+
+    fireEvent.click(toggle);
+
+    const expanded = screen.getByRole("button", { name: "Show less" });
+    expect(expanded).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(note, verbatim)).toBeInTheDocument();
+  });
+
+  it("offers the disclosure for a long single-line detail too", () => {
+    const longValue = "a".repeat(200);
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "File", value: longValue }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Show full file" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the line total as unit price times quantity", () => {

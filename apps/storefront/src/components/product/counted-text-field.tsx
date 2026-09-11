@@ -16,6 +16,9 @@ export type CountedTextFieldProps = {
   value: string;
   onChange: (next: string) => void;
   maxLength: number;
+  // What the field is for, ahead of the character count. Only order notes
+  // carry one: custom text is named by what it is, and a note is not.
+  guidance?: string;
   // Shown once the shopper leaves the field empty. Each field words this in
   // its own terms — what the piece needs is not what the maker needs to know.
   requiredMessage: string;
@@ -24,6 +27,18 @@ export type CountedTextFieldProps = {
   // clause to the one add-to-cart hint is the one the field shows.
   errorMessage?: string | null;
 };
+
+// HeroUI's TextField wires exactly one Description into aria-describedby, so
+// the guidance and the count share it rather than competing for it.
+function fieldDescription(
+  guidance: string | undefined,
+  mode: Exclude<CustomizationInputMode, "off">,
+  value: string,
+  maxLength: number,
+): string {
+  const count = characterCountHint(mode, value, maxLength);
+  return guidance ? `${guidance} ${count}` : count;
+}
 
 // Both configurator text fields are this one. A textarea, not an input, even
 // for a single line of engraving: an input clips a long value out of sight at
@@ -36,6 +51,7 @@ export function CountedTextField({
   value,
   onChange,
   maxLength,
+  guidance,
   requiredMessage,
   rows = 2,
   errorMessage = null,
@@ -56,7 +72,7 @@ export function CountedTextField({
     <div className="flex flex-col gap-3">
       <Textarea
         label={label}
-        description={characterCountHint(mode, value, maxLength)}
+        description={fieldDescription(guidance, mode, value, maxLength)}
         isRequired={mode === "required"}
         isInvalid={showsError}
         errorMessage={showsError ? error : undefined}

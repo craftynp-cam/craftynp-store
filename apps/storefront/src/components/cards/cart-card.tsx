@@ -9,6 +9,7 @@ import { formatMoney } from "@/lib/money";
 
 import { X } from "../icons";
 import { Badge, QuantityStepper } from "../ui";
+import { CartLineDetailValue } from "./cart-line-detail-value";
 
 export type CartCardData = {
   isLoading?: false;
@@ -116,9 +117,7 @@ export function CartCard(props: CartCardProps) {
               <dt className="shrink-0 text-foreground-muted">
                 {detail.label}:
               </dt>
-              <dd className="min-w-0 truncate" title={detail.value}>
-                {detail.value}
-              </dd>
+              <CartLineDetailValue label={detail.label} value={detail.value} />
             </div>
           ))}
         </dl>

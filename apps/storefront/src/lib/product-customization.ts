@@ -238,6 +238,19 @@ export function missingInputLabels(
   return missing.map((key) => MISSING_LABELS[key]);
 }
 
+// Order notes are the one detail that may carry line breaks, so they are the
+// one that has to agree on what a line break is. A Windows textarea submits
+// \r\n and a Mac one \n, and cartLineKey builds the cart line's identity out
+// of the detail value — the same note typed on two machines would otherwise be
+// two lines. Runs of blank lines collapse so a stray Enter does not push the
+// rest of the note out of the cart card's clamp.
+export function normalizeOrderNotes(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function customizationDetails(
   customization: ProductCustomization,
   draft: CustomizationDraft,
@@ -266,7 +279,10 @@ export function customizationDetails(
     customization.inputs.orderNotes !== "off" &&
     isSatisfied("orderNotes", customization, draft)
   ) {
-    details.push({ label: "Order notes", value: draft.orderNotes.trim() });
+    details.push({
+      label: "Order notes",
+      value: normalizeOrderNotes(draft.orderNotes),
+    });
   }
 
   return details;

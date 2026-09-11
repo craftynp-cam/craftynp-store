@@ -13,6 +13,7 @@ import {
   characterCountHint,
   customTextProblem,
   customizationDetails,
+  normalizeOrderNotes,
   missingInputLabels,
   missingRequiredInputs,
   nearLimitAnnouncement,
@@ -668,5 +669,46 @@ describe("artworkGuidance", () => {
     expect(guidance).toContain("PNG, JPG, WEBP, SVG, PDF or AI");
     expect(guidance).toContain("25 MB");
     expect(guidance).not.toContain("DPI");
+  });
+});
+
+describe("normalizeOrderNotes", () => {
+  it("keeps the shopper's own line breaks", () => {
+    expect(
+      normalizeOrderNotes("Match the sage green.\nCentre the monogram."),
+    ).toBe("Match the sage green.\nCentre the monogram.");
+  });
+
+  it("folds a Windows textarea's line endings to the same value a Mac sends", () => {
+    expect(normalizeOrderNotes("One\r\nTwo\rThree")).toBe("One\nTwo\nThree");
+  });
+
+  it("collapses a run of blank lines to a single blank line", () => {
+    expect(normalizeOrderNotes("One\n\n\n\nTwo")).toBe("One\n\nTwo");
+  });
+
+  it("still trims the ends", () => {
+    expect(normalizeOrderNotes("\n\n  Matte finish  \n\n")).toBe(
+      "Matte finish",
+    );
+  });
+});
+
+describe("customizationDetails order notes", () => {
+  it("carries a multi-line note onto the cart line intact", () => {
+    const [notes] = customizationDetails(
+      ALL_REQUIRED,
+      draft({
+        artwork: ARTWORK,
+        customText: "Ellie",
+        widthInches: "8",
+        heightInches: "10",
+        orderNotes: "Match the sage green.\r\n\r\nNeeded before the 14th.",
+      }),
+    ).filter((detail) => detail.label === "Order notes");
+
+    expect(notes?.value).toBe(
+      "Match the sage green.\n\nNeeded before the 14th.",
+    );
   });
 });

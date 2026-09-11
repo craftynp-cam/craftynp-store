@@ -650,6 +650,13 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   row**, now purely to keep one email a sane size — the original reason
   (Resend's 2,000-character template-variable cap) no longer applies, since
   nothing here is sent as a template variable.
+- **A line's customization details get one line each, in both bodies, and a
+  value's own newlines are carried.** Order notes may run to several lines
+  (CNP-38), and joining every detail with `" · "` into one span was where
+  those breaks died. The HTML path converts `\n` to `<br>` **after**
+  `escapeHtml`, never before, or the escape would eat the tag; the plain-text
+  path re-indents continuation lines by the same two spaces, or the rest of a
+  note reads as a new item.
 - **Every interpolated value must go through `escapeHtml`** before landing in
   the HTML body — `order-email.ts` builds the email as a literal JS template
   string, so an unescaped value is a direct injection, not a framework quirk.

@@ -302,6 +302,16 @@ for the keys).
   second's `details`. `id` stays the variant id because that is what
   `/checkout/prepare` is sent; the key adds the configuration on top, and the
   quantity stepper, the remove button and every React `key` use it.
+- **A detail value that is long or multi-line is clamped behind a disclosure,
+  and `isExpandableDetail` decides that from the value, not from the box.**
+  Order notes may run to several lines, and `truncate` — which is
+  `white-space: nowrap` — collapsed them to one. `CartLineDetailValue`
+  (`src/components/cards`) clamps to two lines with `whitespace-pre-line` and
+  offers a real `aria-expanded` button, because the `title` tooltip it
+  replaces was reachable by neither keyboard nor touch. Measuring the rendered
+  box would make a note expandable in a browser and not in jsdom, which is the
+  wrong way round for the guarantee. A short single-line value keeps the plain
+  truncation and its `title`.
 
 ### Counted text fields
 
@@ -374,6 +384,23 @@ rewritten to drop it; what was left was the same field twice.
   that does not change while the shopper types — the live region speaks once,
   at the threshold, and going over is the field error's job to announce. A
   counter wired straight to `aria-live` reads every letter aloud.
+- **Order notes carry a `guidance` line and custom text does not.** "Custom
+  text" says what it is; "Order notes" does not say what is worth saying, so
+  the field names placement, colour matching and deadlines before the count.
+  It shares the one `Description` because HeroUI's `TextField` wires exactly
+  one into `aria-describedby` — a second element would drop half of it from
+  the accessible description.
+- **Order notes sit last in the panel, and that is the decision, not the
+  default.** They are the catch-all for anything the options do not cover, so
+  they only read correctly once the shopper has seen artwork, text and size;
+  the guidance says "the options above" and depends on it. CNP-80 put them
+  there without deliberating, CNP-38 kept them there having done so.
+- **Notes are normalised once, in `normalizeOrderNotes`, not at each surface
+  that renders them.** A Windows textarea submits `\r\n` and a Mac one `\n`,
+  and `cartLineKey` builds a line's identity out of the detail value — the
+  same note typed on two machines would otherwise be two cart lines. Runs of
+  blank lines collapse so a stray Enter does not push the rest of the note out
+  of the cart card's clamp.
 
 **Custom text's limit is product configuration; order notes' is one shop-wide
 constant.** Text is made into the piece, so what fits varies by product;
