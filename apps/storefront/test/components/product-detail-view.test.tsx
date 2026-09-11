@@ -811,6 +811,35 @@ describe("ProductDetailView", () => {
       });
     });
 
+    it("carries a multi-line order note through to the cart line", () => {
+      const withNotes = resolveProductCustomization({
+        customizable: "true",
+        customization_notes: "optional",
+      });
+
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: withNotes })}
+        />,
+      );
+
+      chooseBlush();
+      fireEvent.change(screen.getByLabelText(/order notes/i), {
+        target: {
+          value: "Match the sage green.\r\n\r\nNeeded before the 14th.",
+        },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+      expect(readCart().lines[0]?.details).toEqual([
+        { label: "Color", value: "Blush" },
+        {
+          label: "Order notes",
+          value: "Match the sage green.\n\nNeeded before the 14th.",
+        },
+      ]);
+    });
+
     describe("artwork resolution", () => {
       // jsdom implements neither, and ArtworkUpload builds a preview from the
       // chosen file the moment it is accepted.

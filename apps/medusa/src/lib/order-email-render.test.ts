@@ -141,3 +141,61 @@ describe("renderAddressHtml", () => {
     expect(renderAddressHtml(null)).toBe("");
   });
 });
+
+describe("multi-line order notes", () => {
+  const NOTE = "Match the sage green.\n\nNeeded before the 14th.";
+
+  it("carries the note's line breaks into the HTML body", () => {
+    const html = renderOrderItemsHtml(
+      [buildLine({ details: [{ label: "Order notes", value: NOTE }] })],
+      "usd",
+      ORDER_URL,
+    );
+
+    expect(html).toContain(
+      "Order notes: Match the sage green.<br><br>Needed before the 14th.",
+    );
+  });
+
+  it("still escapes a note that carries markup alongside its line breaks", () => {
+    const html = renderOrderItemsHtml(
+      [
+        buildLine({
+          details: [{ label: "Order notes", value: "One\n<img src=x>" }],
+        }),
+      ],
+      "usd",
+      ORDER_URL,
+    );
+
+    expect(html).not.toContain("<img");
+    expect(html).toContain("One<br>&lt;img src=x&gt;");
+  });
+
+  it("keeps the note indented under its item in the plain-text body", () => {
+    const text = renderOrderItemsText(
+      [buildLine({ details: [{ label: "Order notes", value: NOTE }] })],
+      "usd",
+    );
+
+    expect(text).toContain(
+      "  Order notes: Match the sage green.\n  \n  Needed before the 14th.",
+    );
+  });
+
+  it("gives each detail its own line rather than running them together", () => {
+    const text = renderOrderItemsText(
+      [
+        buildLine({
+          details: [
+            { label: "Size", value: '8" x 10"' },
+            { label: "Order notes", value: "Gift wrap it" },
+          ],
+        }),
+      ],
+      "usd",
+    );
+
+    expect(text).toContain('  Size: 8" x 10"\n  Order notes: Gift wrap it');
+  });
+});

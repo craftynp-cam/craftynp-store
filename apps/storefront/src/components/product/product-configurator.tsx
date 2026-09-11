@@ -15,6 +15,11 @@ import {
   type CustomizationDraft,
 } from "@/lib/product-customization";
 
+// Order notes are the one field whose label does not say what it is for, and
+// the shopper is otherwise left guessing what is worth telling the maker.
+const ORDER_NOTES_GUIDANCE =
+  "Placement, colour matching, a deadline — anything the options above don't cover.";
+
 type ProductConfiguratorProps = {
   customization: ProductCustomization;
   value: CustomizationDraft;
@@ -124,6 +129,7 @@ export function ProductConfigurator({
           value={value.orderNotes}
           onChange={(orderNotes) => patch({ orderNotes })}
           maxLength={ORDER_NOTES_MAX_LENGTH}
+          guidance={ORDER_NOTES_GUIDANCE}
           requiredMessage="Tell us what you'd like us to know about this piece."
           rows={4}
           errorMessage={orderNotesError}

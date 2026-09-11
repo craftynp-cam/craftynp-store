@@ -113,3 +113,47 @@ describe("CountedTextField", () => {
     );
   });
 });
+
+describe("CountedTextField guidance", () => {
+  function describedText(field: HTMLElement): string {
+    const ids = field.getAttribute("aria-describedby")?.split(" ") ?? [];
+    return ids
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ");
+  }
+
+  it("carries the guidance and the character count in one description", () => {
+    render(
+      <CountedTextField
+        label="Order notes"
+        mode="optional"
+        value=""
+        onChange={jest.fn()}
+        maxLength={500}
+        guidance="Placement, colour matching, a deadline."
+        requiredMessage="Tell us about this piece."
+      />,
+    );
+
+    const described = describedText(screen.getByLabelText(/order notes/i));
+    expect(described).toContain("Placement, colour matching, a deadline.");
+    expect(described).toContain("Up to 500 characters");
+  });
+
+  it("describes a field with no guidance by its count alone", () => {
+    render(
+      <CountedTextField
+        label="Custom text"
+        mode="optional"
+        value=""
+        onChange={jest.fn()}
+        maxLength={120}
+        requiredMessage={REQUIRED_MESSAGE}
+      />,
+    );
+
+    const described = describedText(screen.getByLabelText(/custom text/i));
+    expect(described).toContain("Up to 120 characters");
+    expect(described).not.toContain("Placement");
+  });
+});
