@@ -127,6 +127,7 @@ export function CartCard(props: CartCardProps) {
         <QuantityStepper
           value={quantity}
           onChange={(next) => onQuantityChange(cartLineKey(line), next)}
+          min={line.minOrderQuantity}
           label={`Quantity for ${title}`}
         />
         <p className="font-display text-lg">

@@ -65,6 +65,14 @@ describe("cart", () => {
     expect(readCart().lines[0]?.quantity).toBe(1);
   });
 
+  it("holds a line at its own minimum, not at one", () => {
+    addCartLine(makeLine({ quantity: 50, minOrderQuantity: 50 }));
+
+    setCartLineQuantity("sticker", 1);
+
+    expect(readCart().lines[0]?.quantity).toBe(50);
+  });
+
   it("removes a line", () => {
     addCartLine(makeLine({ id: "sticker" }));
     addCartLine(makeLine({ id: "keychain", title: "Keychain" }));

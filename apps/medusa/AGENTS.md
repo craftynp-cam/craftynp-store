@@ -66,7 +66,8 @@ tax provider), `notification-resend`, `auth-auth0`, and
   the ordered width and the custom text limit the same way, for the same
   reason. It still has no production caller; CNP-45 wires the real
   `LineItemCustomization` payload through.
-- **Custom text carries a fifth key, `customization_text_max_length`**, written
+- **Custom text carries a fifth customization key,
+  `customization_text_max_length`**, written
   by the same widget and patch — how many characters that product allows.
   It splits the same way the size bounds do, but the halves sit differently:
   `resolveProductCustomization` falls back to
@@ -81,6 +82,23 @@ tax provider), `notification-resend`, `auth-auth0`, and
   message, so the storefront's counter and this rejection cannot disagree —
   and both count graphemes through `textLength`, not UTF-16 code units, so an
   emoji is one character on both sides.
+- **`min_order_quantity` is a product key that is not a customization key.**
+  It is the fewest units a shopper may order, and it applies to a ready-made
+  product exactly as it does to a made-to-order one — so it is deliberately
+  outside `ProductCustomization` and outside `customizationMetadataPatch`, for
+  the reason `resolveArtworkMinDpi` sits outside them:
+  `resolveProductCustomization` answers `READY_MADE_PRODUCT` for a product that
+  is not customizable, and a shared constant has nowhere to keep a per-product
+  number. The widget writes it as its own key beside the patch rather than
+  through it, because the patch is derived from a `ProductCustomization` and
+  switching Made to order off resets that — riding the patch would wipe the
+  minimum of the very products this key exists for. It splits the way the text
+  limit does: `resolveMinOrderQuantity` falls back to 1 on anything it cannot
+  read, and `validateProductCustomization` refuses a value it could not honour —
+  a fraction, a zero, a word — rather than rounding it, but **does not insist
+  the key be set**, because one is a sane answer rather than a hidden policy.
+  That check sits before the customizable-only clauses on purpose, so a
+  ready-made product is held to it too.
 - **`tsconfig.json` must keep `medusa-config.ts` in `include`, with `rootDir`
   at `./`.** `medusa build` emits exactly `tsConfig.fileNames`, so scoping the
   root to `src` leaves the built `.medusa/server` with no `medusa-config.js` and

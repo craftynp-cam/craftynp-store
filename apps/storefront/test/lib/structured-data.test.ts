@@ -28,6 +28,7 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
     ],
     customization: READY_MADE_PRODUCT,
     artworkMinDpi: 300,
+    minOrderQuantity: 1,
     ...overrides,
   };
 }

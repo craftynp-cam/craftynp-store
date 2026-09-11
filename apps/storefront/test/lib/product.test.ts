@@ -134,6 +134,27 @@ describe("toProductDetail", () => {
     expect(detail.variants[0]?.availability).toBe("out_of_stock");
   });
 
+  it("reads the order minimum off the product's own metadata", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "stickers",
+      title: "Stickers",
+      metadata: { min_order_quantity: "50" },
+    });
+
+    expect(detail.minOrderQuantity).toBe(50);
+  });
+
+  it("orders one at a time when no minimum is declared", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "keychain",
+      title: "Keychain",
+    });
+
+    expect(detail.minOrderQuantity).toBe(1);
+  });
+
   it("maps option values with their ids, for the selector to key off", () => {
     const detail = toProductDetail({
       id: "prod_1",

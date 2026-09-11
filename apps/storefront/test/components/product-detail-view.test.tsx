@@ -65,6 +65,7 @@ function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
     variants,
     customization: READY_MADE_PRODUCT,
     artworkMinDpi: 300,
+    minOrderQuantity: 1,
     ...overrides,
   };
 }
@@ -298,6 +299,45 @@ describe("ProductDetailView", () => {
     fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
 
     expect(readCart().lines[0]?.quantity).toBe(2);
+  });
+
+  it("starts the quantity at the product's minimum (AC 2)", () => {
+    render(
+      <ProductDetailView product={makeProduct({ minOrderQuantity: 50 })} />,
+    );
+
+    expect(
+      screen.getByRole("spinbutton", {
+        name: "Quantity for Wildflower Acrylic Keychain",
+      }),
+    ).toHaveValue(50);
+    expect(
+      screen.getByRole("button", { name: "Decrease quantity" }),
+    ).toBeDisabled();
+  });
+
+  it("names the minimum to the shopper rather than only disabling decrement (AC 2)", () => {
+    render(
+      <ProductDetailView product={makeProduct({ minOrderQuantity: 50 })} />,
+    );
+
+    expect(
+      screen.getByRole("spinbutton", {
+        name: "Quantity for Wildflower Acrylic Keychain",
+      }),
+    ).toHaveAccessibleDescription("Minimum order: 50");
+  });
+
+  it("carries the minimum onto the cart line, so the drawer holds it too", () => {
+    render(
+      <ProductDetailView product={makeProduct({ minOrderQuantity: 50 })} />,
+    );
+
+    chooseBlush();
+    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(readCart().lines[0]?.quantity).toBe(50);
+    expect(readCart().lines[0]?.minOrderQuantity).toBe(50);
   });
 
   it("shows the unit price on the add to cart button at quantity 1", () => {

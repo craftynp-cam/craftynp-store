@@ -4,6 +4,7 @@ import {
   readOptionValueHeightInches,
   readOptionValueWidthInches,
   resolveArtworkMinDpi,
+  resolveMinOrderQuantity,
   resolveProductCustomization,
   type ProductCustomization,
 } from "@craftynp/types";
@@ -105,6 +106,7 @@ export type ProductDetail = {
   variants: ProductDetailVariant[];
   customization: ProductCustomization;
   artworkMinDpi: number;
+  minOrderQuantity: number;
 };
 
 const SUB_LABEL_KEYS = ["subLabel", "sub_label"] as const;
@@ -200,6 +202,7 @@ export function toProductDetail(
     variants,
     customization: resolveProductCustomization(product.metadata),
     artworkMinDpi: resolveArtworkMinDpi(product.categories),
+    minOrderQuantity: resolveMinOrderQuantity(product.metadata),
   };
 }
 

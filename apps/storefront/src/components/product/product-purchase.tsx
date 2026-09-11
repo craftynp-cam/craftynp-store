@@ -38,6 +38,7 @@ type ProductPurchaseProps = {
   variants: readonly ProductDetailVariant[];
   customization: ProductCustomization;
   artworkMinDpi: number;
+  minOrderQuantity: number;
   selected: Record<string, string>;
   onOptionChange: (optionId: string, valueId: string | null) => void;
   onCtaHeightChange?: (height: number) => void;
@@ -63,11 +64,13 @@ export function ProductPurchase({
   variants,
   customization,
   artworkMinDpi,
+  minOrderQuantity,
   selected,
   onOptionChange,
   onCtaHeightChange,
 }: ProductPurchaseProps) {
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(minOrderQuantity);
+  const orderQuantity = Math.max(quantity, minOrderQuantity);
   const [draft, setDraft] = useState<CustomizationDraft>(
     EMPTY_CUSTOMIZATION_DRAFT,
   );
@@ -195,7 +198,7 @@ export function ProductPurchase({
 
   const totalPrice = selectedVariant?.price
     ? formatMoney(
-        selectedVariant.calculatedAmount * quantity,
+        selectedVariant.calculatedAmount * orderQuantity,
         selectedVariant.currencyCode,
       )
     : undefined;
@@ -231,7 +234,8 @@ export function ProductPurchase({
       imageAlt: title,
       unitPrice: selectedVariant.calculatedAmount,
       currencyCode: selectedVariant.currencyCode,
-      quantity,
+      quantity: orderQuantity,
+      minOrderQuantity,
       isCustomizable: customization.isCustomizable,
       details: detailsForCart,
     });
@@ -302,9 +306,15 @@ export function ProductPurchase({
           Qty
         </p>
         <QuantityStepper
-          value={quantity}
+          value={orderQuantity}
           onChange={setQuantity}
+          min={minOrderQuantity}
           label={`Quantity for ${title}`}
+          description={
+            minOrderQuantity > 1
+              ? `Minimum order: ${minOrderQuantity}`
+              : undefined
+          }
         />
       </div>
 

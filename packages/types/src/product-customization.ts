@@ -72,6 +72,13 @@ export const ARTWORK_MIN_DPI_METADATA_KEY = "artwork_min_dpi";
 // common floor for large-format work.
 export const DEFAULT_ARTWORK_MIN_DPI = 150;
 
+export const MIN_ORDER_QUANTITY_METADATA_KEY = "min_order_quantity";
+
+// Reachable, like DEFAULT_ARTWORK_MIN_DPI: most products sell one at a time and
+// their owner will never name a minimum, so one is the answer rather than a
+// misconfiguration.
+export const DEFAULT_MIN_ORDER_QUANTITY = 1;
+
 export const OPTION_VALUE_WIDTH_INCHES_KEYS = [
   "widthInches",
   "width_inches",
@@ -169,6 +176,21 @@ function readTextLimit(value: unknown): number | null {
   if (!Number.isInteger(parsed)) return null;
   if (parsed < 1 || parsed > CUSTOM_TEXT_LENGTH_CEILING) return null;
   return parsed;
+}
+
+// Refused rather than clamped, for readTextLimit's reason: a minimum of 0 or
+// 2.5 units is a mistake, and quietly rounding it hides it. There is no ceiling
+// — one here would be invented policy rather than a limit the schema imposes.
+function readOrderMinimum(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isInteger(parsed)) return null;
+  return parsed >= 1 ? parsed : null;
 }
 
 function readTextConfig(metadata: Metadata): CustomTextConfig {
@@ -386,6 +408,14 @@ export function validateProductCustomization(
     };
   }
 
+  const rawMinimum = metadata?.[MIN_ORDER_QUANTITY_METADATA_KEY];
+  if (isPresent(rawMinimum) && readOrderMinimum(rawMinimum) === null) {
+    return {
+      ok: false,
+      message: `${MIN_ORDER_QUANTITY_METADATA_KEY} must be a whole number of units, 1 or more`,
+    };
+  }
+
   if (!isCustomizable && declared.length > 0) {
     return {
       ok: false,
@@ -402,6 +432,16 @@ export function validateProductCustomization(
   }
 
   return { ok: true };
+}
+
+// Deliberately not part of ProductCustomization: a ready-made product has no
+// customization object of its own to carry it, and a minimum applies to one
+// just as readily as to a made-to-order piece.
+export function resolveMinOrderQuantity(metadata: Metadata): number {
+  return (
+    readOrderMinimum(metadata?.[MIN_ORDER_QUANTITY_METADATA_KEY]) ??
+    DEFAULT_MIN_ORDER_QUANTITY
+  );
 }
 
 type MetadataCarrier = { metadata?: Record<string, unknown> | null };

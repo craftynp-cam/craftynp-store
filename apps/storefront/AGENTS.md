@@ -56,7 +56,10 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   side by side from the page. The selected variant's `thumbnail` drives the
   gallery's main image, so the state has to sit above both. `ProductPurchase`
   is controlled — it takes `selected` and `onOptionChange` and keeps only the
-  state nothing above it needs: the quantity and the customization draft.
+  state nothing above it needs: the quantity and the customization draft. The
+  quantity **starts at `ProductDetail.minOrderQuantity`** and is clamped to it
+  by derivation on every render, never synced in an effect — the same reason
+  `defaultSelection` seeds the custom size rather than an effect doing it.
 - **Import icons only through `src/components/icons`** — the sole place
   `@phosphor-icons/react` is imported, and from its `/dist/ssr` subpath so
   glyphs render in server components too. Every glyph is decorative:
@@ -227,6 +230,15 @@ guard that validates them).
   The threshold reaches the page as `ProductDetail.artworkMinDpi`, resolved from
   the product's categories; `fetchProductByHandle` must keep asking for
   `*categories`, and the failure mode if it stops is silent.
+- **The order minimum is not part of the one gate, and that is not an
+  oversight.** `ProductDetail.minOrderQuantity` rides the same `+metadata` the
+  declaration does and is read only through `resolveMinOrderQuantity` in
+  `@craftynp/types` (see [apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the
+  key). It reaches `QuantityStepper` as `min` and is stated under the control,
+  and it lands on the cart line so the drawer holds the same floor. Because the
+  stepper puts a sub-minimum quantity out of reach, there is no state for
+  `canAddToCart` to refuse and nothing for the hint to name — a clause there
+  would describe something the shopper cannot do.
 - **There is one add-to-cart gate and one hint, not two.** `canAddToCart` is
   false while an option is outstanding, while the variant is sold out, _or_
   while a required configurator input is empty; the hint names whatever is
@@ -388,6 +400,14 @@ rewritten to drop it; what was left was the same field twice.
   that does not change while the shopper types — the live region speaks once,
   at the threshold, and going over is the field error's job to announce. A
   counter wired straight to `aria-live` reads every letter aloud.
+- **`QuantityStepper` holds a typed draft and commits it on blur or Enter**, for
+  the same reason this field has no `maxLength`: clamping each keystroke swallows
+  input with no explanation. With a minimum of 50, clamping turned the `1` of
+  `100` into `50` and put every number above the minimum out of typing reach. A
+  value already in range still commits as typed, so the ordinary minimum of one
+  is as responsive as it was. Its `role="status"` line speaks the **committed**
+  value and is silent while a draft is open — a live region wired to the field
+  reads every digit aloud, which is `nearLimitAnnouncement`'s rule again.
 - **Order notes carry a `guidance` line and custom text does not.** "Custom
   text" says what it is; "Order notes" does not say what is worth saying, so
   the field names placement, colour matching and deadlines before the count.

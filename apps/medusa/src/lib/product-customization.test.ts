@@ -47,6 +47,14 @@ describe("assertDeclaredCustomization", () => {
     ).toThrow(/at least one input/);
   });
 
+  it("guards the order minimum on a product that is not customizable at all", () => {
+    expect(() =>
+      assertDeclaredCustomization([
+        { ...READY_MADE, metadata: { min_order_quantity: "half a dozen" } },
+      ]),
+    ).toThrow(/min_order_quantity/);
+  });
+
   it("reports every bad product in one batch, not just the first", () => {
     expect(() =>
       assertDeclaredCustomization([
