@@ -22,9 +22,12 @@ import {
   CUSTOMIZATION_INPUT_MODES,
   CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
   CUSTOM_TEXT_LENGTH_CEILING,
+  DEFAULT_MIN_ORDER_QUANTITY,
+  MIN_ORDER_QUANTITY_METADATA_KEY,
   READY_MADE_PRODUCT,
   activeCustomizationInputs,
   customizationMetadataPatch,
+  resolveMinOrderQuantity,
   resolveProductCustomization,
   unmeasuredOptionValues,
   type CustomizationInputMode,
@@ -81,6 +84,12 @@ function readTextLimitDraft(value: string): number | null {
   return parsed >= 1 && parsed <= CUSTOM_TEXT_LENGTH_CEILING ? parsed : null;
 }
 
+function readOrderMinimumDraft(value: string): number | null {
+  const parsed = Number(value.trim());
+  if (!Number.isInteger(parsed)) return null;
+  return parsed >= 1 ? parsed : null;
+}
+
 const ProductCustomizationWidget = ({
   data,
 }: DetailWidgetProps<AdminProduct>) => {
@@ -96,6 +105,7 @@ const ProductCustomizationWidget = ({
     optionValue: "",
   });
   const [textMaxLength, setTextMaxLength] = useState("");
+  const [orderMinimum, setOrderMinimum] = useState("");
 
   const { data: product, isLoading } = useQuery({
     queryKey,
@@ -128,6 +138,11 @@ const ProductCustomizationWidget = ({
         ? ""
         : String(resolved.text.maxLength),
     );
+
+    const minimum = resolveMinOrderQuantity(product.product.metadata);
+    setOrderMinimum(
+      minimum === DEFAULT_MIN_ORDER_QUANTITY ? "" : String(minimum),
+    );
   }, [product]);
 
   const save = useMutation({
@@ -158,6 +173,7 @@ const ProductCustomizationWidget = ({
                 CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
             },
           }),
+          [MIN_ORDER_QUANTITY_METADATA_KEY]: orderMinimum.trim(),
         },
       });
     },
@@ -201,6 +217,9 @@ const ProductCustomizationWidget = ({
   const asksForArtwork =
     customization.isCustomizable && customization.inputs.artwork !== "off";
 
+  const orderMinimumIsBroken =
+    orderMinimum.trim() !== "" && readOrderMinimumDraft(orderMinimum) === null;
+
   const sizing = unmeasuredOptionValues(
     (product?.product as { options?: unknown } | undefined)?.options as
       Parameters<typeof unmeasuredOptionValues>[0] | undefined,
@@ -213,7 +232,7 @@ const ProductCustomizationWidget = ({
   return (
     <Container className="divide-y p-0">
       <div className="flex items-center justify-between px-6 py-4">
-        <Heading level="h2">Customization</Heading>
+        <Heading level="h2">Ordering and customization</Heading>
         <Button
           size="small"
           onClick={() => save.mutate()}
@@ -225,6 +244,29 @@ const ProductCustomizationWidget = ({
       </div>
 
       <div className="flex flex-col gap-y-4 px-6 py-4">
+        <div className="flex flex-col gap-y-2">
+          <Label htmlFor={MIN_ORDER_QUANTITY_METADATA_KEY}>
+            Minimum order quantity
+          </Label>
+          <Input
+            id={MIN_ORDER_QUANTITY_METADATA_KEY}
+            value={orderMinimum}
+            placeholder={String(DEFAULT_MIN_ORDER_QUANTITY)}
+            onChange={(event) => setOrderMinimum(event.target.value)}
+          />
+          <Hint>
+            The fewest units a shopper may order. Blank means one. Applies
+            whether or not this product is made to order.
+          </Hint>
+        </div>
+
+        {orderMinimumIsBroken ? (
+          <Hint variant="error">
+            The minimum must be a whole number of units, 1 or more. Saving it
+            like this is rejected.
+          </Hint>
+        ) : null}
+
         <div className="flex items-start justify-between gap-x-4">
           <div className="flex flex-col gap-y-1">
             <Label htmlFor="product_customizable">Made to order</Label>
