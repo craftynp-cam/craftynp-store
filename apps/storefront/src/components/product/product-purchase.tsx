@@ -8,10 +8,12 @@ import { Badge, Button, QuantityStepper } from "../ui";
 import { ProductConfigurator } from "./product-configurator";
 import { ProductPrice } from "./product-price";
 import { StockStatus } from "./stock-status";
+import { usePriceQuote } from "./use-price-quote";
 import { VariantSelector } from "./variant-selector";
 import { addCartLine } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
 import { formatMoney } from "@/lib/money";
+import { quotedDimensions } from "@/lib/price-quote";
 import type { ProductDetailOption, ProductDetailVariant } from "@/lib/product";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
@@ -157,6 +159,27 @@ export function ProductPurchase({
   const notesProblem = orderNotesProblem(customization, draft);
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isSoldOut = selectedVariant?.availability === "out_of_stock";
+
+  const quoteDimensions = quotedDimensions(
+    usesCustomSize(customization, draft),
+    orderedSize,
+  );
+  // Nothing is quoted while a size is still being typed or is out of range —
+  // the backend would only refuse it, and the shopper is already being told.
+  const quotableVariantId =
+    selectedVariant != null &&
+    !isSoldOut &&
+    !hasSizeErrors &&
+    (!usesCustomSize(customization, draft) || quoteDimensions != null)
+      ? selectedVariant.id
+      : null;
+
+  const priceQuote = usePriceQuote(
+    quotableVariantId,
+    orderQuantity,
+    quoteDimensions,
+  );
+
   const canAddToCart =
     selectedVariant != null &&
     !isSoldOut &&
@@ -164,7 +187,9 @@ export function ProductPurchase({
     !hasSizeErrors &&
     textProblem === null &&
     notesProblem === null &&
-    artworkError === null;
+    artworkError === null &&
+    priceQuote.status === "ready" &&
+    priceQuote.quote !== null;
 
   const clauses: string[] = [];
   if (outstanding.length > 0) {
@@ -187,6 +212,12 @@ export function ProductPurchase({
   if (artworkError !== null) {
     clauses.push("replace your artwork with a higher-resolution file");
   }
+  // Only the failure earns a clause. A quote in flight is already shown by the
+  // price dimming itself, and a hint that appears and vanishes within a second
+  // of every option change is noise rather than instruction.
+  if (clauses.length === 0 && priceQuote.status === "error") {
+    clauses.push("try again — we could not price this just now");
+  }
 
   const hint = isSoldOut
     ? undefined
@@ -196,11 +227,12 @@ export function ProductPurchase({
         ? asSentence(clauses)
         : undefined;
 
-  const totalPrice = selectedVariant?.price
-    ? formatMoney(
-        selectedVariant.calculatedAmount * orderQuantity,
-        selectedVariant.currencyCode,
-      )
+  const quote = priceQuote.quote;
+  const quotedUnitPrice = quote
+    ? formatMoney(quote.unitAmount, quote.currencyCode)
+    : undefined;
+  const totalPrice = quote
+    ? formatMoney(quote.lineTotal, quote.currencyCode)
     : undefined;
 
   const detailsForCart = [
@@ -224,7 +256,7 @@ export function ProductPurchase({
   ];
 
   function handleAddToCart() {
-    if (!selectedVariant || !canAddToCart) return;
+    if (!selectedVariant || !canAddToCart || !quote) return;
 
     addCartLine({
       id: selectedVariant.id,
@@ -232,12 +264,14 @@ export function ProductPurchase({
       title,
       imageUrl,
       imageAlt: title,
-      unitPrice: selectedVariant.calculatedAmount,
-      currencyCode: selectedVariant.currencyCode,
+      unitPrice: quote.unitAmount,
+      currencyCode: quote.currencyCode,
       quantity: orderQuantity,
       minOrderQuantity,
       isCustomizable: customization.isCustomizable,
       details: detailsForCart,
+      dimensions: quoteDimensions,
+      priceQuoteToken: quote.quoteToken,
     });
     openCartDrawer();
   }
@@ -257,11 +291,27 @@ export function ProductPurchase({
       </div>
 
       {selectedVariant ? (
-        <ProductPrice
-          price={selectedVariant.price}
-          originalPrice={selectedVariant.originalPrice}
-          savingsLabel={selectedVariant.savingsLabel}
-        />
+        <>
+          <ProductPrice
+            price={quotedUnitPrice ?? selectedVariant.price}
+            originalPrice={
+              quote?.isAreaPriced ? undefined : selectedVariant.originalPrice
+            }
+            savingsLabel={
+              quote?.isAreaPriced ? undefined : selectedVariant.savingsLabel
+            }
+            lineTotal={totalPrice}
+            quantity={orderQuantity}
+            isUpdating={priceQuote.status === "loading"}
+          />
+          {/* Speaks the settled price once. A live region wired to the quote
+              itself would read every intermediate figure aloud. */}
+          <p role="status" className="sr-only">
+            {priceQuote.status === "ready" && totalPrice
+              ? `Price updated: ${totalPrice}`
+              : ""}
+          </p>
+        </>
       ) : fromPrice ? (
         <ProductPrice price={fromPrice} prefix="From" />
       ) : null}

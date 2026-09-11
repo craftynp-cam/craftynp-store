@@ -27,6 +27,8 @@ type CheckoutPreparePayload = {
     quantity: number;
     isCustomizable?: boolean;
     details?: { label: string; value: string }[];
+    dimensions?: { widthInches: number; heightInches: number };
+    priceQuoteToken?: string;
   }[];
   shippingRateId: string;
   shippingServiceCode: string;

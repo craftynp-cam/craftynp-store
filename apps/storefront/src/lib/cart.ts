@@ -12,6 +12,11 @@ export type CartLine = {
   minOrderQuantity?: number;
   isCustomizable?: boolean;
   details?: readonly CartLineDetail[];
+  // What the backend quoted this line at, and the size it was quoted for.
+  // Both travel to prepare-cart, which re-derives the price rather than
+  // trusting either — the token only proves which line the quote was for.
+  dimensions?: { widthInches: number; heightInches: number };
+  priceQuoteToken?: string;
 };
 
 export type Cart = { lines: readonly CartLine[] };
@@ -173,12 +178,17 @@ export function setCartLineQuantity(id: string, quantity: number): void {
       if (cartLineKey(line) !== id) return line;
 
       const floor = line.minOrderQuantity ?? 1;
-      return {
-        ...line,
-        quantity: Number.isFinite(quantity)
-          ? Math.max(floor, Math.trunc(quantity))
-          : floor,
-      };
+      const next = Number.isFinite(quantity)
+        ? Math.max(floor, Math.trunc(quantity))
+        : floor;
+
+      if (next === line.quantity) return line;
+
+      // The quote was issued for the old quantity, and a quantity break makes
+      // that a different unit price. Dropping the token here is what makes
+      // prepare-cart ask for a fresh one rather than charge a stale tier.
+      const { priceQuoteToken: _staleQuote, ...rest } = line;
+      return { ...rest, quantity: next };
     }),
   });
 }

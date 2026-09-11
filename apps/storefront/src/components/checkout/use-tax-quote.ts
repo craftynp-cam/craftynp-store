@@ -98,6 +98,7 @@ export function useTaxQuote(
           items: latestCart.lines.map((line) => ({
             variantId: line.id,
             quantity: line.quantity,
+            dimensions: line.dimensions,
           })),
           shippingQuoteToken: latestDraft.shippingQuoteToken,
         }),
