@@ -8,11 +8,14 @@ import {
   CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
   READY_MADE_PRODUCT,
   DEFAULT_ARTWORK_MIN_DPI,
+  DEFAULT_MIN_ORDER_QUANTITY,
+  MIN_ORDER_QUANTITY_METADATA_KEY,
   activeCustomizationInputs,
   customizationMetadataPatch,
   readOptionValueWidthInches,
   requiredCustomizationInputs,
   resolveArtworkMinDpi,
+  resolveMinOrderQuantity,
   unmeasuredOptionValues,
   validateCategoryArtwork,
   resolveProductCustomization,
@@ -365,6 +368,68 @@ describe("validateProductCustomization", () => {
         { published: false },
       ),
     ).toEqual({ ok: true });
+  });
+
+  it.each([
+    ["a word", "none"],
+    ["a fraction", "2.5"],
+    ["zero", "0"],
+  ])("rejects %s as an order minimum on a ready-made product", (_l, raw) => {
+    expect(
+      validateProductCustomization(
+        { customizable: "false", [MIN_ORDER_QUANTITY_METADATA_KEY]: raw },
+        { published: true },
+      ),
+    ).toEqual({
+      ok: false,
+      message: expect.stringContaining(MIN_ORDER_QUANTITY_METADATA_KEY),
+    });
+  });
+
+  it("accepts an order minimum on a ready-made product", () => {
+    expect(
+      validateProductCustomization(
+        { customizable: "false", [MIN_ORDER_QUANTITY_METADATA_KEY]: "50" },
+        { published: true },
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it("lets a published product name no minimum, since one is a sane answer", () => {
+    expect(
+      validateProductCustomization(
+        { customizable: "false" },
+        { published: true },
+      ),
+    ).toEqual({ ok: true });
+  });
+});
+
+describe("resolveMinOrderQuantity", () => {
+  it.each([
+    ["a string, as a CSV import writes one", "50"],
+    ["a number, as the admin's JSON editor writes one", 50],
+  ])("reads a minimum given as %s", (_label, raw) => {
+    expect(
+      resolveMinOrderQuantity({ [MIN_ORDER_QUANTITY_METADATA_KEY]: raw }),
+    ).toBe(50);
+  });
+
+  it.each([
+    ["a word", "fifty"],
+    ["a fraction, which no shopper can order", "2.5"],
+    ["zero", "0"],
+    ["a negative count", "-3"],
+    ["an empty string, as the widget writes when cleared", ""],
+    ["nothing at all", undefined],
+  ])("falls back to one on %s", (_label, raw) => {
+    expect(
+      resolveMinOrderQuantity({ [MIN_ORDER_QUANTITY_METADATA_KEY]: raw }),
+    ).toBe(DEFAULT_MIN_ORDER_QUANTITY);
+  });
+
+  it("falls back to one when the product carries no metadata", () => {
+    expect(resolveMinOrderQuantity(undefined)).toBe(DEFAULT_MIN_ORDER_QUANTITY);
   });
 });
 
