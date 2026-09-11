@@ -16,6 +16,20 @@ function makeLine(overrides: Partial<CartLine> = {}): CartLine {
 }
 
 describe("CartCard", () => {
+  it("will not let a line be decremented below its own minimum", () => {
+    render(
+      <CartCard
+        line={makeLine({ quantity: 50, minOrderQuantity: 50 })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Decrease quantity" }),
+    ).toBeDisabled();
+  });
+
   it("shows the ready-to-ship badge for a non-customizable line", () => {
     render(
       <CartCard

@@ -76,7 +76,12 @@ describe("QuantityStepper", () => {
   it("does not clamp a part-typed value up to the minimum", () => {
     const onChange = jest.fn();
     render(
-      <QuantityStepper value={50} onChange={onChange} min={50} label="Quantity" />,
+      <QuantityStepper
+        value={50}
+        onChange={onChange}
+        min={50}
+        label="Quantity"
+      />,
     );
 
     const input = screen.getByRole("spinbutton", { name: "Quantity" });
@@ -91,7 +96,12 @@ describe("QuantityStepper", () => {
   it("raises a below-minimum value only once the shopper leaves the field", () => {
     const onChange = jest.fn();
     render(
-      <QuantityStepper value={50} onChange={onChange} min={50} label="Quantity" />,
+      <QuantityStepper
+        value={50}
+        onChange={onChange}
+        min={50}
+        label="Quantity"
+      />,
     );
 
     const input = screen.getByRole("spinbutton", { name: "Quantity" });
@@ -105,7 +115,12 @@ describe("QuantityStepper", () => {
   it("commits a typed value on Enter, so a keyboard needs no blur", () => {
     const onChange = jest.fn();
     render(
-      <QuantityStepper value={50} onChange={onChange} min={50} label="Quantity" />,
+      <QuantityStepper
+        value={50}
+        onChange={onChange}
+        min={50}
+        label="Quantity"
+      />,
     );
 
     const input = screen.getByRole("spinbutton", { name: "Quantity" });

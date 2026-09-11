@@ -9,6 +9,7 @@ export type CartLine = {
   unitPrice: number;
   currencyCode: string;
   quantity: number;
+  minOrderQuantity?: number;
   isCustomizable?: boolean;
   details?: readonly CartLineDetail[];
 };
@@ -166,14 +167,19 @@ export function addCartLine(line: CartLine): void {
 
 export function setCartLineQuantity(id: string, quantity: number): void {
   const current = readCartFromStorage();
-  const clamped = Number.isFinite(quantity)
-    ? Math.max(1, Math.trunc(quantity))
-    : 1;
 
   writeCart({
-    lines: current.lines.map((line) =>
-      cartLineKey(line) === id ? { ...line, quantity: clamped } : line,
-    ),
+    lines: current.lines.map((line) => {
+      if (cartLineKey(line) !== id) return line;
+
+      const floor = line.minOrderQuantity ?? 1;
+      return {
+        ...line,
+        quantity: Number.isFinite(quantity)
+          ? Math.max(floor, Math.trunc(quantity))
+          : floor,
+      };
+    }),
   });
 }
 
