@@ -219,7 +219,7 @@ export default async function ComponentsPage() {
 
               <Section
                 title="Long detail values"
-                description="A custom text or filename far longer than the panel truncates with an ellipsis rather than widening the card (AC 3)."
+                description="A short value truncates with an ellipsis rather than widening the card. A long or multi-line one clamps to two lines behind a disclosure, so an order note keeps its line breaks and stays readable in full (CNP-38 AC 3)."
               >
                 <CartCardDemo
                   initialLines={[
@@ -241,6 +241,11 @@ export default async function ComponentsPage() {
                           label: "File",
                           value:
                             "sarahs-sweet-shop-final-logo-v3-approved-for-print-2026.png",
+                        },
+                        {
+                          label: "Order notes",
+                          value:
+                            "Match the sage green on the sample I emailed, and centre the monogram.\n\nNeeded before the 14th if that's possible.",
                         },
                       ],
                     },

@@ -40,7 +40,10 @@ export function CartLineDetailValue({
     <dd className="min-w-0">
       <span
         id={valueId}
-        className={`block whitespace-pre-line ${isExpanded ? "" : "line-clamp-2"}`}
+        // `line-clamp-2` brings its own `display: -webkit-box`, which a `block`
+        // alongside it silently beats — the clamp then does nothing at all. The
+        // expanded state is the only one that supplies a display of its own.
+        className={`whitespace-pre-line ${isExpanded ? "block" : "line-clamp-2"}`}
       >
         {value}
       </span>
