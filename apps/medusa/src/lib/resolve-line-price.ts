@@ -112,10 +112,13 @@ export async function resolveLinePrice(
   // price, so a custom size gets the same volume discount a preset one does.
   // An area-priced line is is_custom_price at the cart, which stops Medusa
   // applying the tier itself.
-  const [singleUnit] = await queryPricedVariants({
-    variantIds: [input.variantId],
-    quantity: 1,
-  });
+  const [singleUnit] =
+    input.quantity === 1
+      ? [variant]
+      : await queryPricedVariants({
+          variantIds: [input.variantId],
+          quantity: 1,
+        });
   const singleUnitAmount = toAmount(
     singleUnit?.calculated_price?.calculated_amount,
   );
@@ -134,7 +137,7 @@ export async function resolveLinePrice(
     return {
       ok: false,
       reason: "unconfigured",
-      message: `this product has no custom size pricing configured`,
+      message: "this product has no custom size pricing configured",
     };
   }
 
