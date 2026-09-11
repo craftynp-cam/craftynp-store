@@ -9,7 +9,7 @@ import {
 import { CountedTextField } from "@/components";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
-  customTextError,
+  customTextProblem,
 } from "@/lib/product-customization";
 
 const REQUIRED = resolveProductCustomization({
@@ -33,10 +33,12 @@ function Harness({ mode = "required" }: { mode?: "optional" | "required" }) {
       onChange={setValue}
       maxLength={REQUIRED.text.maxLength}
       requiredMessage={REQUIRED_MESSAGE}
-      errorMessage={customTextError(REQUIRED, {
-        ...EMPTY_CUSTOMIZATION_DRAFT,
-        customText: value,
-      })}
+      errorMessage={
+        customTextProblem(REQUIRED, {
+          ...EMPTY_CUSTOMIZATION_DRAFT,
+          customText: value,
+        })?.message ?? null
+      }
     />
   );
 }

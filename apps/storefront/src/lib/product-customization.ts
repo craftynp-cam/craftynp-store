@@ -5,6 +5,7 @@ import {
   artworkResolutionDemands,
   checkArtworkResolution,
   checkCustomDimensions,
+  checkSingleLine,
   checkTextLength,
   requiredCustomizationInputs,
   textLength,
@@ -98,26 +99,52 @@ export function customSizeErrors(
   );
 }
 
+// What is wrong with a text field, in the field's words and in the one
+// add-to-cart hint's. They travel together because the hint has to name what
+// the shopper must actually do, and "shorten" is the wrong instruction for a
+// line break.
+export type TextFieldProblem = {
+  message: string;
+  clause: string;
+};
+
 // Both counted fields measure through @craftynp/types' textLength, which is
 // what customTextSchema and the backend validator measure too, so the number
 // the shopper is shown is the number they are held to.
-export function customTextError(
+export function customTextProblem(
   customization: ProductCustomization,
   draft: CustomizationDraft,
-): string | null {
+): TextFieldProblem | null {
   if (customization.inputs.customText === "off") return null;
-  return checkTextLength(draft.customText, customization.text.maxLength);
+
+  const singleLine = checkSingleLine(draft.customText);
+  if (singleLine !== null) {
+    return { message: singleLine, clause: "keep your custom text to one line" };
+  }
+
+  const tooLong = checkTextLength(
+    draft.customText,
+    customization.text.maxLength,
+  );
+  return tooLong === null
+    ? null
+    : { message: tooLong, clause: "shorten your custom text" };
 }
 
 // Order notes are instructions to the maker rather than something made into
 // the piece, so their limit is one number for the whole shop instead of
-// product configuration the way the custom text limit is.
-export function orderNotesError(
+// product configuration the way the custom text limit is — and unlike custom
+// text they may run to as many lines as the shopper wants.
+export function orderNotesProblem(
   customization: ProductCustomization,
   draft: CustomizationDraft,
-): string | null {
+): TextFieldProblem | null {
   if (customization.inputs.orderNotes === "off") return null;
-  return checkTextLength(draft.orderNotes, ORDER_NOTES_MAX_LENGTH);
+
+  const tooLong = checkTextLength(draft.orderNotes, ORDER_NOTES_MAX_LENGTH);
+  return tooLong === null
+    ? null
+    : { message: tooLong, clause: "shorten your order notes" };
 }
 
 // The limit is stated before the shopper reaches it and counted while they

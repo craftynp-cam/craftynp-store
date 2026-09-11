@@ -315,10 +315,25 @@ rewritten to drop it; what was left was the same field twice.
 - **Both are a `Textarea`, including the single line of engraving.** An
   `<input>` clips a long value out of sight at its right-hand edge, and AC 1
   is that the shopper can read the whole of what they typed. The field grows
-  with its content — `[field-sizing:content]` on the `Textarea` primitive,
-  with `rows` as the floor and a `max-h-64` cap that only bites for a value far
-  past any limit we enforce. The stored value is still one string; nothing
-  adds line breaks.
+  with its content — `[field-sizing:content]` on the `Textarea` primitive —
+  with a `max-h-64` cap that only bites for a value far past any limit we
+  enforce.
+- **`field-sizing: content` makes the browser ignore `rows`, so the primitive
+  restores that floor itself.** Measured: with it on, `rows={4}` and `rows={2}`
+  both render at 39px, so order notes lost two-thirds of their height and read
+  as a single-line box. The `minHeight` inline style on the `Textarea` is what
+  puts it back — the element's own line heights plus HeroUI's padding and
+  border, because the box is `border-box` and HeroUI sets its own `min-height`
+  on `.textarea` that a utility class would have to fight. Keep `rows` as the
+  prop that drives it; it is also what a browser without `field-sizing` uses
+  natively.
+- **Custom text is one line, and `checkSingleLine` in `@craftynp/types` is what
+  says so.** A textarea means the shopper can press Enter, and what the
+  workshop makes is one line — so `customTextSchema` rejects a line break as
+  well, and the field blocks add-to-cart with "Keep this to one line." rather
+  than stripping the newline behind the shopper's back. **Order notes may run
+  to as many lines as the shopper likes**; they are instructions to the maker,
+  not something made into the piece.
 - **Do not re-add a preview of the value below the field.** It repeats an
   input the shopper is already looking at, and rendering it in another face
   promises a typeface the workshop does not cut. It was defended as showing
@@ -337,10 +352,13 @@ rewritten to drop it; what was left was the same field twice.
 - **`checkTextLength` is the one message**, shared the way
   `checkCustomDimensions` is, so the field and the backend's rejection cannot
   word the same failure differently.
-- **The length error is derived in `ProductPurchase`, not in the field.**
-  `customTextError` and `orderNotesError` feed the field's
-  `isInvalid`/`errorMessage` and the one `canAddToCart` gate, adding one clause
-  each to the one hint — one gate, one hint, no second gate.
+- **What is wrong with a field is derived in `ProductPurchase`, not in the
+  field.** `customTextProblem` and `orderNotesProblem` return a
+  `TextFieldProblem` — the message the field shows and the clause the one hint
+  adds — feeding `isInvalid`/`errorMessage` and the one `canAddToCart` gate.
+  The two travel together because the hint has to name what the shopper must
+  actually do: "shorten your custom text" is the wrong instruction for a line
+  break.
 - **The empty-required message is passed in per field, and it waits for a
   blur.** What the piece needs is not what the maker needs to know, so the two
   are worded differently. An untouched field is not yet wrong, so `isVisited`

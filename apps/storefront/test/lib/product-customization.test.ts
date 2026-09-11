@@ -11,12 +11,12 @@ import {
   artworkResolutionError,
   customSizeErrors,
   characterCountHint,
-  customTextError,
+  customTextProblem,
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
   nearLimitAnnouncement,
-  orderNotesError,
+  orderNotesProblem,
   orderedSizeInches,
   resolveCustomSizeOption,
   type CustomizationDraft,
@@ -185,31 +185,53 @@ describe("customizationDetails", () => {
 
 const AT_LIMIT = "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH);
 
-describe("customTextError", () => {
+describe("customTextProblem", () => {
   it("accepts text at exactly the limit", () => {
-    expect(customTextError(ALL_REQUIRED, draft({ customText: AT_LIMIT }))).toBe(
-      null,
-    );
+    expect(
+      customTextProblem(ALL_REQUIRED, draft({ customText: AT_LIMIT })),
+    ).toBe(null);
   });
 
   it("measures the trimmed value, as the schema does", () => {
     expect(
-      customTextError(ALL_REQUIRED, draft({ customText: `  ${AT_LIMIT}  ` })),
+      customTextProblem(ALL_REQUIRED, draft({ customText: `  ${AT_LIMIT}  ` })),
     ).toBe(null);
   });
 
-  it("says how far over the limit the text runs", () => {
+  it("says how far over the limit the text runs, and what to do about it", () => {
     expect(
-      customTextError(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}abc` })),
-    ).toBe(
-      `Shorten this to ${CUSTOM_TEXT_FALLBACK_MAX_LENGTH} characters or fewer \u2014 3 characters over.`,
-    );
+      customTextProblem(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}abc` })),
+    ).toEqual({
+      message: `Shorten this to ${CUSTOM_TEXT_FALLBACK_MAX_LENGTH} characters or fewer \u2014 3 characters over.`,
+      clause: "shorten your custom text",
+    });
   });
 
   it("counts one character over in the singular", () => {
     expect(
-      customTextError(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}a` })),
+      customTextProblem(ALL_REQUIRED, draft({ customText: `${AT_LIMIT}a` }))
+        ?.message,
     ).toContain("1 character over");
+  });
+
+  // The field is a textarea, so Enter now inserts a newline. Custom text is
+  // one line — and "shorten" would be the wrong instruction for this.
+  it("refuses a line break, and says so rather than saying shorten", () => {
+    expect(
+      customTextProblem(ALL_REQUIRED, draft({ customText: "Happy\nBirthday" })),
+    ).toEqual({
+      message: "Keep this to one line.",
+      clause: "keep your custom text to one line",
+    });
+  });
+
+  it("refuses a carriage return the same way", () => {
+    expect(
+      customTextProblem(
+        ALL_REQUIRED,
+        draft({ customText: "Happy\r\nBirthday" }),
+      )?.message,
+    ).toBe("Keep this to one line.");
   });
 
   it("holds the shopper to the limit the owner configured", () => {
@@ -220,10 +242,11 @@ describe("customTextError", () => {
     });
 
     expect(
-      customTextError(shortLimit, draft({ customText: "a".repeat(20) })),
+      customTextProblem(shortLimit, draft({ customText: "a".repeat(20) })),
     ).toBe(null);
     expect(
-      customTextError(shortLimit, draft({ customText: "a".repeat(21) })),
+      customTextProblem(shortLimit, draft({ customText: "a".repeat(21) }))
+        ?.message,
     ).toBe("Shorten this to 20 characters or fewer \u2014 1 character over.");
   });
 
@@ -234,7 +257,7 @@ describe("customTextError", () => {
     });
 
     expect(
-      customTextError(notesOnly, draft({ customText: `${AT_LIMIT}a` })),
+      customTextProblem(notesOnly, draft({ customText: `${AT_LIMIT}a` })),
     ).toBe(null);
   });
 });
@@ -304,20 +327,34 @@ describe("nearLimitAnnouncement", () => {
   });
 });
 
-describe("orderNotesError", () => {
+describe("orderNotesProblem", () => {
   it("holds notes to the shop-wide limit", () => {
     expect(
-      orderNotesError(
+      orderNotesProblem(
         ALL_REQUIRED,
         draft({ orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH) }),
       ),
     ).toBe(null);
     expect(
-      orderNotesError(
+      orderNotesProblem(
         ALL_REQUIRED,
         draft({ orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH + 2) }),
       ),
-    ).toContain("2 characters over");
+    ).toEqual({
+      message: expect.stringContaining("2 characters over"),
+      clause: "shorten your order notes",
+    });
+  });
+
+  // Notes are instructions to the maker, not something made into the piece,
+  // so a shopper may lay them out over as many lines as they want.
+  it("lets notes run to several lines", () => {
+    expect(
+      orderNotesProblem(
+        ALL_REQUIRED,
+        draft({ orderNotes: "Matte finish\nGift wrap, please" }),
+      ),
+    ).toBe(null);
   });
 
   it("stays quiet on a product that never asks for notes", () => {
@@ -327,7 +364,7 @@ describe("orderNotesError", () => {
     });
 
     expect(
-      orderNotesError(
+      orderNotesProblem(
         textOnly,
         draft({ orderNotes: "a".repeat(ORDER_NOTES_MAX_LENGTH + 2) }),
       ),

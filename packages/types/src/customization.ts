@@ -42,6 +42,17 @@ export function checkTextLength(
   return `Shorten this to ${maxLength} characters or fewer \u2014 ${over} ${over === 1 ? "character" : "characters"} over.`;
 }
 
+// Custom text is one line: it is what gets engraved, printed or stitched, and
+// a line break is not something the workshop makes. The storefront field is a
+// textarea so a long value stays readable, which means the shopper can now
+// press Enter in it — so the rule is stated here, where the backend enforces
+// the same thing in the same words.
+export const SINGLE_LINE_MESSAGE = "Keep this to one line.";
+
+export function checkSingleLine(value: string): string | null {
+  return /[\r\n]/.test(value) ? SINGLE_LINE_MESSAGE : null;
+}
+
 export const customTextSchema = z.object({
   value: z
     .string()
@@ -49,6 +60,9 @@ export const customTextSchema = z.object({
     .min(1)
     .refine((value) => textLength(value) <= CUSTOM_TEXT_LENGTH_CEILING, {
       message: `must be ${CUSTOM_TEXT_LENGTH_CEILING} characters or fewer`,
+    })
+    .refine((value) => checkSingleLine(value) === null, {
+      message: "must be a single line",
     }),
 });
 export type CustomText = z.infer<typeof customTextSchema>;

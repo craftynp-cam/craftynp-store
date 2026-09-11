@@ -28,10 +28,18 @@ export function Textarea({
       <HeroTextArea
         placeholder={placeholder}
         rows={rows}
-        // The field grows with what is typed instead of scrolling it out of
-        // sight; `rows` is the floor, and the cap only bites for a value far
-        // past any limit a field of ours enforces.
         className="[field-sizing:content] max-h-64"
+        // The field grows with what is typed instead of scrolling it out of
+        // sight, and the cap only bites for a value far past any limit a field
+        // of ours enforces. `field-sizing: content` makes the browser ignore
+        // `rows` outright — a rows={4} box rendered at the same 39px as a
+        // rows={2} one — so the floor rows used to provide is restored here,
+        // in the element's own line heights plus HeroUI's padding and border.
+        // Inline rather than a utility class because it is computed, and
+        // because it has to beat the `min-height` HeroUI sets on `.textarea`.
+        style={{
+          minHeight: `calc(${rows} * 1lh + 1rem + 2 * var(--border-width-field, 1px))`,
+        }}
       />
       {description ? <Description>{description}</Description> : null}
       {errorMessage ? <FieldError>{errorMessage}</FieldError> : null}

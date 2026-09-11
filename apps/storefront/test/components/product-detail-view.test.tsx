@@ -706,6 +706,27 @@ describe("ProductDetailView", () => {
 
     // Both configurator fields are one component, so what is worth pinning is
     // that each is wired to its own limit and its own words.
+    it("blocks a line break in the custom text, and says what to do", () => {
+      render(
+        <ProductDetailView
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      chooseBlush();
+      fireEvent.change(screen.getByLabelText(/custom text/i), {
+        target: { value: "Happy\nBirthday" },
+      });
+
+      expect(
+        screen.getByText("Keep your custom text to one line to continue."),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Keep this to one line.")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /add to cart/i }),
+      ).toBeDisabled();
+    });
+
     it("gives each text field its own required message", () => {
       const both = resolveProductCustomization({
         customizable: "true",

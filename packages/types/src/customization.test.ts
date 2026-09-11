@@ -1,12 +1,14 @@
 import {
   CUSTOM_TEXT_LENGTH_CEILING,
   ORDER_NOTES_MAX_LENGTH,
+  SINGLE_LINE_MESSAGE,
   artworkReferenceSchema,
   checkArtworkResolution,
   checkCustomDimensions,
+  checkSingleLine,
+  checkTextLength,
   customDimensionsSchema,
   customTextSchema,
-  checkTextLength,
   effectiveDpi,
   lineItemCustomizationSchema,
   requiredPixels,
@@ -58,6 +60,21 @@ describe("checkTextLength", () => {
   });
 });
 
+describe("checkSingleLine", () => {
+  it("passes ordinary one-line text", () => {
+    expect(checkSingleLine("For Grandma")).toBe(null);
+  });
+
+  it.each([
+    ["a newline", "Happy\nBirthday"],
+    ["a carriage return", "Happy\rBirthday"],
+    ["a Windows line ending", "Happy\r\nBirthday"],
+    ["a trailing newline", "Happy Birthday\n"],
+  ])("refuses %s", (_label, value) => {
+    expect(checkSingleLine(value)).toBe(SINGLE_LINE_MESSAGE);
+  });
+});
+
 describe("customTextSchema", () => {
   it("trims surrounding whitespace", () => {
     const result = customTextSchema.parse({ value: "  For Grandma  " });
@@ -75,6 +92,14 @@ describe("customTextSchema", () => {
     expect(customTextSchema.safeParse({ value: "a".repeat(200) }).success).toBe(
       true,
     );
+  });
+
+  // The storefront field is a textarea, so the shopper can press Enter in it.
+  // What the workshop makes is one line, and the backend has to agree.
+  it("rejects text carrying a line break", () => {
+    expect(
+      customTextSchema.safeParse({ value: "Happy\nBirthday" }).success,
+    ).toBe(false);
   });
 
   it("accepts text at exactly the ceiling", () => {

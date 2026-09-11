@@ -18,11 +18,11 @@ import {
   artworkGuidance,
   artworkResolutionError,
   customSizeErrors,
-  customTextError,
+  customTextProblem,
   customizationDetails,
   missingInputLabels,
   missingRequiredInputs,
-  orderNotesError,
+  orderNotesProblem,
   orderedSizeInches,
   resolveCustomSizeOption,
   usesCustomSize,
@@ -150,8 +150,8 @@ export function ProductPurchase({
     artworkMinDpi,
     orderedSize,
   );
-  const textError = customTextError(customization, draft);
-  const notesError = orderNotesError(customization, draft);
+  const textProblem = customTextProblem(customization, draft);
+  const notesProblem = orderNotesProblem(customization, draft);
   const selectedVariant = findVariant(variants, selected, optionIds);
   const isSoldOut = selectedVariant?.availability === "out_of_stock";
   const canAddToCart =
@@ -159,8 +159,8 @@ export function ProductPurchase({
     !isSoldOut &&
     missingInputs.length === 0 &&
     !hasSizeErrors &&
-    textError === null &&
-    notesError === null &&
+    textProblem === null &&
+    notesProblem === null &&
     artworkError === null;
 
   const clauses: string[] = [];
@@ -172,11 +172,11 @@ export function ProductPurchase({
   if (missingInputs.length > 0) {
     clauses.push(`add ${joinTitles(missingInputLabels(missingInputs))}`);
   }
-  if (textError !== null) {
-    clauses.push("shorten your custom text");
+  if (textProblem !== null) {
+    clauses.push(textProblem.clause);
   }
-  if (notesError !== null) {
-    clauses.push("shorten your order notes");
+  if (notesProblem !== null) {
+    clauses.push(notesProblem.clause);
   }
   if (hasSizeErrors) {
     clauses.push("check the size you entered");
@@ -292,8 +292,8 @@ export function ProductPurchase({
           onCustomSizeChange={handleCustomSizeChange}
           artworkError={artworkError}
           artworkGuidance={artworkGuidance(artworkMinDpi, orderedSize)}
-          customTextError={textError}
-          orderNotesError={notesError}
+          customTextError={textProblem?.message ?? null}
+          orderNotesError={notesProblem?.message ?? null}
         />
       ) : null}
 

@@ -89,6 +89,26 @@ describe("validateCustomization", () => {
     ).toThrow(/customText: Shorten this/);
   });
 
+  // The storefront blocks add-to-cart on a line break; this is the half that
+  // does not depend on the browser.
+  it("refuses custom text carrying a line break", () => {
+    expect(() =>
+      validateCustomization(
+        { customText: { value: "Happy\nBirthday" } },
+        RULES,
+      ),
+    ).toThrow(/customText\.value/);
+  });
+
+  it("leaves order notes free to run to several lines", () => {
+    expect(
+      validateCustomization(
+        { orderNotes: "Matte finish\nGift wrap, please" },
+        RULES,
+      ).orderNotes,
+    ).toBe("Matte finish\nGift wrap, please");
+  });
+
   it("throws on a non-object payload", () => {
     expect(() => validateCustomization("nope", RULES)).toThrow(
       /Invalid line item customization/,
