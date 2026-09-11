@@ -456,6 +456,21 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   return 400 — the storefront's stored id outlives its cart, and rejecting it
   wedges a shopper out of checkout permanently. Double-order protection lives in
   `/checkout/complete`'s order lookup, not here.
+- **It falls through for changed line items too** (`reason=items_changed`).
+  Reuse exists so an address edit keeps the shopper's PaymentIntent alive, and
+  `updateCartWorkflow` **cannot change line items** — so a cart whose lines no
+  longer match the request would be prepared, and charged, at the configuration
+  it was created with. The comparison covers the dimensions and the re-derived
+  area price as well as the variant and quantity: every custom size shares one
+  `Custom` variant, so the dimensions are the only thing that distinguishes an
+  8″ × 10″ line from a 12″ × 16″ one, and a rate the owner has edited since
+  makes the frozen `unit_price` stale. Non-area lines deliberately leave the
+  price out of the comparison — Medusa prices and refreshes those itself, so
+  including it would report a change the shopper never made.
+  **The reuse and fresh branches both need a test that asserts which workflow
+  ran.** The suite pinned neither for a long time, because the cart fixture
+  carried no `items` and every "reuse" test silently exercised the fresh-cart
+  branch while still passing.
 - **`prepare-cart` re-attaches the shipping method on every call.** The workflow
   replaces rather than duplicates; skipping it leaves the previous address's
   `quoteToken` attached, which blocks checkout on the next address edit.

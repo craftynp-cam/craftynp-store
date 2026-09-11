@@ -16,6 +16,7 @@ import {
 } from "../../../../lib/shipping-quote";
 import { taxSignature, verifyTaxQuote } from "../../../../lib/tax-quote";
 import { describeError } from "../../../../lib/describe-error";
+import { toAmount } from "../../../../lib/money";
 import { priceSignature, verifyPriceQuote } from "../../../../lib/price-quote";
 import { resolveLinePrice } from "../../../../lib/resolve-line-price";
 import { pricedVariantQuery } from "../../price-quote/route";
@@ -54,6 +55,45 @@ function toCartAddress(address: CheckoutAddress) {
     postal_code: address.postalCode,
     country_code: address.countryCode.toLowerCase(),
   };
+}
+
+type CartItemRow = {
+  variant_id?: string | null;
+  quantity?: unknown;
+  unit_price?: unknown;
+  is_custom_price?: boolean | null;
+  metadata?: {
+    dimensions?: { widthInches?: number; heightInches?: number } | null;
+  } | null;
+};
+
+type CartWithItems = {
+  id: string;
+  completed_at?: string | Date | null;
+  items?: CartItemRow[] | null;
+};
+
+function lineSignature(input: {
+  variantId: string;
+  quantity: number;
+  widthInches: number | null;
+  heightInches: number | null;
+  // Only an area-priced line carries one. Medusa prices every other line
+  // itself and refreshes it, so comparing those would report a change the
+  // shopper never made.
+  unitPrice: number | null;
+}): string {
+  return [
+    input.variantId,
+    input.quantity,
+    input.widthInches ?? "",
+    input.heightInches ?? "",
+    input.unitPrice ?? "",
+  ].join(":");
+}
+
+function itemsSignature(lines: readonly string[]): string {
+  return [...lines].sort().join(",");
 }
 
 type PaymentSessionWithData = {
@@ -169,26 +209,6 @@ export async function POST(
     });
   }
 
-  let reusableCartId: string | null = null;
-
-  if (cartId) {
-    const { data: existingCarts } = await query.graph({
-      entity: "cart",
-      fields: ["id", "completed_at"],
-      filters: { id: cartId },
-    });
-    const existingCart = existingCarts[0] as
-      { id: string; completed_at?: string | Date | null } | undefined;
-
-    if (existingCart && !existingCart.completed_at) {
-      reusableCartId = existingCart.id;
-    } else {
-      logger.warn(
-        `[checkout:cart-superseded] reason=${existingCart ? "completed" : "not_found"} cart=${cartId}`,
-      );
-    }
-  }
-
   // An area-priced line cannot be left to Medusa: the amount depends on the
   // dimensions, which no price set knows about. The token proves which line the
   // shopper was quoted for; the amount is re-derived here rather than read off
@@ -246,6 +266,63 @@ export async function POST(
     }
 
     unitPrices.set(index, priced.price.unitAmount);
+  }
+
+  const requestedItems = itemsSignature(
+    items.map((item, index) =>
+      lineSignature({
+        variantId: item.variantId,
+        quantity: item.quantity,
+        widthInches: item.dimensions?.widthInches ?? null,
+        heightInches: item.dimensions?.heightInches ?? null,
+        unitPrice: unitPrices.get(index) ?? null,
+      }),
+    ),
+  );
+
+  let reusableCartId: string | null = null;
+
+  if (cartId) {
+    const { data: existingCarts } = await query.graph({
+      entity: "cart",
+      fields: ["id", "completed_at", "items.*"],
+      filters: { id: cartId },
+    });
+    const existingCart = existingCarts[0] as CartWithItems | undefined;
+
+    // Reuse is only for an address edit, which is what keeps the shopper's
+    // PaymentIntent alive across one. updateCartWorkflow cannot change line
+    // items, so a cart whose lines no longer match the request would be
+    // prepared — and charged — at the configuration it was created with.
+    const storedItems = existingCart
+      ? itemsSignature(
+          (existingCart.items ?? []).map((item) =>
+            lineSignature({
+              variantId: item.variant_id ?? "",
+              quantity: toAmount(item.quantity),
+              widthInches: item.metadata?.dimensions?.widthInches ?? null,
+              heightInches: item.metadata?.dimensions?.heightInches ?? null,
+              unitPrice: item.is_custom_price
+                ? toAmount(item.unit_price)
+                : null,
+            }),
+          ),
+        )
+      : null;
+
+    const reason = !existingCart
+      ? "not_found"
+      : existingCart.completed_at
+        ? "completed"
+        : storedItems !== requestedItems
+          ? "items_changed"
+          : null;
+
+    if (reason === null && existingCart) {
+      reusableCartId = existingCart.id;
+    } else {
+      logger.warn(`[checkout:cart-superseded] reason=${reason} cart=${cartId}`);
+    }
   }
 
   let cartIdToPrepare: string;
