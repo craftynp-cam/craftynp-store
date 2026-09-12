@@ -160,10 +160,51 @@ the project. Both Medusa services reach them by reference variable
 which silently disagrees with the Dockerfile's `EXPOSE` and with every port
 reference in this repo.
 
-**Backups are not enabled.** Railway's scheduled volume backups need a paid
-plan, so CNP-16's "daily backups with the retention documented" is **not met**.
-When the plan is upgraded, enable daily and monthly on the Postgres volume —
-daily retains 6 days, monthly 3 months — and record it here.
+**Backups are scheduled on the Postgres volume, daily and monthly**, from the
+service's Backups tab. Railway fixes the retention per schedule: daily is kept 6
+days, monthly 89 days — roughly three months. Redis is deliberately not backed
+up, because it holds no durable state; the R2 buckets age out under their own
+lifecycle rules, under [R2](#r2).
+
+- A volume backup restores only into the same service in the same environment,
+  never into another environment or project.
+- Deleting or wiping the volume deletes its backups with it. A logical dump is
+  the only copy that survives that.
+- A restore moves the service onto a new volume named after the backup's date
+  stamp and leaves the old volume unmounted in the project. Backups newer than
+  the restored one stay on the old volume.
+
+### Restoring Postgres
+
+**From a volume backup:** Postgres service → Backups → find the backup by date
+stamp → Restore. Railway stages the change rather than applying it; review it
+under Details on the project canvas, then Deploy. Postgres redeploys onto the
+restored volume, and both Medusa services keep reaching it through the same
+reference variable. This path can only run against production itself, so it
+has not been exercised.
+
+**From a logical dump:** exercised on 2026-09-12 (CNP-82), restored into a
+throwaway local container. Postgres has no TCP proxy, so the dump goes through
+the CLI's SSH tunnel, which needs a key registered with `railway ssh keys add`.
+
+```sh
+railway connect Postgres --tunnel-only -p <project-id> -e production -P 55432
+docker run -d --rm --name restore-drill -e POSTGRES_PASSWORD=drill \
+  -p 127.0.0.1:55433:5432 postgres:18
+docker exec -e PGPASSWORD=<tunnel password> restore-drill pg_dump \
+  -h host.docker.internal -p 55432 -U postgres -d railway \
+  --format=custom --no-owner > prod.dump
+docker exec restore-drill createdb -U postgres restore_drill
+docker exec -i restore-drill pg_restore -U postgres -d restore_drill \
+  --no-owner --exit-on-error < prod.dump
+```
+
+**Run `pg_dump` and `pg_restore` at the server's major version, which is 18.**
+An older client refuses to dump a newer server, which is why both run inside a
+`postgres:18` container rather than from a local install. The drill dumped the
+20 MB database in 33 seconds over the tunnel, restored it in under a second, and
+all 148 tables matched production's exact row counts, 1,114 rows in total. The
+dump holds customer data: keep it out of the repo and delete it afterwards.
 
 ### The custom domain had to be added unproxied first
 
