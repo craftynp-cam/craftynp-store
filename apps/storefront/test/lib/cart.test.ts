@@ -94,6 +94,24 @@ describe("cart", () => {
     expect(cart.lines[0]?.quantity).toBe(2);
   });
 
+  it("reports a storage failure instead of losing the line silently", () => {
+    addCartLine(makeLine({ id: "sticker", quantity: 1 }));
+
+    const setItem = jest
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("quota", "QuotaExceededError");
+      });
+
+    try {
+      expect(addCartLine(makeLine({ id: "keychain" }))).toBe(false);
+    } finally {
+      setItem.mockRestore();
+    }
+
+    expect(readCart().lines.map((line) => line.id)).toEqual(["sticker"]);
+  });
+
   it("keeps two lines with different ids separate", () => {
     addCartLine(makeLine({ id: "sticker" }));
     addCartLine(makeLine({ id: "keychain", title: "Keychain" }));
