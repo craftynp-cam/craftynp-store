@@ -6,6 +6,7 @@ import type { CartLine } from "@/lib/cart";
 function makeLine(overrides: Partial<CartLine> = {}): CartLine {
   return {
     id: "sticker",
+    lineId: "line-sticker",
     href: "/products/sticker",
     title: "Custom Die-Cut Stickers",
     unitPrice: 0.75,

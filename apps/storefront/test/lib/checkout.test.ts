@@ -317,6 +317,7 @@ describe("checkoutTotals", () => {
       lines: [
         {
           id: "sticker",
+          lineId: "line-sticker",
           href: "/products/sticker",
           title: "Sticker",
           unitPrice: 0.75,
@@ -340,6 +341,7 @@ describe("checkoutTotals", () => {
       lines: [
         {
           id: "sticker",
+          lineId: "line-sticker",
           href: "/products/sticker",
           title: "Sticker",
           unitPrice: 0.75,
@@ -359,6 +361,7 @@ describe("checkoutTotals", () => {
       lines: [
         {
           id: "sticker",
+          lineId: "line-sticker",
           href: "/products/sticker",
           title: "Sticker",
           unitPrice: 0.75,
@@ -388,6 +391,7 @@ describe("checkoutTotals", () => {
       lines: [
         {
           id: "sticker",
+          lineId: "line-sticker",
           href: "/products/sticker",
           title: "Sticker",
           unitPrice: 0.75,
@@ -419,6 +423,7 @@ describe("checkoutTotals", () => {
       lines: [
         {
           id: "sticker",
+          lineId: "line-sticker",
           href: "/products/sticker",
           title: "Sticker",
           unitPrice: 0.75,
@@ -442,6 +447,7 @@ describe("checkoutTotals", () => {
       lines: [
         {
           id: "big-order",
+          lineId: "line-big-order",
           href: "/products/big-order",
           title: "Big order",
           unitPrice: 500,
@@ -466,6 +472,7 @@ describe("checkoutTotals", () => {
       lines: [
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 10,

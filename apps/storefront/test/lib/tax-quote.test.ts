@@ -67,6 +67,7 @@ describe("taxQuoteKey", () => {
       lines: [
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,
@@ -75,6 +76,7 @@ describe("taxQuoteKey", () => {
         },
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,
@@ -93,6 +95,7 @@ describe("taxQuoteKey", () => {
     const draft = makeDraft();
     const line = {
       id: "a",
+      lineId: "line-a",
       href: "/a",
       title: "A",
       unitPrice: 1,

@@ -11,6 +11,7 @@ export function CartCardDemo({
   initialLines: readonly CartLine[];
 }) {
   const [lines, setLines] = useState(initialLines);
+  const [editing, setEditing] = useState<string | null>(null);
 
   if (lines.length === 0) {
     return <p className="text-foreground-muted">Removed — reload to reset.</p>;
@@ -34,8 +35,15 @@ export function CartCardDemo({
               current.filter((candidate) => candidate.id !== id),
             )
           }
+          editHref={`${line.href}?edit=${line.lineId}`}
+          onEdit={() => setEditing(line.lineId)}
         />
       ))}
+      {editing ? (
+        <p className="text-foreground-muted">
+          Edit would open the product page for {editing}.
+        </p>
+      ) : null}
     </ul>
   );
 }

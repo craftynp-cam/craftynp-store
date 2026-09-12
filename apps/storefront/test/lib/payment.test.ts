@@ -64,6 +64,7 @@ describe("paymentPrepareKey", () => {
       lines: [
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,
@@ -72,6 +73,7 @@ describe("paymentPrepareKey", () => {
         },
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,
@@ -94,6 +96,7 @@ describe("paymentPrepareKey", () => {
     const draft = makeDraft();
     const line = {
       id: "a",
+      lineId: "line-a",
       href: "/a",
       title: "A",
       unitPrice: 1,
@@ -169,6 +172,7 @@ describe("paymentPrepareKey", () => {
       lines: [
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,
@@ -177,6 +181,7 @@ describe("paymentPrepareKey", () => {
         },
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,

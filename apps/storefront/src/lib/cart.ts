@@ -4,6 +4,7 @@ export type CartLineDetail = { label: string; value: string };
 
 export type CartLine = {
   id: string;
+  lineId: string;
   href: string;
   title: string;
   imageUrl?: string;
@@ -26,7 +27,7 @@ export type Cart = { lines: readonly CartLine[] };
 
 export const CART_STORAGE_KEY = "craftynp-cart";
 
-export function cartLineKey(line: CartLine): string {
+export function cartLineKey(line: Omit<CartLine, "lineId">): string {
   const configuration = (line.details ?? [])
     .map((detail) => `${detail.label}=${detail.value}`)
     .join("|");
@@ -40,7 +41,19 @@ export function cartLineKey(line: CartLine): string {
 
 const EMPTY_CART: Cart = { lines: [] };
 
-function isCartLine(value: unknown): value is CartLine {
+let lineIdCounter = 0;
+
+export function newLineId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return uuid;
+
+  lineIdCounter += 1;
+  return `line-${Date.now().toString(36)}-${lineIdCounter}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isCartLine(value: unknown): value is Omit<CartLine, "lineId"> & {
+  lineId?: unknown;
+} {
   if (typeof value !== "object" || value === null) return false;
   const line = value as Record<string, unknown>;
   return (
@@ -103,6 +116,7 @@ function parseCart(raw: string | null): Cart {
       .filter(isCartLine)
       .map((line) => ({
         ...line,
+        lineId: typeof line.lineId === "string" ? line.lineId : newLineId(),
         imageUrl: renderableImageUrl(line.imageUrl),
       }));
     return lines.length > 0 ? { lines } : EMPTY_CART;
@@ -166,7 +180,9 @@ function writeCart(cart: Cart): boolean {
   return true;
 }
 
-export function addCartLine(line: CartLine): boolean {
+export type NewCartLine = Omit<CartLine, "lineId">;
+
+export function addCartLine(line: NewCartLine): boolean {
   const current = readCartFromStorage();
   const key = cartLineKey(line);
   const existing = current.lines.find(
@@ -179,9 +195,40 @@ export function addCartLine(line: CartLine): boolean {
           ? { ...candidate, quantity: candidate.quantity + line.quantity }
           : candidate,
       )
-    : [...current.lines, line];
+    : [...current.lines, { ...line, lineId: newLineId() }];
 
   return writeCart({ lines });
+}
+
+export function updateCartLine(lineId: string, next: NewCartLine): boolean {
+  const current = readCartFromStorage();
+  const index = current.lines.findIndex((line) => line.lineId === lineId);
+  if (index === -1) return false;
+
+  const replacement: CartLine = { ...next, lineId };
+  const key = cartLineKey(replacement);
+  const twin = current.lines.find(
+    (line) => line.lineId !== lineId && cartLineKey(line) === key,
+  );
+
+  if (!twin) {
+    return writeCart({
+      lines: current.lines.map((line, at) =>
+        at === index ? replacement : line,
+      ),
+    });
+  }
+
+  const { priceQuoteToken: _staleQuote, ...merged } = {
+    ...twin,
+    quantity: twin.quantity + replacement.quantity,
+  };
+
+  return writeCart({
+    lines: current.lines
+      .filter((line) => line.lineId !== lineId)
+      .map((line) => (line.lineId === twin.lineId ? merged : line)),
+  });
 }
 
 export function setCartLineQuantity(id: string, quantity: number): void {

@@ -15,11 +15,11 @@ export type ArtworkFileMeta = {
 };
 
 export type ArtworkReference = ArtworkFileMeta & {
-  uploadId: string;
+  uploadId?: string;
   storageKey: string;
   // Measured from the stored bytes by Medusa, never from the browser, so the
   // resolution the shopper is gated on is one they cannot overstate.
-  kind: ArtworkKind;
+  kind?: ArtworkKind;
   widthPx: number | null;
   heightPx: number | null;
 };

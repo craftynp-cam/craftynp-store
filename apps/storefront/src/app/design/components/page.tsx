@@ -193,6 +193,7 @@ export default async function ComponentsPage() {
                   initialLines={[
                     {
                       id: "ready-made",
+                      lineId: "line-ready-made",
                       href: "/products/wildflower-acrylic-keychain",
                       title: "Wildflower Acrylic Keychain",
                       unitPrice: 9,
@@ -201,6 +202,7 @@ export default async function ComponentsPage() {
                     },
                     {
                       id: "customizable",
+                      lineId: "line-customizable",
                       href: "/products/custom-die-cut-stickers",
                       title: "Custom Die-Cut Stickers",
                       unitPrice: 0.75,
@@ -225,6 +227,7 @@ export default async function ComponentsPage() {
                   initialLines={[
                     {
                       id: "long-details",
+                      lineId: "line-long-details",
                       href: "/products/custom-die-cut-stickers",
                       title: "Custom Die-Cut Stickers",
                       unitPrice: 0.75,
@@ -261,6 +264,7 @@ export default async function ComponentsPage() {
                   initialLines={[
                     {
                       id: "missing-image",
+                      lineId: "line-missing-image",
                       href: "/products/coming-soon",
                       title: "Coming Soon",
                       unitPrice: 5,

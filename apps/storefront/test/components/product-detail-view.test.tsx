@@ -13,6 +13,14 @@ import { clearCart, readCart } from "@/lib/cart";
 import { uploadArtwork } from "@/lib/artwork-upload";
 import { readCartDrawerOpen, setCartDrawerOpen } from "@/lib/cart-drawer";
 
+const mockRouterReplace = jest.fn();
+let searchParams = new URLSearchParams();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: mockRouterReplace }),
+  useSearchParams: () => searchParams,
+}));
+
 const options = [
   {
     id: "opt_color",

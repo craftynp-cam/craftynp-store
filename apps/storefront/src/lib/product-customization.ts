@@ -21,8 +21,12 @@ import type {
 
 import { ARTWORK_SIZE_LIMIT_LABEL } from "./artwork-upload";
 import type { ArtworkReference } from "./artwork-upload";
-import type { CartLineDetail } from "./cart";
-import type { ProductDetailOption, ProductDetailOptionValue } from "./product";
+import type { CartLine, CartLineDetail } from "./cart";
+import type {
+  ProductDetail,
+  ProductDetailOption,
+  ProductDetailOptionValue,
+} from "./product";
 
 export type CustomizationDraft = {
   artwork: ArtworkReference | null;
@@ -381,6 +385,49 @@ export function lineItemCustomization(
   }
 
   return Object.keys(payload).length > 0 ? payload : undefined;
+}
+
+export type CartLineConfiguration = {
+  selected: Record<string, string>;
+  draft: CustomizationDraft;
+  quantity: number;
+};
+
+export function configurationFromCartLine(
+  line: CartLine,
+  product: ProductDetail,
+): CartLineConfiguration | null {
+  const variant = product.variants.find(
+    (candidate) => candidate.id === line.id,
+  );
+  if (!variant) return null;
+
+  const chosen = new Set(variant.optionValueIds);
+  const selected: Record<string, string> = {};
+  for (const option of product.options) {
+    const value = option.values.find((candidate) => chosen.has(candidate.id));
+    if (value) selected[option.id] = value.id;
+  }
+
+  const saved = line.customization;
+  const dimensions = saved?.dimensions;
+
+  const draft: CustomizationDraft = {
+    ...EMPTY_CUSTOMIZATION_DRAFT,
+    artwork: saved?.artwork ? { ...saved.artwork } : null,
+    customText: saved?.customText?.value ?? "",
+    orderNotes: saved?.orderNotes ?? "",
+    useCustomSize:
+      dimensions != null && isCustomSizeOffered(product.customization),
+    widthInches: dimensions ? String(dimensions.widthInches) : "",
+    heightInches: dimensions ? String(dimensions.heightInches) : "",
+  };
+
+  return {
+    selected,
+    draft,
+    quantity: Math.max(line.quantity, product.minOrderQuantity),
+  };
 }
 
 // The physical size the artwork will be printed at. A custom size is whatever

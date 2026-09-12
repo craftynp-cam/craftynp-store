@@ -1,17 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 
 import { ProcessPanel } from "./process-panel";
 import { ProductDetails } from "./product-details";
 import { ProductGallery } from "./product-gallery";
 import { ProductPurchase } from "./product-purchase";
+import { readCart, readServerCart, subscribeToCart } from "@/lib/cart";
+import { openCartDrawer } from "@/lib/cart-drawer";
 import type { ProductDetail } from "@/lib/product";
+import { EDIT_LINE_PARAM } from "@/lib/routes";
 import {
   EMPTY_CUSTOMIZATION_DRAFT,
+  configurationFromCartLine,
   resolveCustomSizeOption,
   usesCustomSize,
+  type CartLineConfiguration,
 } from "@/lib/product-customization";
 import { findVariant } from "@/lib/variant";
 
@@ -48,8 +54,53 @@ export function ProductDetailView({
   turnaroundNote,
   shippingWindowNote,
 }: ProductDetailViewProps) {
-  const [selected, setSelected] = useState<Record<string, string>>(() =>
-    defaultSelection(product),
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const cart = useSyncExternalStore(subscribeToCart, readCart, readServerCart);
+
+  const requestedLineId = searchParams?.get(EDIT_LINE_PARAM) ?? null;
+  const editLine = requestedLineId
+    ? cart.lines.find((line) => line.lineId === requestedLineId)
+    : undefined;
+  const configuration = editLine
+    ? configurationFromCartLine(editLine, product)
+    : null;
+  const editLineId = configuration ? requestedLineId : null;
+
+  function settleEdit() {
+    router.replace(product.href);
+    openCartDrawer();
+  }
+
+  return (
+    <ProductConfigureView
+      key={editLineId ?? "new"}
+      product={product}
+      turnaroundNote={turnaroundNote}
+      shippingWindowNote={shippingWindowNote}
+      configuration={configuration}
+      editLineId={editLineId ?? undefined}
+      onEditSettled={settleEdit}
+    />
+  );
+}
+
+type ProductConfigureViewProps = ProductDetailViewProps & {
+  configuration: CartLineConfiguration | null;
+  editLineId?: string;
+  onEditSettled: () => void;
+};
+
+function ProductConfigureView({
+  product,
+  turnaroundNote,
+  shippingWindowNote,
+  configuration,
+  editLineId,
+  onEditSettled,
+}: ProductConfigureViewProps) {
+  const [selected, setSelected] = useState<Record<string, string>>(
+    () => configuration?.selected ?? defaultSelection(product),
   );
   const [ctaHeight, setCtaHeight] = useState<number | null>(null);
 
@@ -100,6 +151,10 @@ export function ProductDetailView({
             })
           }
           onCtaHeightChange={setCtaHeight}
+          initialDraft={configuration?.draft}
+          initialQuantity={configuration?.quantity}
+          editLineId={editLineId}
+          onEditSettled={onEditSettled}
         />
         <ProductDetails description={product.description} />
         <ProcessPanel
