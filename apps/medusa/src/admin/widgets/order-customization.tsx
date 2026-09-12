@@ -18,7 +18,7 @@ type CustomizedLine = {
   id: string;
   title: string;
   details: CheckoutLineItemDetail[];
-  customization: LineItemCustomization;
+  customization: LineItemCustomization | null;
 };
 
 function readDetails(value: unknown): CheckoutLineItemDetail[] {
@@ -37,16 +37,33 @@ function readCustomization(value: unknown): LineItemCustomization | null {
   return value as LineItemCustomization;
 }
 
+// `metadata` on an order item is the versioned order_item snapshot;
+// `line_item_metadata` is the order_line_item's own, which is what prepare-cart
+// wrote and what the promotion subscriber reads. Prefer it, and fall back for
+// an order whose snapshot is the only copy.
+function lineMetadata(item: {
+  metadata?: Record<string, unknown> | null;
+}): Record<string, unknown> | null {
+  const own = (item as { line_item_metadata?: Record<string, unknown> | null })
+    .line_item_metadata;
+  return own ?? item.metadata ?? null;
+}
+
+// A made-to-order line earns a panel whether or not the shopper filled anything
+// in: a product with only optional inputs, and every line placed before the
+// payload existed, both carry isCustomizable and no customization. Keying on the
+// payload alone left those looking like stocked items.
 function customizedLines(order: AdminOrder): CustomizedLine[] {
   return (order.items ?? []).flatMap((item) => {
-    const customization = readCustomization(item.metadata?.customization);
-    if (!customization) return [];
+    const metadata = lineMetadata(item);
+    const customization = readCustomization(metadata?.customization);
+    if (!customization && metadata?.isCustomizable !== true) return [];
 
     return [
       {
         id: item.id,
         title: item.product_title ?? item.title ?? "Item",
-        details: readDetails(item.metadata?.details),
+        details: readDetails(metadata?.details),
         customization,
       },
     ];
@@ -136,7 +153,7 @@ const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
       sdk.client.fetch<ArtworkOrderListResponse>("/admin/artwork", {
         query: { order_id: data.id },
       }),
-    enabled: lines.some((line) => line.customization.artwork != null),
+    enabled: lines.some((line) => line.customization?.artwork != null),
   });
 
   if (lines.length === 0) return null;
@@ -153,15 +170,24 @@ const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
         <Heading level="h2">Customization</Heading>
       </div>
 
-      {lines.map((line) => (
-        <div key={line.id} className="flex flex-col gap-3 px-6 py-4">
-          <Text size="small" weight="plus">
-            {line.title}
-          </Text>
+      {lines.map((line) => {
+        const rows = line.details.filter(
+          (detail) => detail.label !== "Artwork",
+        );
 
-          {line.details
-            .filter((detail) => detail.label !== "Artwork")
-            .map((detail) => (
+        return (
+          <div key={line.id} className="flex flex-col gap-3 px-6 py-4">
+            <Text size="small" weight="plus">
+              {line.title}
+            </Text>
+
+            {rows.length === 0 && line.customization?.artwork == null ? (
+              <Text size="small" className="text-ui-fg-subtle">
+                Made to order. The shopper left every option blank.
+              </Text>
+            ) : null}
+
+            {rows.map((detail) => (
               <div key={detail.label} className="flex flex-col gap-1">
                 <Text size="small" className="text-ui-fg-subtle">
                   {detail.label}
@@ -172,15 +198,16 @@ const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
               </div>
             ))}
 
-          {line.customization.artwork ? (
-            <ArtworkBlock
-              artwork={line.customization.artwork}
-              asset={assetByLine.get(line.id)}
-              isLoading={isLoading}
-            />
-          ) : null}
-        </div>
-      ))}
+            {line.customization?.artwork ? (
+              <ArtworkBlock
+                artwork={line.customization.artwork}
+                asset={assetByLine.get(line.id)}
+                isLoading={isLoading}
+              />
+            ) : null}
+          </div>
+        );
+      })}
     </Container>
   );
 };

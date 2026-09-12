@@ -476,6 +476,15 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   otherwise keep the cart the first file was added to, and have the first file
   made. `customizationSignature` covers the artwork storage key, the custom text
   and the order notes — everything that changes what gets produced.
+- **On the admin order API the line's own metadata is `line_item_metadata`, not
+  `metadata`.** `order.items[]` merges the versioned `order_item` snapshot with
+  the `order_line_item` it points at, and the snapshot wins the `metadata` name;
+  the line item's own copy — the one `prepare-cart` wrote and the one
+  `promote-artwork` reads — is exposed beside it as `line_item_metadata`.
+  `query.graph({ entity: "order", fields: ["items.metadata"] })` resolves to the
+  line item's, so the two surfaces disagree on the same name. A widget reading
+  `item.metadata` finds the snapshot and silently renders nothing;
+  `order-customization.tsx` reads `line_item_metadata` and falls back.
 - **The configured line's metadata is `{ isCustomizable, details, dimensions?,
 customization? }`.** `details` is the rendered half — label/value rows the
   cart, the confirmation page and the order email all print — and
