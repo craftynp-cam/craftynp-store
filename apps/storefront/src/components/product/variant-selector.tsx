@@ -71,7 +71,7 @@ export function VariantSelector({
                     option.values.map((value) => statusOf(value.id)),
                   )
             }
-            value={selected[option.id] ?? ""}
+            value={selected[option.id] ?? null}
             onChange={(value) => onChange(option.id, value)}
             options={option.values.map((value) => {
               const status = statusOf(value.id);

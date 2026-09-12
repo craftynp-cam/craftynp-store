@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { VariantSelector } from "@/components";
 import type { OptionValueStatus } from "@/lib/variant";
@@ -51,6 +52,22 @@ describe("VariantSelector", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Blush" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Navy" })).not.toBeChecked();
+  });
+
+  it("lets Tab reach a group nobody has answered yet", async () => {
+    const user = userEvent.setup();
+    render(
+      <VariantSelector
+        options={options}
+        selected={{}}
+        onChange={jest.fn()}
+        availability={allAvailable}
+      />,
+    );
+
+    await user.tab();
+
+    expect(screen.getByRole("radio", { name: "Blush" })).toHaveFocus();
   });
 
   it("marks every option group required (AC 5)", () => {
