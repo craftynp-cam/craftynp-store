@@ -257,12 +257,6 @@ const OFFERED_LABELS: Record<CustomizationInputKey, string> = {
 
 export type OfferedInputLabels = { required: string[]; optional: string[] };
 
-// Walks CUSTOMIZATION_INPUTS rather than the customization's own key order so
-// the sentence reads in the same order the configurator asks, and so a new
-// input cannot be offered on the product page without a phrase for it. The two
-// moods are kept apart rather than flattened: one phrase reads as an
-// instruction, and an optional input is not one — telling a shopper to set a
-// size they may leave alone describes work they do not have to do.
 export function offeredInputLabels(
   customization: ProductCustomization,
 ): OfferedInputLabels {

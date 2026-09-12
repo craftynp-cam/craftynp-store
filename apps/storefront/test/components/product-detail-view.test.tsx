@@ -828,7 +828,6 @@ describe("ProductDetailView", () => {
         />,
       );
 
-      // Anchored: the process panel's first step also says "your artwork".
       expect(screen.getByText(/^your artwork/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/order notes/i)).toBeInTheDocument();
       expect(screen.queryByLabelText(/custom text/i)).not.toBeInTheDocument();
@@ -1307,7 +1306,6 @@ describe("ProductDetailView", () => {
         />,
       );
 
-      // Exact: the process panel explains being made to order in prose too.
       expect(screen.getByText("Made to order")).toBeInTheDocument();
       expect(screen.queryByText(/ready to ship/i)).not.toBeInTheDocument();
     });

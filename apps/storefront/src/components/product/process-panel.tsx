@@ -21,9 +21,6 @@ function sentence(clause: string): string {
   return `${clause.charAt(0).toUpperCase()}${clause.slice(1)}.`;
 }
 
-// Required inputs are instructions and optional ones are an invitation, so they
-// get a sentence each rather than one list that tells the shopper to do things
-// they need not do. "also" only belongs there when an instruction preceded it.
 function customizationBody({ required, optional }: OfferedInputLabels): string {
   const instruction = required.length > 0 ? sentence(joinLabels(required)) : "";
   if (optional.length === 0) return instruction;
@@ -45,9 +42,6 @@ function processSteps({
     steps.push({
       title: "You tell us what you want",
       body,
-      // There is no on-product preview of the artwork, so the resolution check
-      // in the upload control is the only reassurance a file will print well.
-      // Saying so here is what stands in for the mockup this design skips.
       note:
         customization.inputs.artwork === "off"
           ? ""
