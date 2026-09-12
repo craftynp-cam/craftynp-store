@@ -92,6 +92,7 @@ export function ArtworkUpload({
   const hintId = useId();
   const guidanceId = useId();
   const uploadErrorId = useId();
+  const labelId = useId();
 
   const view =
     state.status === "uploading"
@@ -299,6 +300,8 @@ export function ArtworkUpload({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      role="group"
+      aria-labelledby={labelId}
       className={zoneClassName}
     >
       <input
@@ -318,7 +321,9 @@ export function ArtworkUpload({
       {view === "idle" ? (
         <div className="flex flex-col items-center gap-3 text-center">
           <FileArrowUp aria-hidden="true" size={28} />
-          <p className="font-medium text-foreground">{label}</p>
+          <p id={labelId} className="font-medium text-foreground">
+            {label}
+          </p>
           <button
             type="button"
             ref={browseRef}
@@ -336,6 +341,12 @@ export function ArtworkUpload({
               : `or drag one here — ${guidance ?? `${ARTWORK_ACCEPTED_LABEL}, up to ${ARTWORK_SIZE_LIMIT_LABEL}.`}`}
           </p>
         </div>
+      ) : null}
+
+      {view !== "idle" ? (
+        <p id={labelId} className="mb-3 font-medium text-foreground">
+          {label}
+        </p>
       ) : null}
 
       {state.status === "uploading" ? (

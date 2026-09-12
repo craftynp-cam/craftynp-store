@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 import { ORDER_NOTES_MAX_LENGTH } from "@craftynp/types";
 import type {
   CustomDimensionErrors,
@@ -54,14 +56,20 @@ export function ProductConfigurator({
 }: ProductConfiguratorProps) {
   const { inputs, size, text } = customization;
   const showsCustomSize = usesCustomSize(customization, value);
+  const headingId = useId();
 
   function patch(change: Partial<CustomizationDraft>) {
     onChange({ ...value, ...change });
   }
 
   return (
-    <div className="flex flex-col gap-6 border-t border-border pt-6">
-      <h2 className="font-display text-xl">Make it yours</h2>
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col gap-6 border-t border-border pt-6"
+    >
+      <h2 id={headingId} className="font-display text-xl">
+        Make it yours
+      </h2>
 
       {inputs.artwork !== "off" ? (
         <ArtworkUpload
@@ -94,7 +102,7 @@ export function ProductConfigurator({
       {inputs.dimensions !== "off" ? (
         <fieldset className="flex flex-col gap-3">
           <legend className="text-sm font-medium text-foreground-muted uppercase tracking-wide">
-            Size
+            Custom size
           </legend>
 
           {isCustomSizeOffered(customization) ? (
@@ -149,6 +157,6 @@ export function ProductConfigurator({
           errorMessage={orderNotesError}
         />
       ) : null}
-    </div>
+    </section>
   );
 }

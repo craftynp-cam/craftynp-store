@@ -1,5 +1,5 @@
 import { MAX_ARTWORK_BYTES } from "@craftynp/types";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 
 import { ArtworkUpload } from "@/components";
@@ -243,6 +243,23 @@ describe("ArtworkUpload", () => {
     expect(
       screen.getByRole("button", { name: "Choose a different file" }),
     ).toHaveAccessibleDescription(message);
+  });
+
+  it("keeps every view's actions inside a group named by the field", async () => {
+    const transport = deferredUpload();
+    const file = makeFile();
+
+    render(<Harness onChange={jest.fn()} upload={transport.upload} />);
+
+    selectFile(file);
+    await transport.resolve(referenceFor(file));
+
+    expect(
+      within(screen.getByRole("group", { name: "Your artwork" })).getByRole(
+        "button",
+        { name: /replace file/i },
+      ),
+    ).toBeInTheDocument();
   });
 
   it("offers no retry for a failure that retrying cannot fix", async () => {

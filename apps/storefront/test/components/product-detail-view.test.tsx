@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
@@ -597,6 +598,20 @@ describe("ProductDetailView", () => {
       return screen.getByRole("checkbox", { name: /enter my own size/i });
     }
 
+    it("groups the custom size under its own name, apart from the preset sizes", () => {
+      renderProduct();
+
+      expect(
+        screen.getByRole("radiogroup", { name: /^size/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole("group", { name: "Custom size" })).getByRole(
+          "checkbox",
+          { name: /enter my own size/i },
+        ),
+      ).toBeInTheDocument();
+    });
+
     it("keeps the preset sizes pickable and the custom value out of them", () => {
       renderProduct();
 
@@ -773,6 +788,22 @@ describe("ProductDetailView", () => {
     const textOnly = resolveProductCustomization({
       customizable: "true",
       customization_text: "required",
+    });
+
+    it("names the configurator as a region of the page", () => {
+      render(
+        <ProductDetailView
+          {...processNotes}
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      expect(
+        within(screen.getByRole("region", { name: "Make it yours" })).getByRole(
+          "textbox",
+          { name: /custom text/i },
+        ),
+      ).toBeInTheDocument();
     });
 
     it("renders only the inputs the product declares", () => {

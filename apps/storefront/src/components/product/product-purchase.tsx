@@ -452,7 +452,7 @@ export function ProductPurchase({
 
       <div>
         <p className="mb-2 text-sm font-medium text-foreground-muted uppercase tracking-wide">
-          Qty
+          Quantity
         </p>
         <QuantityStepper
           value={orderQuantity}
