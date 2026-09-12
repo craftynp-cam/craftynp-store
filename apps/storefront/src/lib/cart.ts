@@ -43,7 +43,7 @@ const EMPTY_CART: Cart = { lines: [] };
 
 let lineIdCounter = 0;
 
-export function newLineId(): string {
+function newLineId(): string {
   const uuid = globalThis.crypto?.randomUUID?.();
   if (uuid) return uuid;
 
