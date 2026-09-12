@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { customDimensionsSchema } from "./customization.js";
+import {
+  customDimensionsSchema,
+  lineItemCustomizationSchema,
+} from "./customization.js";
 import { shippingRateItemSchema } from "./shipping-rates.js";
 
 export const checkoutAddressSchema = z.object({
@@ -32,6 +35,7 @@ export const checkoutLineItemSchema = shippingRateItemSchema.extend({
   // canonicalise variantId and quantity alone.
   dimensions: customDimensionsSchema.optional(),
   priceQuoteToken: z.string().min(1).optional(),
+  customization: lineItemCustomizationSchema.optional(),
 });
 export type CheckoutLineItem = z.infer<typeof checkoutLineItemSchema>;
 
