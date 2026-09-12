@@ -387,7 +387,9 @@ gate, the price quote and the artwork upload.
   already declines to special-case the empty server snapshot.
 - **Save and Cancel move focus to `#main-content` before opening the
   drawer.** The keyed remount removes the button that had focus, so the drawer
-  would otherwise return focus to `<body>` when it closes.
+  would otherwise return focus to `<body>` when it closes. Only an edit does
+  this: `onEditSettled` runs after every add, and a plain add keeps its button,
+  so moving focus there would stop the drawer returning it to Add to cart.
 - **Nothing is written until Save**, which is what makes Cancel safe without
   any undo machinery. Save re-quotes like every other change, so the line
   always lands with a fresh token.

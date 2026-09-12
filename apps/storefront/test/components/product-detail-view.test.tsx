@@ -161,6 +161,25 @@ describe("ProductDetailView", () => {
     ).toHaveAttribute("role", "status");
   });
 
+  it("leaves focus on add to cart after a plain add, so the drawer can return it there", async () => {
+    render(
+      <main id="main-content" tabIndex={-1}>
+        <ProductDetailView {...processNotes} product={makeProduct()} />
+      </main>,
+    );
+    chooseBlush();
+    await settlePrice();
+
+    const button = screen.getByRole("button", { name: /add to cart/i });
+    button.focus();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(readCart().lines).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /add to cart/i })).toHaveFocus();
+  });
+
   it("answers a no-choice option itself and draws no group for it", async () => {
     const singleValue = [
       { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },

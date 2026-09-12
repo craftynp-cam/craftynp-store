@@ -69,7 +69,9 @@ export function ProductDetailView({
 
   function settleEdit() {
     router.replace(product.href);
-    document.getElementById("main-content")?.focus({ preventScroll: true });
+    if (editLineId) {
+      document.getElementById("main-content")?.focus({ preventScroll: true });
+    }
     openCartDrawer();
   }
 
