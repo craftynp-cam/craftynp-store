@@ -238,29 +238,43 @@ export function missingInputLabels(
   return missing.map((key) => MISSING_LABELS[key]);
 }
 
-export function joinLabels(labels: readonly string[]): string {
+export function joinLabels(
+  labels: readonly string[],
+  conjunction = "and",
+): string {
   const last = labels.at(-1);
   if (last == null) return "";
   if (labels.length === 1) return last;
-  return `${labels.slice(0, -1).join(", ")} and ${last}`;
+  return `${labels.slice(0, -1).join(", ")} ${conjunction} ${last}`;
 }
 
 const OFFERED_LABELS: Record<CustomizationInputKey, string> = {
   artwork: "upload your artwork",
   customText: "add the text you want on it",
-  dimensions: "set the size you need",
+  dimensions: "set a custom size",
   orderNotes: "tell us anything else about the piece",
 };
 
+export type OfferedInputLabels = { required: string[]; optional: string[] };
+
 // Walks CUSTOMIZATION_INPUTS rather than the customization's own key order so
 // the sentence reads in the same order the configurator asks, and so a new
-// input cannot be offered on the product page without a phrase for it.
+// input cannot be offered on the product page without a phrase for it. The two
+// moods are kept apart rather than flattened: one phrase reads as an
+// instruction, and an optional input is not one — telling a shopper to set a
+// size they may leave alone describes work they do not have to do.
 export function offeredInputLabels(
   customization: ProductCustomization,
-): string[] {
-  return CUSTOMIZATION_INPUTS.filter(
-    (input) => customization.inputs[input.key] !== "off",
-  ).map((input) => OFFERED_LABELS[input.key]);
+): OfferedInputLabels {
+  const labels: OfferedInputLabels = { required: [], optional: [] };
+
+  for (const input of CUSTOMIZATION_INPUTS) {
+    const mode = customization.inputs[input.key];
+    if (mode === "off") continue;
+    labels[mode].push(OFFERED_LABELS[input.key]);
+  }
+
+  return labels;
 }
 
 // Order notes are the one detail that may carry line breaks, so they are the

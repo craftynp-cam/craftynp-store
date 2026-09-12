@@ -1,6 +1,7 @@
 import type { ProductCustomization } from "@craftynp/types";
 
 import { joinLabels, offeredInputLabels } from "@/lib/product-customization";
+import type { OfferedInputLabels } from "@/lib/product-customization";
 
 const HEADING_ID = "product-process-heading";
 
@@ -20,6 +21,17 @@ function sentence(clause: string): string {
   return `${clause.charAt(0).toUpperCase()}${clause.slice(1)}.`;
 }
 
+// Required inputs are instructions and optional ones are an invitation, so they
+// get a sentence each rather than one list that tells the shopper to do things
+// they need not do. "also" only belongs there when an instruction preceded it.
+function customizationBody({ required, optional }: OfferedInputLabels): string {
+  const instruction = required.length > 0 ? sentence(joinLabels(required)) : "";
+  if (optional.length === 0) return instruction;
+
+  const invitation = `You can ${instruction ? "also " : ""}${joinLabels(optional, "or")}.`;
+  return instruction ? `${instruction} ${invitation}` : invitation;
+}
+
 function processSteps({
   customization,
   turnaroundNote,
@@ -28,10 +40,11 @@ function processSteps({
   const steps: ProcessStep[] = [];
 
   const offered = offeredInputLabels(customization);
-  if (offered.length > 0) {
+  const body = customizationBody(offered);
+  if (body !== "") {
     steps.push({
       title: "You tell us what you want",
-      body: sentence(joinLabels(offered)),
+      body,
       // There is no on-product preview of the artwork, so the resolution check
       // in the upload control is the only reassurance a file will print well.
       // Saying so here is what stands in for the mockup this design skips.

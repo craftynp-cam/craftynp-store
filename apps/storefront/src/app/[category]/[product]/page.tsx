@@ -40,16 +40,17 @@ export async function generateMetadata({
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  let product;
+  let product, content;
   try {
-    product = await loadProduct(params);
+    [product, content] = await Promise.all([
+      loadProduct(params),
+      fetchSiteContent(),
+    ]);
   } catch (error) {
     if (error instanceof MedusaUnavailableError) return <StoreUnavailable />;
     throw error;
   }
   if (!product) notFound();
-
-  const content = await fetchSiteContent();
 
   return (
     <>

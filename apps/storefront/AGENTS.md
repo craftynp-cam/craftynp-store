@@ -219,6 +219,11 @@ here knows that a product might have a size or a material.
   it: a new input added to the registry without a phrase here is a type error
   rather than a step that quietly fails to mention it. A ready-made product
   offers nothing, so the step is dropped rather than rendered empty.
+- **`offeredInputLabels` keeps `required` and `optional` apart, and the step
+  gives them a sentence each.** One flat list reads as a list of instructions,
+  and an optional input is not one — a shopper told to "set a custom size" they
+  may leave alone is being described work they do not have to do, on the panel
+  whose whole job is telling them what to expect.
 
 ### Pricing
 

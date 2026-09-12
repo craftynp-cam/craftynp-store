@@ -45,7 +45,25 @@ describe("ProcessPanel", () => {
     expect(stepTitles()).toEqual(["We make it by hand", "It ships to you"]);
   });
 
-  it("names every input the product asks for, in the order it asks", () => {
+  it("names every required input in the order the configurator asks", () => {
+    render(
+      <ProcessPanel
+        customization={customizable({
+          customization_text: "required",
+          customization_notes: "required",
+        })}
+        {...notes}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Upload your artwork, add the text you want on it and tell us anything else about the piece.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("invites the optional inputs rather than instructing them", () => {
     render(
       <ProcessPanel
         customization={customizable({
@@ -58,8 +76,24 @@ describe("ProcessPanel", () => {
 
     expect(
       screen.getByText(
-        "Upload your artwork, add the text you want on it and tell us anything else about the piece.",
+        "Upload your artwork. You can also add the text you want on it or tell us anything else about the piece.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("drops the \u201calso\u201d when nothing is required", () => {
+    render(
+      <ProcessPanel
+        customization={customizable({
+          customization_artwork: "optional",
+          customization_size: "optional",
+        })}
+        {...notes}
+      />,
+    );
+
+    expect(
+      screen.getByText("You can upload your artwork or set a custom size."),
     ).toBeInTheDocument();
   });
 
