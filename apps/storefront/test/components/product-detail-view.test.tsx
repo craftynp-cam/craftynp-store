@@ -115,6 +115,51 @@ describe("ProductDetailView", () => {
     expect(readCart().lines).toHaveLength(0);
   });
 
+  it("says nothing about a price the shopper did not ask for", async () => {
+    render(
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({
+          options: [
+            {
+              id: "opt_color",
+              title: "Color",
+              values: [options[0]!.values[0]!],
+            },
+          ],
+          variants: [variants[0]!],
+        })}
+      />,
+    );
+    await settlePrice();
+
+    expect(screen.getByText("$9.00")).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((region) => region.textContent?.includes("$9.00")),
+    ).toBe(false);
+  });
+
+  it("announces the settled price politely once the shopper changes the line", async () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+    chooseBlush();
+    await settlePrice();
+
+    expect(screen.getByText("Price: $9.00")).toHaveAttribute("role", "status");
+  });
+
+  it("announces a price that could not be worked out", async () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+    global.fetch = jest.fn(async () => ({ ok: false }) as Response);
+    chooseBlush();
+    await settlePrice();
+
+    expect(
+      screen.getByText("We could not price this just now."),
+    ).toHaveAttribute("role", "status");
+  });
+
   it("answers a no-choice option itself and draws no group for it", async () => {
     const singleValue = [
       { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
@@ -437,7 +482,9 @@ describe("ProductDetailView", () => {
     expect(
       screen.getByRole("button", { name: /add to cart/i }),
     ).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText(/could not price this/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/try again — we could not price this/i),
+    ).toBeInTheDocument();
   });
 
   it("re-quotes the line total when the quantity changes", async () => {

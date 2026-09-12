@@ -81,6 +81,7 @@ export function ProductPurchase({
     initialDraft ?? EMPTY_CUSTOMIZATION_DRAFT,
   );
   const [addError, setAddError] = useState<string | null>(null);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const presetSizeRef = useRef<string | null>(null);
   const ctaRef = useRef<HTMLDivElement | null>(null);
   const baseId = useId();
@@ -143,7 +144,23 @@ export function ProductPurchase({
     [options, customization],
   );
 
+  function handleOptionChange(optionId: string, valueId: string) {
+    setHasInteracted(true);
+    onOptionChange(optionId, valueId);
+  }
+
+  function handleQuantityChange(next: number) {
+    setHasInteracted(true);
+    setQuantity(next);
+  }
+
+  function handleDraftChange(next: CustomizationDraft) {
+    setHasInteracted(true);
+    setDraft(next);
+  }
+
   function handleCustomSizeChange(useCustomSize: boolean) {
+    setHasInteracted(true);
     setDraft((current) => ({ ...current, useCustomSize }));
     if (!customSizeOption) return;
 
@@ -280,6 +297,16 @@ export function ProductPurchase({
     ? formatMoney(quote.lineTotal, quote.currencyCode)
     : undefined;
 
+  const priceAnnouncement = !hasInteracted
+    ? ""
+    : priceQuote.status === "error"
+      ? "We could not price this just now."
+      : priceQuote.status === "ready" && quotedUnitPrice && totalPrice
+        ? orderQuantity > 1
+          ? `Price: ${quotedUnitPrice} each, ${totalPrice} total`
+          : `Price: ${totalPrice}`
+        : "";
+
   const detailsForCart = [
     ...options
       .filter(
@@ -363,30 +390,25 @@ export function ProductPurchase({
       </div>
 
       {selectedVariant ? (
-        <>
-          <ProductPrice
-            price={quotedUnitPrice ?? selectedVariant.price}
-            originalPrice={
-              quote?.isAreaPriced ? undefined : selectedVariant.originalPrice
-            }
-            savingsLabel={
-              quote?.isAreaPriced ? undefined : selectedVariant.savingsLabel
-            }
-            lineTotal={totalPrice}
-            quantity={orderQuantity}
-            isUpdating={priceQuote.status === "loading"}
-          />
-          {/* Speaks the settled price once. A live region wired to the quote
-              itself would read every intermediate figure aloud. */}
-          <p role="status" className="sr-only">
-            {priceQuote.status === "ready" && totalPrice
-              ? `Price updated: ${totalPrice}`
-              : ""}
-          </p>
-        </>
+        <ProductPrice
+          price={quotedUnitPrice ?? selectedVariant.price}
+          originalPrice={
+            quote?.isAreaPriced ? undefined : selectedVariant.originalPrice
+          }
+          savingsLabel={
+            quote?.isAreaPriced ? undefined : selectedVariant.savingsLabel
+          }
+          lineTotal={totalPrice}
+          quantity={orderQuantity}
+          isUpdating={priceQuote.status === "loading"}
+        />
       ) : fromPrice ? (
         <ProductPrice price={fromPrice} prefix="From" />
       ) : null}
+
+      <p role="status" className="sr-only">
+        {priceAnnouncement}
+      </p>
 
       {selectedVariant ? (
         <StockStatus
@@ -398,7 +420,7 @@ export function ProductPurchase({
       <VariantSelector
         options={options}
         selected={selected}
-        onChange={onOptionChange}
+        onChange={handleOptionChange}
         availability={availability}
         groupId={optionGroupId}
         hiddenValueIds={
@@ -417,7 +439,7 @@ export function ProductPurchase({
         <ProductConfigurator
           customization={customization}
           value={draft}
-          onChange={setDraft}
+          onChange={handleDraftChange}
           sizeErrors={sizeErrors}
           onCustomSizeChange={handleCustomSizeChange}
           artworkError={artworkError}
@@ -434,7 +456,7 @@ export function ProductPurchase({
         </p>
         <QuantityStepper
           value={orderQuantity}
-          onChange={setQuantity}
+          onChange={handleQuantityChange}
           min={minOrderQuantity}
           label={`Quantity for ${title}`}
           description={
