@@ -25,14 +25,15 @@ describe("Navbar", () => {
     expect(focusable[0]).toHaveAccessibleName("Skip to content");
   });
 
-  it("renders the announcement bar above the header when set", () => {
+  it("keeps the announcement bar inside the banner landmark (CNP-83 AC 1)", () => {
     render(
       <Navbar categories={categories} announcement="Now Selling: GLITTER!" />,
     );
 
-    expect(screen.getAllByText("Now Selling: GLITTER!").length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      within(screen.getByRole("banner")).getAllByText("Now Selling: GLITTER!")
+        .length,
+    ).toBeGreaterThan(0);
   });
 
   it("renders no announcement bar when unset", () => {

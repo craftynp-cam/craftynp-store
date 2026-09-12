@@ -35,6 +35,11 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   top-level route claims one more.
 - Every page's `<main>` must carry `id="main-content"` and `tabIndex={-1}` —
   that is what the navbar's skip link targets.
+- **The announcement bar sits inside the navbar's `<header>`**, which is the
+  sticky wrapper rather than the bar's sibling. Outside it the bar is content
+  in no landmark at all, and axe reports `region` on every page (CNP-83).
+  jest-axe disables `region` and cannot see a whole document anyway, so
+  `navbar.test.tsx` guards it with a banner-scoped query instead.
 
 ## Components
 
@@ -181,7 +186,10 @@ here knows that a product might have a size or a material.
   disables the only gate protecting that product. The product-customization
   admin widget names the unmeasured values back at the owner
   (`unmeasuredOptionValues` in `@craftynp/types`) precisely because nothing on
-  the storefront can. **Both axes are checked and the coarsest decides**, so a
+  the storefront can. It treats any option with a measured value as a size
+  group, not only the one `customization_size_option` names — that key is
+  written only for a custom size, so a preset-only product's Medium and Large
+  went unnamed (CNP-83) — and names a value missing either axis. **Both axes are checked and the coarsest decides**, so a
   long banner cannot pass on its width alone.
 - **`RadioButtonGroup` (`src/components/ui`) is the option control**, not
   `RadioGroup`, which still serves every ordinary form. It renders React Aria
@@ -191,7 +199,12 @@ here knows that a product might have a size or a material.
   accessible name, because a disabled radio cannot be focused and a `title`
   would never be announced. Its visible `Required` marker is `aria-hidden` so it
   stays out of the group's accessible name; `isRequired` → `aria-required` is the
-  programmatic half.
+  programmatic half. **`validationBehavior="aria"` is load-bearing.** React
+  Aria's default is `native`, which puts `required` on every hidden radio, and
+  Chrome then reports an unanswered group as `valueMissing` — invalid — on first
+  load, before the shopper has touched it. `aria` keeps `aria-required` on the
+  group and drops the native attribute; the one add-to-cart gate never read
+  form validity, so nothing else changes.
 - **An unanswered group's value is `null`, never `""`.** React Aria's
   `useRadio` gives tab stop 0 only to the radio matching a non-null
   `selectedValue`, so an empty string — which matches nothing — takes every

@@ -601,10 +601,10 @@ describe("unmeasuredOptionValues", () => {
 
   const sized = { sizeOptionTitle: "Size", customValue: "Custom" };
 
-  it("names the size values a shopper could pick and get no gate on", () => {
+  it("names the size values a shopper could pick and not be fully checked on", () => {
     expect(unmeasuredOptionValues(product, sized)).toEqual({
       anyMeasured: true,
-      missing: ["Large"],
+      missing: ["Small", "Large"],
     });
   });
 
@@ -622,13 +622,30 @@ describe("unmeasuredOptionValues", () => {
     );
   });
 
-  it("complains about no value in particular when no size group is named", () => {
-    // Without a named group there is no telling a size from a finish, so the
-    // only honest report is the whole-product one below.
-    expect(unmeasuredOptionValues(product, { customValue: "Custom" })).toEqual({
-      anyMeasured: true,
-      missing: [],
-    });
+  it("finds the size group itself when none is named (CNP-83 AC 4)", () => {
+    // A product with preset sizes and no custom size never writes
+    // customization_size_option, which is how Medium and Large on the name sign
+    // went unnamed. A group where any value records inches is a size group.
+    expect(
+      unmeasuredOptionValues([
+        {
+          title: "Size",
+          values: [
+            {
+              value: "Small",
+              metadata: { width_inches: "12", height_inches: "4" },
+            },
+            { value: "Medium", metadata: null },
+            { value: "Large", metadata: {} },
+          ],
+        },
+        { title: "Finish", values: [{ value: "Matte", metadata: null }] },
+      ]),
+    ).toEqual({ anyMeasured: true, missing: ["Medium", "Large"] });
+  });
+
+  it("names a value that records only one axis, since both are checked", () => {
+    expect(unmeasuredOptionValues(product, sized).missing).toContain("Small");
   });
 
   it("reports a product where nothing anywhere is measured", () => {
@@ -641,15 +658,15 @@ describe("unmeasuredOptionValues", () => {
     ).toEqual({ anyMeasured: false, missing: [] });
   });
 
-  it("counts a height on its own as measured", () => {
+  it("counts a height on its own toward anyMeasured but still names it", () => {
     expect(
       unmeasuredOptionValues([
         {
           title: "Size",
           values: [{ value: "Tall", metadata: { height_inches: "40" } }],
         },
-      ]).anyMeasured,
-    ).toBe(true);
+      ]),
+    ).toEqual({ anyMeasured: true, missing: ["Tall"] });
   });
 
   it("copes with a product that has no options at all", () => {

@@ -18,9 +18,9 @@ export function Navbar({ categories, announcement }: NavbarProps) {
   return (
     <>
       <SkipLink />
-      <div className="sticky top-0 z-40">
+      <header className="sticky top-0 z-40">
         {announcement ? <AnnouncementBar text={announcement} /> : null}
-        <header className="border-b border-border bg-surface">
+        <div className="border-b border-border bg-surface">
           <Container className="flex h-(--header-height) items-center justify-between gap-2 sm:gap-4">
             <div className="flex shrink-0 items-center gap-2">
               <NavDrawer categories={categories} />
@@ -37,8 +37,8 @@ export function Navbar({ categories, announcement }: NavbarProps) {
               <CartDrawer />
             </div>
           </Container>
-        </header>
-      </div>
+        </div>
+      </header>
     </>
   );
 }

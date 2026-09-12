@@ -429,8 +429,9 @@ const ProductCustomizationWidget = ({
 
         {asksForArtwork && sizing.anyMeasured && sizing.missing.length > 0 ? (
           <Hint variant="error">
-            These option values record no physical size, so a shopper choosing
-            one gets no resolution check: {sizing.missing.join(", ")}.
+            These size values are missing a width_inches or height_inches, so a
+            shopper choosing one is not fully checked against the minimum
+            resolution: {sizing.missing.join(", ")}.
           </Hint>
         ) : null}
       </div>

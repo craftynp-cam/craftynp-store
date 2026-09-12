@@ -61,4 +61,22 @@ describe("RadioButtonGroup", () => {
 
     expect(screen.getByRole("radio", { name: "Navy" })).toBeEnabled();
   });
+
+  it("stays required without reading as invalid before it is answered (CNP-83 AC 2)", () => {
+    render(
+      <RadioButtonGroup
+        label="Colour"
+        options={options}
+        value={null}
+        isRequired
+      />,
+    );
+
+    const group = screen.getByRole("radiogroup");
+    expect(group).toHaveAttribute("aria-required", "true");
+    expect(group).not.toHaveAttribute("aria-invalid");
+    for (const radio of screen.getAllByRole<HTMLInputElement>("radio")) {
+      expect(radio.required).toBe(false);
+    }
+  });
 });
