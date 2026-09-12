@@ -9,6 +9,13 @@ export function productHref(
   return `/${categoryHandle}/${productHandle}`;
 }
 
+export const EDIT_LINE_PARAM = "edit";
+
+export function productEditHref(productHref: string, lineId: string): string {
+  const params = new URLSearchParams({ [EDIT_LINE_PARAM]: lineId });
+  return `${productHref}?${params.toString()}`;
+}
+
 export function accountHref(): string {
   return "/account";
 }

@@ -15,6 +15,7 @@ export {
   Monitor,
   Moon,
   Pause,
+  PencilSimple,
   Play,
   Plus,
   ShoppingCartSimple,

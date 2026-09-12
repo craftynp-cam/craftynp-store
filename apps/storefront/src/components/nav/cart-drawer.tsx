@@ -19,7 +19,7 @@ import {
   subscribeToCartDrawer,
 } from "@/lib/cart-drawer";
 import { formatMoney } from "@/lib/money";
-import { checkoutHref } from "@/lib/routes";
+import { checkoutHref, productEditHref } from "@/lib/routes";
 
 import { CartCard } from "../cards";
 import { Drawer, DrawerCloseButton, DrawerPanel, DrawerTitle } from "../ui";
@@ -82,6 +82,8 @@ export function CartDrawer() {
                       line={line}
                       onQuantityChange={setCartLineQuantity}
                       onRemove={removeCartLine}
+                      editHref={productEditHref(line.href, line.lineId)}
+                      onEdit={close}
                     />
                   ))}
                 </ul>

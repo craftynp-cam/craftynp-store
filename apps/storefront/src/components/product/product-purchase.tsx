@@ -10,7 +10,7 @@ import { ProductPrice } from "./product-price";
 import { StockStatus } from "./stock-status";
 import { usePriceQuote } from "./use-price-quote";
 import { VariantSelector } from "./variant-selector";
-import { addCartLine } from "@/lib/cart";
+import { addCartLine, updateCartLine } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
 import { formatMoney } from "@/lib/money";
 import { quotedDimensions } from "@/lib/price-quote";
@@ -46,6 +46,10 @@ type ProductPurchaseProps = {
   selected: Record<string, string>;
   onOptionChange: (optionId: string, valueId: string | null) => void;
   onCtaHeightChange?: (height: number) => void;
+  initialDraft?: CustomizationDraft;
+  initialQuantity?: number;
+  editLineId?: string;
+  onEditSettled?: () => void;
 };
 
 function asSentence(clauses: readonly string[]): string {
@@ -65,11 +69,16 @@ export function ProductPurchase({
   selected,
   onOptionChange,
   onCtaHeightChange,
+  initialDraft,
+  initialQuantity,
+  editLineId,
+  onEditSettled,
 }: ProductPurchaseProps) {
-  const [quantity, setQuantity] = useState(minOrderQuantity);
+  const isEditing = editLineId != null;
+  const [quantity, setQuantity] = useState(initialQuantity ?? minOrderQuantity);
   const orderQuantity = Math.max(quantity, minOrderQuantity);
   const [draft, setDraft] = useState<CustomizationDraft>(
-    EMPTY_CUSTOMIZATION_DRAFT,
+    initialDraft ?? EMPTY_CUSTOMIZATION_DRAFT,
   );
   const [addError, setAddError] = useState<string | null>(null);
   const presetSizeRef = useRef<string | null>(null);
@@ -251,10 +260,10 @@ export function ProductPurchase({
     ...customizationDetails(customization, draft),
   ];
 
-  function handleAddToCart() {
+  function handleSubmit() {
     if (!selectedVariant || !canAddToCart || !quote) return;
 
-    const added = addCartLine({
+    const line = {
       id: selectedVariant.id,
       href,
       title,
@@ -269,16 +278,23 @@ export function ProductPurchase({
       dimensions: quoteDimensions,
       priceQuoteToken: quote.quoteToken,
       customization: lineItemCustomization(customization, draft),
-    });
+    };
 
-    if (!added) {
+    const saved = editLineId
+      ? updateCartLine(editLineId, line)
+      : addCartLine(line);
+
+    if (!saved) {
       setAddError(
-        "We could not save this to your cart. Your browser may be out of storage or blocking site data.",
+        isEditing
+          ? "We could not save your changes. Your browser may be out of storage or blocking site data."
+          : "We could not save this to your cart. Your browser may be out of storage or blocking site data.",
       );
       return;
     }
 
     setAddError(null);
+    onEditSettled?.();
     openCartDrawer();
   }
 
@@ -291,6 +307,12 @@ export function ProductPurchase({
       >
         {customization.isCustomizable ? "Made to order" : "Ready to ship"}
       </Badge>
+
+      {isEditing ? (
+        <p className="text-sm font-medium text-foreground-muted">
+          Editing this item in your cart
+        </p>
+      ) : null}
 
       <div>
         <h1 className="font-display text-4xl">{title}</h1>
@@ -390,10 +412,17 @@ export function ProductPurchase({
           variant="primary"
           size="lg"
           isDisabled={!canAddToCart}
-          onPress={handleAddToCart}
+          onPress={handleSubmit}
         >
-          Add to cart{totalPrice ? ` · ${totalPrice}` : ""}
+          {isEditing ? "Save changes" : "Add to cart"}
+          {totalPrice ? ` · ${totalPrice}` : ""}
         </Button>
+
+        {isEditing ? (
+          <Button variant="secondary" size="lg" onPress={onEditSettled}>
+            Cancel
+          </Button>
+        ) : null}
       </div>
     </div>
   );

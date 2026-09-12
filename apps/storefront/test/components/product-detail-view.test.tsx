@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
 import {
@@ -12,6 +18,14 @@ import type { ProductDetail, ProductDetailVariant } from "@/lib/product";
 import { clearCart, readCart } from "@/lib/cart";
 import { uploadArtwork } from "@/lib/artwork-upload";
 import { readCartDrawerOpen, setCartDrawerOpen } from "@/lib/cart-drawer";
+
+const mockRouterReplace = jest.fn();
+let searchParams = new URLSearchParams();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: mockRouterReplace }),
+  useSearchParams: () => searchParams,
+}));
 
 const options = [
   {
@@ -205,6 +219,8 @@ describe("ProductDetailView", () => {
     window.localStorage.clear();
     clearCart();
     setCartDrawerOpen(false);
+    searchParams = new URLSearchParams();
+    mockRouterReplace.mockClear();
     mockPriceQuote();
   });
 
@@ -1329,6 +1345,235 @@ describe("ProductDetailView", () => {
 
       expect(screen.getByText("Made to order")).toBeInTheDocument();
       expect(screen.queryByText(/ready to ship/i)).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe("ProductDetailView editing a cart line", () => {
+  // jsdom implements neither, and the upload flow reports a failed upload
+  // without them.
+  beforeAll(() => {
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: jest.fn(() => "blob:artwork-preview"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: jest.fn(),
+    });
+  });
+
+  const customizable = resolveProductCustomization({
+    customizable: "true",
+    customization_text: "required",
+  });
+
+  function editableProduct() {
+    return makeProduct({ customization: customizable });
+  }
+
+  async function seedLine() {
+    render(<ProductDetailView {...processNotes} product={editableProduct()} />);
+    chooseBlush();
+    fireEvent.change(screen.getByLabelText(/custom text/i), {
+      target: { value: "The Wrights" },
+    });
+    await clickAddToCart();
+
+    const line = readCart().lines[0];
+    if (!line) throw new Error("nothing was added to the cart");
+    return line;
+  }
+
+  function openEditor(lineId: string) {
+    searchParams = new URLSearchParams({ edit: lineId });
+    render(<ProductDetailView {...processNotes} product={editableProduct()} />);
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    clearCart();
+    setCartDrawerOpen(false);
+    searchParams = new URLSearchParams();
+    mockRouterReplace.mockClear();
+    mockPriceQuote();
+  });
+
+  it("reopens the configurator on what was saved, and offers to save rather than add", async () => {
+    const line = await seedLine();
+    cleanup();
+    openEditor(line.lineId);
+
+    expect(screen.getByLabelText(/custom text/i)).toHaveValue("The Wrights");
+    expect(screen.getByRole("radio", { name: "Blush" })).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /add to cart/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("updates that line rather than adding a second one, and repriced", async () => {
+    const line = await seedLine();
+    cleanup();
+    openEditor(line.lineId);
+
+    fireEvent.change(screen.getByLabelText(/custom text/i), {
+      target: { value: "The Wright Family" },
+    });
+    await settlePrice();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    });
+
+    const lines = readCart().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.lineId).toBe(line.lineId);
+    expect(lines[0]?.details).toContainEqual({
+      label: "Custom text",
+      value: "The Wright Family",
+    });
+    expect(lines[0]?.priceQuoteToken).toBeDefined();
+    expect(mockRouterReplace).toHaveBeenCalledWith(editableProduct().href);
+  });
+
+  it("leaves the line untouched when the edit is cancelled", async () => {
+    const line = await seedLine();
+    const before = readCart();
+    cleanup();
+    openEditor(line.lineId);
+
+    fireEvent.change(screen.getByLabelText(/custom text/i), {
+      target: { value: "Something else entirely" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    });
+
+    expect(readCart()).toEqual(before);
+    expect(mockRouterReplace).toHaveBeenCalledWith(editableProduct().href);
+  });
+
+  it("falls back to adding when the line named by the query is gone", async () => {
+    openEditor("line-nobody-holds");
+
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/custom text/i)).toHaveValue("");
+  });
+
+  it("brings a saved artwork file back rather than asking for it again", async () => {
+    const withArtwork = resolveProductCustomization({
+      customizable: "true",
+      customization_artwork: "required",
+    });
+    const product = makeProduct({ customization: withArtwork });
+
+    render(<ProductDetailView {...processNotes} product={product} />);
+    chooseBlush();
+    await uploadArtworkOfWidth(3000);
+    await clickAddToCart();
+
+    const line = readCart().lines[0];
+    if (!line) throw new Error("nothing was added to the cart");
+    cleanup();
+
+    searchParams = new URLSearchParams({ edit: line.lineId });
+    render(<ProductDetailView {...processNotes} product={product} />);
+
+    expect(screen.getByText(/screenshot\.png/)).toBeInTheDocument();
+    await settlePrice();
+    expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+  });
+
+  describe("a custom size", () => {
+    const sizeOptions = [
+      {
+        id: "opt_size",
+        title: "Size",
+        values: [
+          { id: "val_small", value: "Small" },
+          { id: "val_custom", value: "Custom" },
+        ],
+      },
+    ];
+
+    const sizeVariants: ProductDetailVariant[] = ["small", "custom"].map(
+      (name, index) => ({
+        id: `var_${name}`,
+        sku: `SIGN-${name.toUpperCase()}`,
+        thumbnail: null,
+        optionValueIds: [`val_${name}`],
+        availability: "in_stock" as const,
+        price: `$${10 + index}.00`,
+        originalPrice: undefined,
+        calculatedAmount: 10 + index,
+        currencyCode: "usd",
+      }),
+    );
+
+    const sized = resolveProductCustomization({
+      customizable: "true",
+      customization_size: "optional",
+      customization_size_min_inches: "2",
+      customization_size_max_inches: "48",
+      customization_size_option: "Size",
+      customization_size_option_value: "Custom",
+    });
+
+    function sizedProduct() {
+      return makeProduct({
+        options: sizeOptions,
+        variants: sizeVariants,
+        customization: sized,
+      });
+    }
+
+    it("reopens on the dimensions the shopper typed, with the custom toggle still on", async () => {
+      mockPriceQuote(sizeVariants);
+      render(<ProductDetailView {...processNotes} product={sizedProduct()} />);
+
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /enter my own size/i }),
+      );
+      fireEvent.change(screen.getByLabelText(/width/i), {
+        target: { value: "8.5" },
+      });
+      fireEvent.change(screen.getByLabelText(/height/i), {
+        target: { value: "10" },
+      });
+      await clickAddToCart();
+
+      const line = readCart().lines[0];
+      if (!line) throw new Error("nothing was added to the cart");
+      expect(line.dimensions).toEqual({ widthInches: 8.5, heightInches: 10 });
+      cleanup();
+
+      searchParams = new URLSearchParams({ edit: line.lineId });
+      render(<ProductDetailView {...processNotes} product={sizedProduct()} />);
+
+      expect(
+        screen.getByRole("checkbox", { name: /enter my own size/i }),
+      ).toBeChecked();
+      expect(screen.getByLabelText(/width/i)).toHaveValue("8.5");
+      expect(screen.getByLabelText(/height/i)).toHaveValue("10");
+
+      fireEvent.change(screen.getByLabelText(/height/i), {
+        target: { value: "12" },
+      });
+      await settlePrice();
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+      });
+
+      const lines = readCart().lines;
+      expect(lines).toHaveLength(1);
+      expect(lines[0]?.dimensions).toEqual({
+        widthInches: 8.5,
+        heightInches: 12,
+      });
     });
   });
 });

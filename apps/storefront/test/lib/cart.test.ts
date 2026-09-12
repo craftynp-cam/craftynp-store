@@ -9,11 +9,13 @@ import {
   removeCartLine,
   renderableImageUrl,
   setCartLineQuantity,
+  updateCartLine,
 } from "@/lib/cart";
 
 function makeLine(overrides: Partial<CartLine> = {}): CartLine {
   return {
     id: "sticker",
+    lineId: "line-sticker",
     href: "/products/sticker",
     title: "Custom Die-Cut Stickers",
     unitPrice: 0.75,
@@ -36,7 +38,9 @@ describe("cart", () => {
   it("adds a new line", () => {
     addCartLine(makeLine());
 
-    expect(readCart().lines).toEqual([makeLine()]);
+    expect(readCart().lines).toEqual([
+      { ...makeLine(), lineId: expect.any(String) },
+    ]);
   });
 
   it("merges an identical configuration into the existing line instead of creating a second one", () => {
@@ -46,6 +50,15 @@ describe("cart", () => {
     const cart = readCart();
     expect(cart.lines).toHaveLength(1);
     expect(cart.lines[0]?.quantity).toBe(5);
+  });
+
+  it("mints a distinct lineId for every line it adds", () => {
+    addCartLine(makeLine({ id: "a" }));
+    addCartLine(makeLine({ id: "b" }));
+
+    const [first, second] = readCart().lines;
+    expect(first?.lineId).toEqual(expect.any(String));
+    expect(second?.lineId).not.toBe(first?.lineId);
   });
 
   it("keeps two artwork files apart even when both are called logo.png", () => {
@@ -282,5 +295,87 @@ describe("renderableImageUrl", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.title).toBe("Custom Die-Cut Stickers");
     expect(lines[0]?.imageUrl).toBeUndefined();
+  });
+});
+
+describe("updateCartLine", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    clearCart();
+  });
+
+  function seedTwoLines() {
+    addCartLine(makeLine({ id: "first", quantity: 1 }));
+    addCartLine(makeLine({ id: "second", quantity: 4 }));
+    return readCart().lines.map((line) => line.lineId);
+  }
+
+  it("replaces the line in place, keeping its position and its lineId", () => {
+    const [firstId] = seedTwoLines();
+
+    updateCartLine(firstId!, makeLine({ id: "first", quantity: 7 }));
+
+    const lines = readCart().lines;
+    expect(lines).toHaveLength(2);
+    expect(lines[0]?.lineId).toBe(firstId);
+    expect(lines[0]?.quantity).toBe(7);
+    expect(lines[1]?.id).toBe("second");
+  });
+
+  it("reports a lineId it does not hold and writes nothing", () => {
+    seedTwoLines();
+    const before = readCart();
+
+    expect(updateCartLine("line-nobody", makeLine())).toBe(false);
+    expect(readCart()).toEqual(before);
+  });
+
+  it("merges into the twin when the edit lands on a configuration already in the cart", () => {
+    const ids = seedTwoLines();
+
+    updateCartLine(ids[1]!, makeLine({ id: "first", quantity: 4 }));
+
+    const lines = readCart().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.lineId).toBe(ids[0]);
+    expect(lines[0]?.quantity).toBe(5);
+  });
+
+  it("drops the price quote token on a merge, because the merged quantity was never quoted", () => {
+    addCartLine(makeLine({ id: "first", quantity: 1, priceQuoteToken: "tok" }));
+    addCartLine(makeLine({ id: "second", quantity: 1 }));
+    const ids = readCart().lines.map((line) => line.lineId);
+
+    updateCartLine(
+      ids[1]!,
+      makeLine({ id: "first", quantity: 1, priceQuoteToken: "fresh" }),
+    );
+
+    expect(readCart().lines[0]?.priceQuoteToken).toBeUndefined();
+  });
+
+  it("keeps the fresh quote token when there is nothing to merge with", () => {
+    const [firstId] = seedTwoLines();
+
+    updateCartLine(
+      firstId!,
+      makeLine({ id: "first", quantity: 2, priceQuoteToken: "fresh" }),
+    );
+
+    expect(readCart().lines[0]?.priceQuoteToken).toBe("fresh");
+  });
+
+  it("mints a lineId for a line stored before lineIds existed, so it stays editable", async () => {
+    const { lineId: _absent, ...legacy } = makeLine();
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      JSON.stringify({ lines: [legacy] }),
+    );
+
+    jest.resetModules();
+    const freshCart = await import("@/lib/cart");
+    const restored = freshCart.readCart().lines[0];
+
+    expect(restored?.lineId).toEqual(expect.any(String));
   });
 });
