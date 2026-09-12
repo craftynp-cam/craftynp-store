@@ -186,7 +186,10 @@ here knows that a product might have a size or a material.
   disables the only gate protecting that product. The product-customization
   admin widget names the unmeasured values back at the owner
   (`unmeasuredOptionValues` in `@craftynp/types`) precisely because nothing on
-  the storefront can. **Both axes are checked and the coarsest decides**, so a
+  the storefront can. It treats any option with a measured value as a size
+  group, not only the one `customization_size_option` names — that key is
+  written only for a custom size, so a preset-only product's Medium and Large
+  went unnamed (CNP-83) — and names a value missing either axis. **Both axes are checked and the coarsest decides**, so a
   long banner cannot pass on its width alone.
 - **`RadioButtonGroup` (`src/components/ui`) is the option control**, not
   `RadioGroup`, which still serves every ordinary form. It renders React Aria

@@ -587,10 +587,18 @@ function measuresSomething(value: OptionValueLike): boolean {
   );
 }
 
+function measuresBoth(value: OptionValueLike): boolean {
+  return (
+    readOptionValueWidthInches(value.metadata) !== null &&
+    readOptionValueHeightInches(value.metadata) !== null
+  );
+}
+
 export type UnmeasuredOptions = {
-  // The option group the owner named as carrying sizes. Without it there is no
-  // way to tell a size that should record inches from a finish that never
-  // will, so no per-value complaint is made at all.
+  // The option group the owner named as carrying sizes. Any other group with a
+  // value that records inches is treated as a size group too, since a product
+  // without a custom size never names one; a group where nothing does is a
+  // finish or a colour and is left alone.
   sizeOptionTitle?: string | null;
   customValue?: string | null;
 };
@@ -617,13 +625,16 @@ export function unmeasuredOptionValues(
     pickable(option.values),
   );
   const sizes = (options ?? [])
-    .filter(named)
+    .filter(
+      (option) =>
+        named(option) || pickable(option.values).some(measuresSomething),
+    )
     .flatMap((option) => pickable(option.values));
 
   return {
     anyMeasured: everything.some(measuresSomething),
     missing: sizes
-      .filter((value) => !measuresSomething(value))
+      .filter((value) => !measuresBoth(value))
       .map((value) => value.value as string),
   };
 }
