@@ -1,3 +1,5 @@
+import type { LineItemCustomization } from "@craftynp/types";
+
 export type CartLineDetail = { label: string; value: string };
 
 export type CartLine = {
@@ -17,6 +19,7 @@ export type CartLine = {
   // trusting either — the token only proves which line the quote was for.
   dimensions?: { widthInches: number; heightInches: number };
   priceQuoteToken?: string;
+  customization?: LineItemCustomization;
 };
 
 export type Cart = { lines: readonly CartLine[] };
@@ -27,7 +30,12 @@ export function cartLineKey(line: CartLine): string {
   const configuration = (line.details ?? [])
     .map((detail) => `${detail.label}=${detail.value}`)
     .join("|");
-  return configuration === "" ? line.id : `${line.id}#${configuration}`;
+  const artwork = line.customization?.artwork?.storageKey;
+  const parts = [configuration, artwork ? `artwork=${artwork}` : ""].filter(
+    (part) => part !== "",
+  );
+
+  return parts.length === 0 ? line.id : `${line.id}#${parts.join("|")}`;
 }
 
 const EMPTY_CART: Cart = { lines: [] };
@@ -142,17 +150,23 @@ export function subscribeToCart(listener: () => void): () => void {
   };
 }
 
-function writeCart(cart: Cart): void {
-  cachedCart = cart.lines.length > 0 ? cart : EMPTY_CART;
+function writeCart(cart: Cart): boolean {
+  const previous = cachedCart;
+  const next = cart.lines.length > 0 ? cart : EMPTY_CART;
+  cachedCart = next;
 
   try {
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cachedCart));
-  } catch {}
+    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    cachedCart = previous;
+    return false;
+  }
 
   for (const listener of listeners) listener();
+  return true;
 }
 
-export function addCartLine(line: CartLine): void {
+export function addCartLine(line: CartLine): boolean {
   const current = readCartFromStorage();
   const key = cartLineKey(line);
   const existing = current.lines.find(
@@ -167,7 +181,7 @@ export function addCartLine(line: CartLine): void {
       )
     : [...current.lines, line];
 
-  writeCart({ lines });
+  return writeCart({ lines });
 }
 
 export function setCartLineQuantity(id: string, quantity: number): void {

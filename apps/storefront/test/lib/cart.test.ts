@@ -48,6 +48,52 @@ describe("cart", () => {
     expect(cart.lines[0]?.quantity).toBe(5);
   });
 
+  it("keeps two artwork files apart even when both are called logo.png", () => {
+    const withArtwork = (storageKey: string) =>
+      makeLine({
+        details: [{ label: "Artwork", value: "logo.png" }],
+        customization: {
+          artwork: {
+            storageKey,
+            fileName: "logo.png",
+            mimeType: "image/png",
+            sizeBytes: 2048,
+            widthPx: 1200,
+            heightPx: 1200,
+          },
+        },
+      });
+
+    addCartLine(withArtwork("staging/up_1"));
+    addCartLine(withArtwork("staging/up_2"));
+
+    expect(readCart().lines).toHaveLength(2);
+  });
+
+  it("merges the same artwork added twice", () => {
+    const line = makeLine({
+      quantity: 1,
+      details: [{ label: "Artwork", value: "logo.png" }],
+      customization: {
+        artwork: {
+          storageKey: "staging/up_1",
+          fileName: "logo.png",
+          mimeType: "image/png",
+          sizeBytes: 2048,
+          widthPx: 1200,
+          heightPx: 1200,
+        },
+      },
+    });
+
+    addCartLine(line);
+    addCartLine(line);
+
+    const cart = readCart();
+    expect(cart.lines).toHaveLength(1);
+    expect(cart.lines[0]?.quantity).toBe(2);
+  });
+
   it("keeps two lines with different ids separate", () => {
     addCartLine(makeLine({ id: "sticker" }));
     addCartLine(makeLine({ id: "keychain", title: "Keychain" }));

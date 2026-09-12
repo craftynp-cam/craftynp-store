@@ -23,6 +23,7 @@ import {
   customTextProblem,
   customizationDetails,
   joinLabels,
+  lineItemCustomization,
   missingInputLabels,
   missingRequiredInputs,
   orderNotesProblem,
@@ -70,6 +71,7 @@ export function ProductPurchase({
   const [draft, setDraft] = useState<CustomizationDraft>(
     EMPTY_CUSTOMIZATION_DRAFT,
   );
+  const [addError, setAddError] = useState<string | null>(null);
   const presetSizeRef = useRef<string | null>(null);
   const ctaRef = useRef<HTMLDivElement | null>(null);
 
@@ -252,7 +254,7 @@ export function ProductPurchase({
   function handleAddToCart() {
     if (!selectedVariant || !canAddToCart || !quote) return;
 
-    addCartLine({
+    const added = addCartLine({
       id: selectedVariant.id,
       href,
       title,
@@ -266,7 +268,17 @@ export function ProductPurchase({
       details: detailsForCart,
       dimensions: quoteDimensions,
       priceQuoteToken: quote.quoteToken,
+      customization: lineItemCustomization(customization, draft),
     });
+
+    if (!added) {
+      setAddError(
+        "We could not save this to your cart. Your browser may be out of storage or blocking site data.",
+      );
+      return;
+    }
+
+    setAddError(null);
     openCartDrawer();
   }
 
@@ -367,6 +379,12 @@ export function ProductPurchase({
         className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4"
       >
         {hint ? <p className="text-sm text-foreground-muted">{hint}</p> : null}
+
+        {addError ? (
+          <p role="alert" className="text-sm text-danger-foreground">
+            {addError}
+          </p>
+        ) : null}
 
         <Button
           variant="primary"
