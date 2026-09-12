@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { CartCard } from "@/components";
 import type { CartLine } from "@/lib/cart";
+import { productEditHref } from "@/lib/routes";
 
 export function CartCardDemo({
   initialLines,
@@ -35,7 +36,7 @@ export function CartCardDemo({
               current.filter((candidate) => candidate.id !== id),
             )
           }
-          editHref={`${line.href}?edit=${line.lineId}`}
+          editHref={productEditHref(line.href, line.lineId)}
           onEdit={() => setEditing(line.lineId)}
         />
       ))}
