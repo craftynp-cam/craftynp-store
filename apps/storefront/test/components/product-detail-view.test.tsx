@@ -1272,6 +1272,27 @@ describe("ProductDetailView", () => {
         ).toBeEnabled();
       });
 
+      it("carries the artwork reference onto the cart line", async () => {
+        renderSized();
+        chooseSize("Small");
+        await uploadArtworkOfWidth(900);
+        await clickAddToCart();
+
+        const line = readCart().lines[0];
+        expect(line?.customization?.artwork).toEqual({
+          storageKey: "staging/upload-1.png",
+          fileName: "screenshot.png",
+          mimeType: "image/png",
+          sizeBytes: 51_200,
+          widthPx: 900,
+          heightPx: 900,
+        });
+        expect(line?.details).toContainEqual({
+          label: "Artwork",
+          value: "screenshot.png",
+        });
+      });
+
       it("does not gate a preset the owner has never measured", async () => {
         // Without a physical width there is no DPI to work out, and refusing
         // every upload on a product mid-setup would be worse than not gating.

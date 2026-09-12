@@ -197,6 +197,7 @@ function buildHarness(options: {
   body: CheckoutPrepareRequest;
   before?: CartRow | null;
   after?: CartRow;
+  optionValues?: { metadata: Record<string, unknown> }[];
 }): Harness {
   let mutated = false;
   const markMutated = async (result: unknown) => {
@@ -230,7 +231,11 @@ function buildHarness(options: {
         data: [
           {
             id: "variant_01",
-            product: { metadata: AREA_METADATA },
+            product: {
+              metadata: AREA_METADATA,
+              categories: [{ metadata: { artwork_min_dpi: "300" } }],
+            },
+            options: options.optionValues ?? [],
             calculated_price: {
               calculated_amount: 1.15,
               original_amount: 1.15,
@@ -743,6 +748,147 @@ describe("POST /store/checkout/prepare-cart", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({ error: "invalid_shipping_quote" }),
     );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /store/checkout/prepare-cart customization", () => {
+  const ARTWORK = {
+    storageKey: "staging/up_1.png",
+    fileName: "logo.png",
+    mimeType: "image/png" as const,
+    sizeBytes: 51_200,
+    widthPx: 3000,
+    heightPx: 3000,
+  };
+
+  const PRESET_SIZE = [
+    { metadata: { width_inches: "8", height_inches: "10" } },
+  ];
+
+  function customizedItems(
+    customization: Record<string, unknown>,
+  ): CheckoutPrepareRequest["items"] {
+    return [
+      {
+        variantId: "variant_01",
+        quantity: 2,
+        customization,
+      },
+    ] as CheckoutPrepareRequest["items"];
+  }
+
+  it("stores the validated customization on the line item", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({
+        items: customizedItems({
+          artwork: ARTWORK,
+          customText: { value: "  Ellie  " },
+          orderNotes: "Matte finish",
+        }),
+      }),
+      before: null,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0].metadata.customization).toEqual({
+      artwork: ARTWORK,
+      customText: { value: "Ellie" },
+      orderNotes: "Matte finish",
+    });
+  });
+
+  it("refuses artwork too coarse for the size the option value names", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: customizedItems({
+          artwork: { ...ARTWORK, widthPx: 300, heightPx: 300 },
+        }),
+      }),
+      before: null,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "invalid_customization",
+        message: expect.stringContaining("300 DPI"),
+      }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("accepts the same artwork once the preset size is small enough to print it", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({
+        items: customizedItems({
+          artwork: { ...ARTWORK, widthPx: 300, heightPx: 300 },
+        }),
+      }),
+      before: null,
+      optionValues: [{ metadata: { width_inches: "1", height_inches: "1" } }],
+    });
+
+    await POST(req, res);
+
+    expect(mockCreateCartRun).toHaveBeenCalled();
+  });
+
+  it("starts a fresh cart when only the artwork changed", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({
+        cartId: CART_ID,
+        items: customizedItems({ artwork: ARTWORK }),
+      }),
+      before: cartRow({
+        items: [
+          {
+            variant_id: "variant_01",
+            quantity: 2,
+            metadata: {
+              customization: {
+                artwork: { ...ARTWORK, storageKey: "staging/up_2.png" },
+              },
+            },
+          },
+        ],
+      }),
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(mockCreateCartRun).toHaveBeenCalled();
+    expect(mockUpdateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("reuses the cart when the artwork is unchanged", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({
+        cartId: CART_ID,
+        items: customizedItems({ artwork: ARTWORK }),
+      }),
+      before: cartRow({
+        items: [
+          {
+            variant_id: "variant_01",
+            quantity: 2,
+            metadata: { customization: { artwork: ARTWORK } },
+          },
+        ],
+      }),
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(mockUpdateCartRun).toHaveBeenCalled();
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 });

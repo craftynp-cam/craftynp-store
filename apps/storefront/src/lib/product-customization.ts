@@ -14,6 +14,7 @@ import type {
   CustomDimensionErrors,
   CustomizationInputKey,
   CustomizationInputMode,
+  LineItemCustomization,
   OrderedSizeInches,
   ProductCustomization,
 } from "@craftynp/types";
@@ -292,6 +293,14 @@ export function customizationDetails(
   if (!customization.isCustomizable) return details;
 
   if (
+    customization.inputs.artwork !== "off" &&
+    isSatisfied("artwork", customization, draft) &&
+    draft.artwork
+  ) {
+    details.push({ label: "Artwork", value: draft.artwork.fileName });
+  }
+
+  if (
     customization.inputs.customText !== "off" &&
     isSatisfied("customText", customization, draft)
   ) {
@@ -319,6 +328,59 @@ export function customizationDetails(
   }
 
   return details;
+}
+
+export function lineItemCustomization(
+  customization: ProductCustomization,
+  draft: CustomizationDraft,
+): LineItemCustomization | undefined {
+  if (!customization.isCustomizable) return undefined;
+
+  const payload: LineItemCustomization = {};
+
+  if (
+    customization.inputs.artwork !== "off" &&
+    isSatisfied("artwork", customization, draft) &&
+    draft.artwork
+  ) {
+    const { storageKey, fileName, mimeType, sizeBytes, widthPx, heightPx } =
+      draft.artwork;
+    payload.artwork = {
+      storageKey,
+      fileName,
+      mimeType,
+      sizeBytes,
+      widthPx,
+      heightPx,
+    };
+  }
+
+  if (
+    customization.inputs.customText !== "off" &&
+    isSatisfied("customText", customization, draft)
+  ) {
+    payload.customText = { value: draft.customText.trim() };
+  }
+
+  if (
+    customization.inputs.dimensions !== "off" &&
+    isSatisfied("dimensions", customization, draft)
+  ) {
+    const widthInches = positiveNumber(draft.widthInches);
+    const heightInches = positiveNumber(draft.heightInches);
+    if (widthInches != null && heightInches != null) {
+      payload.dimensions = { widthInches, heightInches };
+    }
+  }
+
+  if (
+    customization.inputs.orderNotes !== "off" &&
+    isSatisfied("orderNotes", customization, draft)
+  ) {
+    payload.orderNotes = normalizeOrderNotes(draft.orderNotes);
+  }
+
+  return Object.keys(payload).length > 0 ? payload : undefined;
 }
 
 // The physical size the artwork will be printed at. A custom size is whatever

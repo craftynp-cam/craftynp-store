@@ -38,6 +38,26 @@ function selectRegionForCountry(
   return match ?? regions[0] ?? null;
 }
 
+type TaxLineItem = {
+  reference: string;
+  amount: number;
+  quantity: number;
+};
+
+export function taxLineItems(
+  items: readonly { variantId: string; quantity: number }[],
+  priced: readonly { ok: boolean; price?: { unitAmount: number } }[],
+): TaxLineItem[] {
+  return items.map((item, index) => {
+    const result = priced[index];
+    return {
+      reference: `${item.variantId}:${index}`,
+      amount: result?.ok ? (result.price?.unitAmount ?? 0) : 0,
+      quantity: item.quantity,
+    };
+  });
+}
+
 export async function POST(
   req: MedusaRequest<TaxQuoteRequest>,
   res: MedusaResponse,
@@ -138,14 +158,7 @@ export async function POST(
       .json({ error: "tax_unavailable", reason: "misconfigured" });
   }
 
-  const lineItems = items.map((item, index) => {
-    const result = priced[index];
-    return {
-      reference: item.variantId,
-      amount: result?.ok ? result.price.unitAmount : 0,
-      quantity: item.quantity,
-    };
-  });
+  const lineItems = taxLineItems(items, priced);
 
   const startedAt = Date.now();
 

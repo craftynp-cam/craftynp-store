@@ -64,8 +64,8 @@ tax provider), `notification-resend`, `auth-auth0`, and
   bounds as an argument rather than a constant, so the message it throws names
   the same range the shopper was shown. It takes the artwork resolution floor,
   the ordered width and the custom text limit the same way, for the same
-  reason. It still has no production caller; CNP-45 wires the real
-  `LineItemCustomization` payload through.
+  reason. Its one caller is `prepare-cart`, through
+  `customizationRulesForVariant` (`src/lib/customization-rules.ts`).
 - **The custom size carries two more keys again, and they are money:**
   `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
   written by the same widget and patch. They are what `areaUnitPrice` in
@@ -471,6 +471,30 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   ran.** The suite pinned neither for a long time, because the cart fixture
   carried no `items` and every "reuse" test silently exercised the fresh-cart
   branch while still passing.
+  **The customization is in the comparison for the same reason the dimensions
+  are.** A shopper who replaces their artwork and then edits their address would
+  otherwise keep the cart the first file was added to, and have the first file
+  made. `customizationSignature` covers the artwork storage key, the custom text
+  and the order notes — everything that changes what gets produced.
+- **On the admin order API the line's own metadata is `line_item_metadata`, not
+  `metadata`.** `order.items[]` merges the versioned `order_item` snapshot with
+  the `order_line_item` it points at, and the snapshot wins the `metadata` name;
+  the line item's own copy — the one `prepare-cart` wrote and the one
+  `promote-artwork` reads — is exposed beside it as `line_item_metadata`.
+  `query.graph({ entity: "order", fields: ["items.metadata"] })` resolves to the
+  line item's, so the two surfaces disagree on the same name. A widget reading
+  `item.metadata` finds the snapshot and silently renders nothing;
+  `order-customization.tsx` reads `line_item_metadata` and falls back.
+- **The configured line's metadata is `{ isCustomizable, details, dimensions?,
+customization? }`.** `details` is the rendered half — label/value rows the
+  cart, the confirmation page and the order email all print — and
+  `customization` is the structured half the maker and the admin widget work
+  from. `dimensions` sits at the line's top level as well as inside the
+  customization, and that duplication is deliberate: `priceSignature`,
+  `resolveLinePrice` and the tax-quote key all predate customization and none of
+  them should have to reach through one to price a line. **What is stored is the
+  value `validateCustomization` returned, not the request's** — the zod-trimmed
+  one is what `promote-artwork` later reads.
 - **`prepare-cart` re-attaches the shipping method on every call.** The workflow
   replaces rather than duplicates; skipping it leaves the previous address's
   `quoteToken` attached, which blocks checkout on the next address edit.
@@ -562,14 +586,19 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   bytes or a URL to them. It is rate-limited like every other anonymous store
   route that spends anything. Do not "fix" this by adding a session check that
   the flow cannot satisfy.
-- **The resolution decision is only half server-side today.** The pixel count
-  is measured here from the stored bytes and cannot be forged by the browser,
-  but the comparison against the threshold still happens in the storefront,
-  because artwork does not reach any server-side order path yet.
-  `validateCustomization` holds the rule and has no caller; **CNP-45 is what
-  closes this**, and until it lands the story's "enforced server-side as well
-  as client-side" is not fully true. There is no exploit in the meantime — a
-  crafted client has nowhere to send an artwork reference.
+- **The resolution decision is enforced in both places, and `prepare-cart` is
+  the server half.** The pixel count is measured here from the stored bytes and
+  cannot be forged by the browser; the comparison against the product's
+  threshold runs in the storefront for the shopper and again in `prepare-cart`
+  for the order, which is the last point before money and the only server path
+  a configured line reaches. `customizationRulesForVariant`
+  (`src/lib/customization-rules.ts`) resolves the bounds, text limit, minimum
+  DPI and ordered size that `validateCustomization` needs.
+  **The preset case is why the variant query asks for its option values.** The
+  payload names a variant, not the option values under it, so a preset size's
+  inches are reachable only through `variant.options[].metadata`; a custom size
+  answers from the payload's own `dimensions`, which `validateCustomization`
+  already falls back to.
 - **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,
   written by `src/admin/widgets/category-artwork.tsx` and read through
   `resolveArtworkMinDpi` in `@craftynp/types`, which takes the strictest value

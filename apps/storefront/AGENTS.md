@@ -280,10 +280,16 @@ guard that validates them).
   draft is deliberately
   storefront-shaped strings, not a `LineItemCustomization` — the shopper's width
   is `"8"` while they are still typing, and an `ArtworkReference` here has no
-  `dpi` yet, so it cannot become one. The text, size and notes reach the cart as
-  `details` entries alongside the variant options; **artwork does not**, because
-  a filename in `details` would show an attachment the cart cannot actually
-  carry. CNP-45 threads the real payload through.
+  `dpi` yet, so it cannot become one. Add-to-cart maps it through
+  `lineItemCustomization`, which narrows the storefront `ArtworkReference` to
+  the six fields `artworkReferenceSchema` declares and drops the `uploadId` and
+  `kind` the wire has no use for. The result rides the cart line as
+  `customization` and reaches Medusa's line item metadata under the same key —
+  which is what `promote-artwork` reads to move the file out of `staging/`.
+  Every input also gets a `details` row for display, artwork included; the two
+  are the same configuration rendered and structured, and both are built from
+  the same `isSatisfied` predicate so they cannot disagree about what the
+  shopper filled in.
 - **The artwork resolution check joins the one gate, and it blocks whatever the
   declared artwork mode is.** `optional` says the shopper need not supply
   artwork, not that a file too coarse to print is acceptable once they have —
@@ -380,6 +386,10 @@ for the keys).
   second's `details`. `id` stays the variant id because that is what
   `/checkout/prepare` is sent; the key adds the configuration on top, and the
   quantity stepper, the remove button and every React `key` use it.
+  **The artwork's storage key is folded in separately, not left to its `details`
+  row.** That row names the file, and two different files are routinely both
+  called `logo.png` — keying on the row alone merged them into one line and
+  produced the wrong artwork for one of the two.
 - **A detail value that is long or multi-line is clamped behind a disclosure,
   and `isExpandableDetail` decides that from the value, not from the box.**
   Order notes may run to several lines, and `truncate` — which is
@@ -534,7 +544,7 @@ in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
   which throws at module eval and may not reach a client component.
 - **The component is controlled on the durable reference alone.** Progress,
   error state and object URLs stay internal, so a progress tick cannot re-render
-  the configurator around it and CNP-45 has exactly one field to thread. The
+  the configurator around it and add-to-cart has exactly one field to thread. The
   rendered view is derived, `uploading → error → uploaded → idle`.
 - **A replacement runs without clearing `value`, and the preview is adopted on
   success rather than at upload start.** `onChange` fires only when an upload

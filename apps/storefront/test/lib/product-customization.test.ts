@@ -13,6 +13,7 @@ import {
   characterCountHint,
   customTextProblem,
   customizationDetails,
+  lineItemCustomization,
   normalizeOrderNotes,
   missingInputLabels,
   missingRequiredInputs,
@@ -139,19 +140,17 @@ describe("customizationDetails", () => {
         }),
       ),
     ).toEqual([
+      { label: "Artwork", value: "flowers.png" },
       { label: "Custom text", value: "Ellie" },
       { label: "Size", value: "8\u2033 \u00d7 10\u2033" },
       { label: "Order notes", value: "Matte finish" },
     ]);
   });
 
-  it("leaves artwork out — the cart cannot carry the file until CNP-45", () => {
-    const details = customizationDetails(
-      ALL_REQUIRED,
-      draft({ artwork: ARTWORK }),
-    );
-
-    expect(details).toEqual([]);
+  it("names the artwork file the shopper attached", () => {
+    expect(
+      customizationDetails(ALL_REQUIRED, draft({ artwork: ARTWORK })),
+    ).toEqual([{ label: "Artwork", value: "flowers.png" }]);
   });
 
   it("skips an input the shopper left empty", () => {
@@ -710,5 +709,67 @@ describe("customizationDetails order notes", () => {
     expect(notes?.value).toBe(
       "Match the sage green.\n\nNeeded before the 14th.",
     );
+  });
+});
+
+describe("lineItemCustomization", () => {
+  it("narrows the storefront artwork reference to the six fields the wire carries", () => {
+    const payload = lineItemCustomization(
+      ALL_REQUIRED,
+      draft({ artwork: ARTWORK }),
+    );
+
+    expect(payload?.artwork).toEqual({
+      storageKey: "staging/up_1",
+      fileName: "flowers.png",
+      mimeType: "image/png",
+      sizeBytes: 2048,
+      widthPx: 1200,
+      heightPx: 1200,
+    });
+  });
+
+  it("carries the text, dimensions and notes as the schema shapes them", () => {
+    expect(
+      lineItemCustomization(
+        ALL_REQUIRED,
+        draft({
+          customText: "  Ellie  ",
+          widthInches: "8",
+          heightInches: "10",
+          orderNotes: "Match the sage green.\r\n\r\nBefore the 14th.",
+        }),
+      ),
+    ).toEqual({
+      customText: { value: "Ellie" },
+      dimensions: { widthInches: 8, heightInches: 10 },
+      orderNotes: "Match the sage green.\n\nBefore the 14th.",
+    });
+  });
+
+  it("leaves out an input the product never declared", () => {
+    const notesOnly = resolveProductCustomization({
+      customizable: "true",
+      customization_notes: "required",
+    });
+
+    expect(
+      lineItemCustomization(
+        notesOnly,
+        draft({ artwork: ARTWORK, customText: "Ellie", orderNotes: "Matte" }),
+      ),
+    ).toEqual({ orderNotes: "Matte" });
+  });
+
+  it("is undefined for a ready-made product, so its line carries no payload", () => {
+    const readyMade = resolveProductCustomization({});
+
+    expect(
+      lineItemCustomization(readyMade, draft({ artwork: ARTWORK })),
+    ).toBeUndefined();
+  });
+
+  it("is undefined when the shopper filled nothing in", () => {
+    expect(lineItemCustomization(ALL_REQUIRED, draft())).toBeUndefined();
   });
 });

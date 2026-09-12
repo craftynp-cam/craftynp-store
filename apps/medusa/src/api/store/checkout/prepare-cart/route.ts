@@ -8,7 +8,11 @@ import {
   createPaymentSessionsWorkflow,
   updateCartWorkflow,
 } from "@medusajs/medusa/core-flows";
-import type { CheckoutAddress, CheckoutPrepareRequest } from "@craftynp/types";
+import type {
+  CheckoutAddress,
+  CheckoutPrepareRequest,
+  LineItemCustomization,
+} from "@craftynp/types";
 
 import {
   cartSignature,
@@ -20,6 +24,12 @@ import { toAmount } from "../../../../lib/money";
 import { priceSignature, verifyPriceQuote } from "../../../../lib/price-quote";
 import { resolveLinePrice } from "../../../../lib/resolve-line-price";
 import { pricedVariantQuery } from "../../price-quote/route";
+import {
+  VARIANT_CUSTOMIZATION_FIELDS,
+  customizationRulesForVariant,
+  type VariantWithCustomization,
+} from "../../../../lib/customization-rules";
+import { validateCustomization } from "../../../../lib/validate-customization";
 
 const STRIPE_PAYMENT_PROVIDER_ID = "pp_stripe_stripe";
 const LIVE_SHIPPING_OPTION_NAME = "Live USPS Rate";
@@ -64,6 +74,7 @@ type CartItemRow = {
   is_custom_price?: boolean | null;
   metadata?: {
     dimensions?: { widthInches?: number; heightInches?: number } | null;
+    customization?: LineItemCustomization | null;
   } | null;
 };
 
@@ -72,6 +83,21 @@ type CartWithItems = {
   completed_at?: string | Date | null;
   items?: CartItemRow[] | null;
 };
+
+// updateCartWorkflow cannot change line items, so anything that alters what
+// gets made has to force a fresh cart rather than be silently kept from the
+// cart the shopper started with.
+function customizationSignature(
+  customization: LineItemCustomization | null | undefined,
+): string {
+  if (!customization) return "";
+
+  return [
+    customization.artwork?.storageKey ?? "",
+    customization.customText?.value ?? "",
+    customization.orderNotes ?? "",
+  ].join("~");
+}
 
 function lineSignature(input: {
   variantId: string;
@@ -82,6 +108,7 @@ function lineSignature(input: {
   // itself and refreshes it, so comparing those would report a change the
   // shopper never made.
   unitPrice: number | null;
+  customization: string;
 }): string {
   return [
     input.variantId,
@@ -89,6 +116,7 @@ function lineSignature(input: {
     input.widthInches ?? "",
     input.heightInches ?? "",
     input.unitPrice ?? "",
+    input.customization,
   ].join(":");
 }
 
@@ -209,6 +237,70 @@ export async function POST(
     });
   }
 
+  // The last point before money, and the only server path a configured line
+  // reaches. The pixels were measured at inspect; the comparison against the
+  // product's threshold happens here.
+  const validated = new Map<number, LineItemCustomization>();
+  const customizedItems = items.filter((item) => item.customization != null);
+
+  if (customizedItems.length > 0) {
+    let variants: VariantWithCustomization[];
+
+    try {
+      const { data } = await query.graph({
+        entity: "variant",
+        fields: VARIANT_CUSTOMIZATION_FIELDS,
+        filters: {
+          id: [...new Set(customizedItems.map((item) => item.variantId))],
+        },
+      });
+      variants = data as VariantWithCustomization[];
+    } catch (error) {
+      logger.error(
+        `[checkout:unavailable] reason=customization_lookup_failed error=${describeError(error)}`,
+      );
+      return res.status(502).json({
+        error: "checkout_unavailable",
+        reason: "misconfigured",
+        message: "checkout_unavailable:misconfigured",
+      });
+    }
+
+    const byId = new Map(variants.map((variant) => [variant.id, variant]));
+
+    for (const [index, item] of items.entries()) {
+      if (item.customization == null) continue;
+
+      const variant = byId.get(item.variantId);
+
+      // A customization we cannot resolve rules for is one we cannot check, and
+      // storing an unchecked one is the hole this closes.
+      if (!variant) {
+        return res.status(400).json({
+          error: "invalid_customization",
+          reason: "unknown_variant",
+          message: `invalid_customization:unknown_variant:${item.variantId}`,
+        });
+      }
+
+      try {
+        validated.set(
+          index,
+          validateCustomization(
+            item.customization,
+            customizationRulesForVariant(variant),
+          ),
+        );
+      } catch (error) {
+        return res.status(400).json({
+          error: "invalid_customization",
+          reason: "rejected",
+          message: describeError(error),
+        });
+      }
+    }
+  }
+
   // An area-priced line cannot be left to Medusa: the amount depends on the
   // dimensions, which no price set knows about. The token proves which line the
   // shopper was quoted for; the amount is re-derived here rather than read off
@@ -276,6 +368,7 @@ export async function POST(
         widthInches: item.dimensions?.widthInches ?? null,
         heightInches: item.dimensions?.heightInches ?? null,
         unitPrice: unitPrices.get(index) ?? null,
+        customization: customizationSignature(validated.get(index)),
       }),
     ),
   );
@@ -305,6 +398,9 @@ export async function POST(
               unitPrice: item.is_custom_price
                 ? toAmount(item.unit_price)
                 : null,
+              customization: customizationSignature(
+                item.metadata?.customization,
+              ),
             }),
           ),
         )
@@ -360,6 +456,9 @@ export async function POST(
             isCustomizable: item.isCustomizable ?? false,
             details: item.details ?? [],
             ...(item.dimensions ? { dimensions: item.dimensions } : {}),
+            ...(validated.has(index)
+              ? { customization: validated.get(index) }
+              : {}),
           },
         })),
       },
