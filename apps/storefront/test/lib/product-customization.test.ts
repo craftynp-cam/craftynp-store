@@ -12,6 +12,7 @@ import {
   customSizeErrors,
   characterCountHint,
   customTextProblem,
+  configurationFromCartLine,
   customizationDetails,
   lineItemCustomization,
   normalizeOrderNotes,
@@ -23,6 +24,8 @@ import {
   resolveCustomSizeOption,
   type CustomizationDraft,
 } from "@/lib/product-customization";
+import type { CartLine } from "@/lib/cart";
+import type { ProductDetail } from "@/lib/product";
 
 const ARTWORK = {
   uploadId: "up_1",
@@ -771,5 +774,161 @@ describe("lineItemCustomization", () => {
 
   it("is undefined when the shopper filled nothing in", () => {
     expect(lineItemCustomization(ALL_REQUIRED, draft())).toBeUndefined();
+  });
+});
+
+describe("configurationFromCartLine", () => {
+  const options = [
+    {
+      id: "opt_size",
+      title: "Size",
+      values: [
+        { id: "val_small", value: "Small" },
+        { id: "val_custom", value: "Custom" },
+      ],
+    },
+    {
+      id: "opt_finish",
+      title: "Finish",
+      values: [
+        { id: "val_matte", value: "Matte" },
+        { id: "val_gloss", value: "Gloss" },
+      ],
+    },
+  ];
+
+  function product(
+    customization: ProductDetail["customization"],
+    overrides: Partial<ProductDetail> = {},
+  ): ProductDetail {
+    return {
+      id: "prod_1",
+      href: "/stickers/die-cut",
+      title: "Die-Cut Stickers",
+      description: "",
+      categoryName: "Stickers",
+      categoryHandle: "stickers",
+      images: [],
+      options,
+      variants: [
+        {
+          id: "var_small_matte",
+          sku: null,
+          thumbnail: null,
+          optionValueIds: ["val_small", "val_matte"],
+          availability: "in_stock",
+          price: "$1.00",
+          calculatedAmount: 100,
+          currencyCode: "usd",
+        },
+        {
+          id: "var_custom_gloss",
+          sku: null,
+          thumbnail: null,
+          optionValueIds: ["val_custom", "val_gloss"],
+          availability: "in_stock",
+          price: "$2.00",
+          calculatedAmount: 200,
+          currencyCode: "usd",
+        },
+      ],
+      customization,
+      artworkMinDpi: 150,
+      minOrderQuantity: 1,
+      ...overrides,
+    };
+  }
+
+  function line(overrides: Partial<CartLine> = {}): CartLine {
+    return {
+      id: "var_small_matte",
+      lineId: "line-1",
+      href: "/stickers/die-cut",
+      title: "Die-Cut Stickers",
+      unitPrice: 100,
+      currencyCode: "usd",
+      quantity: 3,
+      ...overrides,
+    };
+  }
+
+  it("rebuilds the option selection from the variant rather than the rendered details", () => {
+    const restored = configurationFromCartLine(
+      line({
+        details: [{ label: "Size", value: "A value nobody chose" }],
+      }),
+      product(ALL_REQUIRED),
+    );
+
+    expect(restored?.selected).toEqual({
+      opt_size: "val_small",
+      opt_finish: "val_matte",
+    });
+  });
+
+  it("declines a line whose variant the product no longer sells", () => {
+    expect(
+      configurationFromCartLine(
+        line({ id: "var_withdrawn" }),
+        product(ALL_REQUIRED),
+      ),
+    ).toBeNull();
+  });
+
+  it("reads every saved input back into the draft", () => {
+    const restored = configurationFromCartLine(
+      line({
+        customization: {
+          artwork: {
+            storageKey: "staging/up_1",
+            fileName: "flowers.png",
+            mimeType: "image/png",
+            sizeBytes: 2048,
+            widthPx: 1200,
+            heightPx: 1200,
+          },
+          customText: { value: "The Wrights" },
+          dimensions: { widthInches: 8.5, heightInches: 10 },
+          orderNotes: "Leave it unwrapped",
+        },
+      }),
+      product(ALL_REQUIRED),
+    );
+
+    expect(restored?.draft).toEqual({
+      artwork: expect.objectContaining({ fileName: "flowers.png" }),
+      customText: "The Wrights",
+      useCustomSize: false,
+      widthInches: "8.5",
+      heightInches: "10",
+      orderNotes: "Leave it unwrapped",
+    });
+  });
+
+  it("turns the custom-size toggle back on when the product only offers it", () => {
+    const restored = configurationFromCartLine(
+      line({
+        id: "var_custom_gloss",
+        customization: { dimensions: { widthInches: 8, heightInches: 8 } },
+      }),
+      product(OPTIONAL_SIZE),
+    );
+
+    expect(restored?.draft.useCustomSize).toBe(true);
+  });
+
+  it("leaves an empty draft for a line that carried no customization", () => {
+    expect(
+      configurationFromCartLine(line(), product(ALL_REQUIRED))?.draft,
+    ).toEqual(EMPTY_CUSTOMIZATION_DRAFT);
+  });
+
+  it("floors the restored quantity at the product's current minimum", () => {
+    const restored = configurationFromCartLine(
+      line({ quantity: 3 }),
+      product(ALL_REQUIRED, { minOrderQuantity: 25 }),
+    );
+
+    expect(restored?.quantity).toBe(25);
   });
 });

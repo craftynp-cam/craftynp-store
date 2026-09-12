@@ -51,12 +51,15 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   (`"../ui"`). `src/components/index.ts` re-exports every subdirectory barrel
   except `icons`; export a new component from its own directory's `index.ts` in
   the same change or it is unreachable.
-- **`ProductDetailView` owns the product page's selected-option state**, and is
-  why the gallery and the purchase panel are wrapped rather than rendered
+- **`ProductConfigureView` owns the product page's selected-option state**, and
+  is why the gallery and the purchase panel are wrapped rather than rendered
   side by side from the page. The selected variant's `thumbnail` drives the
-  gallery's main image, so the state has to sit above both. `ProductPurchase`
-  is controlled — it takes `selected` and `onOptionChange` and keeps only the
-  state nothing above it needs: the quantity and the customization draft. The
+  gallery's main image, so the state has to sit above both. The exported
+  `ProductDetailView` around it does nothing but resolve the edit seed and
+  remount it on a `key` — see the Editing a cart line section for why that
+  split exists. `ProductPurchase` is controlled — it takes `selected` and
+  `onOptionChange` and keeps only the state nothing above it needs: the
+  quantity and the customization draft. The
   quantity **starts at `ProductDetail.minOrderQuantity`** and is clamped to it
   by derivation on every render, never synced in an effect — the same reason
   `defaultSelection` seeds the custom size rather than an effect doing it.
@@ -106,6 +109,15 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   is shared across concurrent server requests and would leak one customer's
   token into another's render. For an already-signed-in customer, pass an
   `Authorization` header on that one call to the singleton instead.
+- **A cart line has two identities and they answer different questions.**
+  `cartLineKey(line)` in `cart.ts` is derived from the configuration and
+  answers "is this the same thing?" — it is what `addCartLine` merges on, and
+  what `setCartLineQuantity` and `removeCartLine` address a line by.
+  `line.lineId` is minted once per line and answers "which line?" An edit
+  changes the configuration and so changes the key, which is exactly why
+  `updateCartLine` and the `?edit=` URL address a line by `lineId` instead.
+  `parseCart` mints one for any line stored before `lineId` existed, so a cart
+  written by an earlier session stays editable.
 - **Stores read through `useSyncExternalStore`** — `cart.ts` and
   `checkout-draft.ts` — must cache their snapshot at module scope and return a
   constant, never a fresh literal, as the server snapshot, or they loop or warn
@@ -321,6 +333,35 @@ guard that validates them).
   Adding an input means adding it to `CUSTOMIZATION_INPUTS` in `@craftynp/types`
   first — the registry is what the admin widget, the backend guard and the gate
   all walk.
+
+### Editing a cart line
+
+The cart drawer's edit action is a link to the line's own product page at
+`?edit=<lineId>` (`productEditHref` in `src/lib/routes.ts`). There is no edit
+modal, and adding one would mean a second home for the option panel, the one
+gate, the price quote and the artwork upload.
+
+- **`configurationFromCartLine` is the inverse of `lineItemCustomization`, and
+  the two have to stay in step.** Anything the forward mapping writes onto the
+  line is something the inverse has to read back, or an edit silently drops it.
+- **It rebuilds the option selection from the variant, never from the line's
+  `details`.** `line.id` is the variant id and `ProductDetailVariant` carries
+  `optionValueIds`, so the lookup is exact; matching the rendered rows by label
+  would collide with the customization rows on a product whose option is titled
+  `Size`.
+- **The seed cannot exist during SSR** — `readServerCart()` is `EMPTY_CART` —
+  so it arrives only once the store is read on the client. `ProductDetailView`
+  remounts `ProductConfigureView` on its `key` to get those values into the
+  `useState` initializers. Syncing them in an effect is what the derivation
+  rules on this page exist to prevent, and `react-hooks/set-state-in-effect` is
+  enforced anyway. A page opened without `?edit=` never remounts.
+- **A `?edit=` naming a line that is gone, or a variant the product no longer
+  sells, falls back silently to add-to-cart.** A notice cannot be rendered
+  without either flashing during hydration or mismatching it, and checkout
+  already declines to special-case the empty server snapshot.
+- **Nothing is written until Save**, which is what makes Cancel safe without
+  any undo machinery. Save re-quotes like every other change, so the line
+  always lands with a fresh token.
 
 ### Custom size
 

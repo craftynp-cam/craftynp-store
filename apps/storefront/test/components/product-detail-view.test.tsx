@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
 import {
@@ -213,6 +219,8 @@ describe("ProductDetailView", () => {
     window.localStorage.clear();
     clearCart();
     setCartDrawerOpen(false);
+    searchParams = new URLSearchParams();
+    mockRouterReplace.mockClear();
     mockPriceQuote();
   });
 
@@ -1338,5 +1346,108 @@ describe("ProductDetailView", () => {
       expect(screen.getByText("Made to order")).toBeInTheDocument();
       expect(screen.queryByText(/ready to ship/i)).not.toBeInTheDocument();
     });
+  });
+});
+
+describe("ProductDetailView editing a cart line", () => {
+  const customizable = resolveProductCustomization({
+    customizable: "true",
+    customization_text: "required",
+  });
+
+  function editableProduct() {
+    return makeProduct({ customization: customizable });
+  }
+
+  async function seedLine() {
+    render(<ProductDetailView {...processNotes} product={editableProduct()} />);
+    chooseBlush();
+    fireEvent.change(screen.getByLabelText(/custom text/i), {
+      target: { value: "The Wrights" },
+    });
+    await clickAddToCart();
+
+    const line = readCart().lines[0];
+    if (!line) throw new Error("nothing was added to the cart");
+    return line;
+  }
+
+  function openEditor(lineId: string) {
+    searchParams = new URLSearchParams({ edit: lineId });
+    render(<ProductDetailView {...processNotes} product={editableProduct()} />);
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    clearCart();
+    setCartDrawerOpen(false);
+    searchParams = new URLSearchParams();
+    mockRouterReplace.mockClear();
+    mockPriceQuote();
+  });
+
+  it("reopens the configurator on what was saved, and offers to save rather than add", async () => {
+    const line = await seedLine();
+    cleanup();
+    openEditor(line.lineId);
+
+    expect(screen.getByLabelText(/custom text/i)).toHaveValue("The Wrights");
+    expect(screen.getByRole("radio", { name: "Blush" })).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /add to cart/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("updates that line rather than adding a second one, and repriced", async () => {
+    const line = await seedLine();
+    cleanup();
+    openEditor(line.lineId);
+
+    fireEvent.change(screen.getByLabelText(/custom text/i), {
+      target: { value: "The Wright Family" },
+    });
+    await settlePrice();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    });
+
+    const lines = readCart().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.lineId).toBe(line.lineId);
+    expect(lines[0]?.details).toContainEqual({
+      label: "Custom text",
+      value: "The Wright Family",
+    });
+    expect(lines[0]?.priceQuoteToken).toBeDefined();
+    expect(mockRouterReplace).toHaveBeenCalledWith(editableProduct().href);
+  });
+
+  it("leaves the line untouched when the edit is cancelled", async () => {
+    const line = await seedLine();
+    const before = readCart();
+    cleanup();
+    openEditor(line.lineId);
+
+    fireEvent.change(screen.getByLabelText(/custom text/i), {
+      target: { value: "Something else entirely" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    });
+
+    expect(readCart()).toEqual(before);
+    expect(mockRouterReplace).toHaveBeenCalledWith(editableProduct().href);
+  });
+
+  it("falls back to adding when the line named by the query is gone", async () => {
+    openEditor("line-nobody-holds");
+
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/custom text/i)).toHaveValue("");
   });
 });

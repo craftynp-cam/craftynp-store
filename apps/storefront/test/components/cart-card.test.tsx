@@ -263,4 +263,51 @@ describe("CartCard", () => {
       expect(container.firstChild).toHaveAttribute("aria-hidden", "true");
     });
   });
+
+  it("offers the edit link only on a line there is something to configure", () => {
+    const { rerender } = render(
+      <CartCard
+        line={makeLine({ isCustomizable: true })}
+        editHref="/products/sticker?edit=line-sticker"
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
+    ).toHaveAttribute("href", "/products/sticker?edit=line-sticker");
+
+    rerender(
+      <CartCard
+        line={makeLine({ isCustomizable: false })}
+        editHref="/products/sticker?edit=line-sticker"
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("tells its host the edit link was followed, so the drawer can close behind it", () => {
+    const onEdit = jest.fn();
+    render(
+      <CartCard
+        line={makeLine({ isCustomizable: true })}
+        editHref="/products/sticker?edit=line-sticker"
+        onEdit={onEdit}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
+    );
+
+    expect(onEdit).toHaveBeenCalled();
+  });
 });
