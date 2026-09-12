@@ -42,7 +42,11 @@ export function Textarea({
         }}
       />
       {description ? <Description>{description}</Description> : null}
-      {errorMessage ? <FieldError>{errorMessage}</FieldError> : null}
+      {errorMessage ? (
+        <FieldError>
+          <span role="alert">{errorMessage}</span>
+        </FieldError>
+      ) : null}
     </TextField>
   );
 }

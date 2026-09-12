@@ -222,6 +222,29 @@ describe("ArtworkUpload", () => {
     expect(transport.lastFile()).toBe(file);
   });
 
+  it("describes both ways out of a failed upload with the error itself", async () => {
+    const transport = deferredUpload();
+
+    render(
+      <ArtworkUpload
+        value={null}
+        onChange={jest.fn()}
+        upload={transport.upload}
+      />,
+    );
+
+    selectFile(makeFile());
+    await transport.reject(new ArtworkUploadError("presign_failed"));
+
+    const message = screen.getByRole("alert").textContent ?? "";
+    expect(
+      screen.getByRole("button", { name: "Try again" }),
+    ).toHaveAccessibleDescription(message);
+    expect(
+      screen.getByRole("button", { name: "Choose a different file" }),
+    ).toHaveAccessibleDescription(message);
+  });
+
   it("offers no retry for a failure that retrying cannot fix", async () => {
     const transport = deferredUpload();
 

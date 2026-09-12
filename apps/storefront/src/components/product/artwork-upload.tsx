@@ -89,6 +89,7 @@ export function ArtworkUpload({
 
   const hintId = useId();
   const guidanceId = useId();
+  const uploadErrorId = useId();
 
   const view =
     state.status === "uploading"
@@ -427,6 +428,7 @@ export function ArtworkUpload({
       {state.status === "failed" ? (
         <div className="flex flex-col gap-3">
           <p
+            id={uploadErrorId}
             role="alert"
             className="flex items-start gap-2 text-sm text-danger-foreground"
           >
@@ -446,6 +448,7 @@ export function ArtworkUpload({
               <button
                 type="button"
                 ref={retryRef}
+                aria-describedby={uploadErrorId}
                 onClick={handleRetry}
                 className={primaryActionClassName}
               >
@@ -456,6 +459,7 @@ export function ArtworkUpload({
               type="button"
               ref={browseRef}
               disabled={disabled}
+              aria-describedby={uploadErrorId}
               onClick={openPicker}
               className={secondaryActionClassName}
             >
