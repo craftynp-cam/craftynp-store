@@ -11,8 +11,8 @@ products, discounts, and orders from the Medusa admin.
 ## Status
 
 Deployed. The storefront is live at
-[thecraftynp.org](https://thecraftynp.org) on Vercel, and Medusa with its admin
-at `api.thecraftynp.com` on Railway. A clone still reaches a working dev
+[thecraftynp.org](https://thecraftynp.org), and Medusa with its admin at
+`api.thecraftynp.com`, both on Railway. A clone still reaches a working dev
 environment — the storefront server-renders products fetched live from Medusa,
 checkout takes a real Stripe payment and places a Medusa order.
 
@@ -33,7 +33,7 @@ storage and its retention window landed in CNP-20; the upload UI is CNP-39. See
 | Monorepo       | pnpm workspaces + Turborepo                                |
 | Formatting     | Prettier (root), ESLint flat config (extended per app)     |
 
-**Deployed on:** Vercel (storefront), Railway (Medusa, Postgres, Redis),
+**Deployed on:** Railway (storefront, Medusa, Postgres, Redis),
 Cloudflare (DNS, TLS, rate limiting) and Cloudflare R2 (imagery and shipping
 labels), with Stripe for payments and tax, ShipStation for shipping, Resend for
 email, and Auth0 for customer accounts. [docs/dns.md](docs/dns.md) records the
@@ -486,18 +486,19 @@ All are run from the repo root.
 
 Production is live. The mapping:
 
-| Branch | Environment | Target                                 |
-| ------ | ----------- | -------------------------------------- |
-| `main` | Production  | Vercel (storefront) + Railway (Medusa) |
-| `dev`  | Preview     | Vercel preview deployments             |
+| Branch | Environment | Target                                |
+| ------ | ----------- | ------------------------------------- |
+| `main` | Production  | Railway (storefront and both Medusa)  |
+| `dev`  | —           | not deployed; integration branch only |
 
-Production is the only environment provisioned. Preview deployments have no
-Medusa of their own and call the production API, which is why `dev` has the
-stable `dev.thecraftynp.org` alias: Auth0 rejects a callback URL it has not been
-told about, so a per-deploy preview hostname could never complete sign-in.
+Production is the only environment, and there are no preview deployments
+(CNP-81). They were dropped on the move off Vercel rather than rebuilt: they
+were reachable only by the team, called the production API so checkout could
+not be exercised there, and a Railway deploy that fails its build or healthcheck
+leaves the previous deployment serving anyway.
 
 **[docs/dns.md](docs/dns.md) records what is actually configured** — every DNS
-record, the Cloudflare rules, and the Railway, Vercel, R2 and GitHub settings,
+record, the Cloudflare rules, and the Railway, R2 and GitHub settings,
 along with the handful of places reality had to diverge from the plan below.
 
 ### Before the first public deploy
@@ -609,35 +610,36 @@ plan would not express what this section asked for.
 `_acme-challenge` records for businessidentity.llc. It is not a redirect-only
 zone and must not be deleted or have its nameservers moved.
 
-**Vercel's default build command cannot build the storefront** (CNP-17). A plain
-`next build` **fails**, because the storefront resolves `@craftynp/types` from
-its built `dist/` and that build has not run. The build must come from the repo
-root through Turborepo so `^build` ordering applies — the same trap as the
-`pnpm --filter` ban above.
+**A plain `next build` cannot build the storefront** (CNP-17). It **fails**,
+because the storefront resolves `@craftynp/types` from its built `dist/` and
+that build has not run. The build must come from the repo root through Turborepo
+so `^build` ordering applies — the same trap as the `pnpm --filter` ban above.
+`apps/storefront/Dockerfile` takes the repo root as its build context for exactly
+that reason, the same shape as Medusa's.
 
-It is the **command** that has to change, not the root directory. That stays
-`apps/storefront`, so Vercel's Next.js framework detection, output location and
-image handling all keep working; `apps/storefront/vercel.json` overrides the
-install and build commands to `cd ../..` and go through turbo, and adds
-`turbo-ignore` so a Medusa-only change does not rebuild the storefront. Do not
-"fix" this by moving the root directory to the repo root.
+**Every `NEXT_PUBLIC_*` variable must be declared as an `ARG` in that
+Dockerfile.** Next inlines them at build time, and Railway passes a service
+variable into a Docker build only when an `ARG` names it. A missing one still
+builds green and ships `undefined` — and `next.config.ts` reads the backend and
+media URLs at build time to allow image hosts, so missing those 400s every
+product image from the optimizer.
 
 **The admin is not proxied through the storefront in production.** The `/api`
 and `/app` rewrites in `next.config.ts` are development-only: they exist so the
 local admin is same-origin on `:8000`, and nothing in `src/` calls either path.
 In production the admin is served by Medusa at `api.thecraftynp.com/app`, which
-keeps it on the API's own zone, off Vercel's function billing, and — because
+keeps it on the API's own zone, off the storefront's container, and — because
 `admin.backendUrl` is left unset so the bundle calls relative URLs — same-origin,
 which is what makes `ADMIN_CORS=https://api.thecraftynp.com` the whole answer.
 
 **The storefront and API are now cross-origin** (CNP-17), because they sit on
 different domains by design. Production values:
 
-| Variable                                               | Value                                                      |
-| ------------------------------------------------------ | ---------------------------------------------------------- |
-| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com`                              |
-| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`                                  |
-| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`, plus the Vercel preview domains |
+| Variable                                               | Value                         |
+| ------------------------------------------------------ | ----------------------------- |
+| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com` |
+| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`     |
+| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`     |
 
 `ADMIN_CORS` is `https://api.thecraftynp.com` — the origin the admin is actually
 served from, and nothing else. With the `/app` rewrite dev-only and
