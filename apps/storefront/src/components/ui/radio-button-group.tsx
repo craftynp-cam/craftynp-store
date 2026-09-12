@@ -42,7 +42,11 @@ export function RadioButtonGroup({
   ...rest
 }: RadioButtonGroupProps) {
   return (
-    <HeroRadioGroup isRequired={isRequired} {...rest}>
+    <HeroRadioGroup
+      isRequired={isRequired}
+      validationBehavior="aria"
+      {...rest}
+    >
       <Label>
         {label}
         {isRequired ? (
