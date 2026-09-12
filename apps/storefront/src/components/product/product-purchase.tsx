@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { ProductCustomization } from "@craftynp/types";
 
@@ -81,8 +81,20 @@ export function ProductPurchase({
     initialDraft ?? EMPTY_CUSTOMIZATION_DRAFT,
   );
   const [addError, setAddError] = useState<string | null>(null);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const presetSizeRef = useRef<string | null>(null);
   const ctaRef = useRef<HTMLDivElement | null>(null);
+  const baseId = useId();
+  const hintId = `${baseId}-hint`;
+  const stockStatusId = `${baseId}-stock`;
+  const fieldIds = {
+    artwork: `${baseId}-artwork`,
+    customText: `${baseId}-custom-text`,
+    widthInches: `${baseId}-width`,
+    heightInches: `${baseId}-height`,
+    orderNotes: `${baseId}-order-notes`,
+  };
+  const optionGroupId = (optionId: string) => `${baseId}-option-${optionId}`;
 
   useEffect(() => {
     const node = ctaRef.current;
@@ -132,7 +144,23 @@ export function ProductPurchase({
     [options, customization],
   );
 
+  function handleOptionChange(optionId: string, valueId: string) {
+    setHasInteracted(true);
+    onOptionChange(optionId, valueId);
+  }
+
+  function handleQuantityChange(next: number) {
+    setHasInteracted(true);
+    setQuantity(next);
+  }
+
+  function handleDraftChange(next: CustomizationDraft) {
+    setHasInteracted(true);
+    setDraft(next);
+  }
+
   function handleCustomSizeChange(useCustomSize: boolean) {
+    setHasInteracted(true);
     setDraft((current) => ({ ...current, useCustomSize }));
     if (!customSizeOption) return;
 
@@ -232,6 +260,35 @@ export function ProductPurchase({
         ? asSentence(clauses)
         : undefined;
 
+  const focusTargets: string[] = [
+    ...outstanding.map((option) => optionGroupId(option.id)),
+    ...missingInputs.map((key) =>
+      key === "dimensions"
+        ? draft.widthInches.trim() === ""
+          ? fieldIds.widthInches
+          : fieldIds.heightInches
+        : fieldIds[key],
+    ),
+    ...(textProblem ? [fieldIds.customText] : []),
+    ...(notesProblem ? [fieldIds.orderNotes] : []),
+    ...(sizeErrors.widthInches ? [fieldIds.widthInches] : []),
+    ...(sizeErrors.heightInches ? [fieldIds.heightInches] : []),
+    ...(artworkError ? [fieldIds.artwork] : []),
+  ];
+
+  function focusFirstOutstanding() {
+    const target = focusTargets[0] && document.getElementById(focusTargets[0]);
+    if (!target) return;
+
+    const radio =
+      target.getAttribute("role") === "radiogroup"
+        ? (target.querySelector<HTMLInputElement>(
+            "input:checked:not(:disabled)",
+          ) ?? target.querySelector<HTMLInputElement>("input:not(:disabled)"))
+        : null;
+    (radio ?? target).focus();
+  }
+
   const quote = priceQuote.quote;
   const quotedUnitPrice = quote
     ? formatMoney(quote.unitAmount, quote.currencyCode)
@@ -239,6 +296,16 @@ export function ProductPurchase({
   const totalPrice = quote
     ? formatMoney(quote.lineTotal, quote.currencyCode)
     : undefined;
+
+  const priceAnnouncement = !hasInteracted
+    ? ""
+    : priceQuote.status === "error"
+      ? "We could not price this just now."
+      : priceQuote.status === "ready" && quotedUnitPrice && totalPrice
+        ? orderQuantity > 1
+          ? `Price: ${quotedUnitPrice} each, ${totalPrice} total`
+          : `Price: ${totalPrice}`
+        : "";
 
   const detailsForCart = [
     ...options
@@ -261,7 +328,11 @@ export function ProductPurchase({
   ];
 
   function handleSubmit() {
-    if (!selectedVariant || !canAddToCart || !quote) return;
+    if (!canAddToCart) {
+      focusFirstOutstanding();
+      return;
+    }
+    if (!selectedVariant || !quote) return;
 
     const line = {
       id: selectedVariant.id,
@@ -319,40 +390,39 @@ export function ProductPurchase({
       </div>
 
       {selectedVariant ? (
-        <>
-          <ProductPrice
-            price={quotedUnitPrice ?? selectedVariant.price}
-            originalPrice={
-              quote?.isAreaPriced ? undefined : selectedVariant.originalPrice
-            }
-            savingsLabel={
-              quote?.isAreaPriced ? undefined : selectedVariant.savingsLabel
-            }
-            lineTotal={totalPrice}
-            quantity={orderQuantity}
-            isUpdating={priceQuote.status === "loading"}
-          />
-          {/* Speaks the settled price once. A live region wired to the quote
-              itself would read every intermediate figure aloud. */}
-          <p role="status" className="sr-only">
-            {priceQuote.status === "ready" && totalPrice
-              ? `Price updated: ${totalPrice}`
-              : ""}
-          </p>
-        </>
+        <ProductPrice
+          price={quotedUnitPrice ?? selectedVariant.price}
+          originalPrice={
+            quote?.isAreaPriced ? undefined : selectedVariant.originalPrice
+          }
+          savingsLabel={
+            quote?.isAreaPriced ? undefined : selectedVariant.savingsLabel
+          }
+          lineTotal={totalPrice}
+          quantity={orderQuantity}
+          isUpdating={priceQuote.status === "loading"}
+        />
       ) : fromPrice ? (
         <ProductPrice price={fromPrice} prefix="From" />
       ) : null}
 
+      <p role="status" className="sr-only">
+        {priceAnnouncement}
+      </p>
+
       {selectedVariant ? (
-        <StockStatus availability={selectedVariant.availability} />
+        <StockStatus
+          id={stockStatusId}
+          availability={selectedVariant.availability}
+        />
       ) : null}
 
       <VariantSelector
         options={options}
         selected={selected}
-        onChange={onOptionChange}
+        onChange={handleOptionChange}
         availability={availability}
+        groupId={optionGroupId}
         hiddenValueIds={
           customSizeOption
             ? new Set([customSizeOption.customValue.id])
@@ -369,23 +439,24 @@ export function ProductPurchase({
         <ProductConfigurator
           customization={customization}
           value={draft}
-          onChange={setDraft}
+          onChange={handleDraftChange}
           sizeErrors={sizeErrors}
           onCustomSizeChange={handleCustomSizeChange}
           artworkError={artworkError}
           artworkGuidance={artworkGuidance(artworkMinDpi, orderedSize)}
           customTextError={textProblem?.message ?? null}
           orderNotesError={notesProblem?.message ?? null}
+          fieldIds={fieldIds}
         />
       ) : null}
 
       <div>
         <p className="mb-2 text-sm font-medium text-foreground-muted uppercase tracking-wide">
-          Qty
+          Quantity
         </p>
         <QuantityStepper
           value={orderQuantity}
-          onChange={setQuantity}
+          onChange={handleQuantityChange}
           min={minOrderQuantity}
           label={`Quantity for ${title}`}
           description={
@@ -400,7 +471,11 @@ export function ProductPurchase({
         ref={ctaRef}
         className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4"
       >
-        {hint ? <p className="text-sm text-foreground-muted">{hint}</p> : null}
+        {hint ? (
+          <p id={hintId} className="text-sm text-foreground-muted">
+            {hint}
+          </p>
+        ) : null}
 
         {addError ? (
           <p role="alert" className="text-sm text-danger-foreground">
@@ -411,7 +486,17 @@ export function ProductPurchase({
         <Button
           variant="primary"
           size="lg"
-          isDisabled={!canAddToCart}
+          aria-disabled={canAddToCart ? undefined : true}
+          aria-describedby={
+            canAddToCart
+              ? undefined
+              : isSoldOut
+                ? stockStatusId
+                : hint
+                  ? hintId
+                  : undefined
+          }
+          className="aria-disabled:pointer-events-auto"
           onPress={handleSubmit}
         >
           {isEditing ? "Save changes" : "Add to cart"}

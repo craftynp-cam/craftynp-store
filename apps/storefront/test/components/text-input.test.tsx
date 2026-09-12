@@ -58,6 +58,25 @@ describe("TextInput", () => {
     );
   });
 
+  it("announces its error as an alert when it appears", () => {
+    const { rerender } = render(<TextInput label="Recipient name" />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    rerender(
+      <TextInput
+        label="Recipient name"
+        errorMessage="Enter a name."
+        isInvalid
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a name.");
+    expect(screen.getByLabelText("Recipient name")).toHaveAccessibleDescription(
+      "Enter a name.",
+    );
+  });
+
   it("does not render error text while valid", () => {
     render(<TextInput label="Recipient name" errorMessage="Enter a name." />);
 

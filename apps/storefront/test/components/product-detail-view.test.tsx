@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 
 import { ProductDetailView } from "@/components";
@@ -11,13 +12,24 @@ import {
   CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
   CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
   ORDER_NOTES_MAX_LENGTH,
-  READY_MADE_PRODUCT,
   resolveProductCustomization,
 } from "@craftynp/types";
-import type { ProductDetail, ProductDetailVariant } from "@/lib/product";
+import type { ProductDetailVariant } from "@/lib/product";
 import { clearCart, readCart } from "@/lib/cart";
-import { uploadArtwork } from "@/lib/artwork-upload";
 import { readCartDrawerOpen, setCartDrawerOpen } from "@/lib/cart-drawer";
+import {
+  AREA_RATE_PER_SQ_INCH,
+  chooseBlush,
+  clickAddToCart,
+  makeProduct,
+  mockPriceQuote,
+  options,
+  processNotes,
+  settlePrice,
+  stubObjectUrls,
+  uploadArtworkOfWidth,
+  variants,
+} from "../support/product-detail";
 
 const mockRouterReplace = jest.fn();
 let searchParams = new URLSearchParams();
@@ -26,68 +38,6 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockRouterReplace }),
   useSearchParams: () => searchParams,
 }));
-
-const options = [
-  {
-    id: "opt_color",
-    title: "Color",
-    values: [
-      { id: "val_blush", value: "Blush" },
-      { id: "val_sage", value: "Sage" },
-    ],
-  },
-];
-
-const variants: ProductDetailVariant[] = [
-  {
-    id: "var_blush",
-    sku: "KEYCHAIN-BLUSH",
-    thumbnail: "https://example.com/blush.png",
-    optionValueIds: ["val_blush"],
-    availability: "in_stock" as const,
-    price: "$9.00",
-    originalPrice: undefined,
-    calculatedAmount: 9,
-    currencyCode: "usd",
-  },
-  {
-    id: "var_sage",
-    sku: "KEYCHAIN-SAGE",
-    thumbnail: "https://example.com/sage.png",
-    optionValueIds: ["val_sage"],
-    availability: "in_stock" as const,
-    price: "$12.00",
-    originalPrice: undefined,
-    calculatedAmount: 12,
-    currencyCode: "usd",
-  },
-];
-
-function makeProduct(overrides: Partial<ProductDetail> = {}): ProductDetail {
-  return {
-    id: "prod_keychain",
-    href: "/keychains/wildflower-acrylic-keychain",
-    title: "Wildflower Acrylic Keychain",
-    description: "Pressed wildflowers set in acrylic.",
-    categoryName: "Keychains",
-    categoryHandle: "keychains",
-    images: [
-      { url: "https://example.com/blush.png", alt: "Keychain, blush" },
-      { url: "https://example.com/sage.png", alt: "Keychain, sage" },
-    ],
-    options,
-    variants,
-    customization: READY_MADE_PRODUCT,
-    artworkMinDpi: 300,
-    minOrderQuantity: 1,
-    ...overrides,
-  };
-}
-
-const processNotes = {
-  turnaroundNote: "Made to order in 3–5 business days.",
-  shippingWindowNote: "Delivery takes another 2–5 business days.",
-};
 
 // The only way artwork reaches the configurator draft is a real upload, so the
 // transport is doubled and the file is chosen through the control itself.
@@ -98,8 +48,6 @@ jest.mock("../../src/lib/artwork-upload", () => {
   return { ...actual, uploadArtwork: jest.fn() };
 });
 
-const uploadArtworkMock = jest.mocked(uploadArtwork);
-
 // The configurator is priced by the backend now, so the quote is doubled the
 // way the artwork transport is. The debounce is flattened because the wait is
 // the component's, not the assertion's — leaving it in makes every add-to-cart
@@ -108,111 +56,6 @@ jest.mock("../../src/lib/price-quote", () => ({
   ...jest.requireActual("../../src/lib/price-quote"),
   PRICE_QUOTE_DEBOUNCE_MS: 0,
 }));
-
-// Stands in for Medusa: the variant's own amount, and an area price when the
-// line carries dimensions, so a test can tell the two apart.
-const AREA_RATE_PER_SQ_INCH = 0.5;
-
-function quoteFor(body: {
-  variantId: string;
-  quantity: number;
-  dimensions?: { widthInches: number; heightInches: number };
-}) {
-  const priced = quotedVariants.find(
-    (candidate) => candidate.id === body.variantId,
-  );
-  const base = priced?.calculatedAmount ?? 0;
-  const unitAmount = body.dimensions
-    ? Math.round(
-        base *
-          AREA_RATE_PER_SQ_INCH *
-          body.dimensions.widthInches *
-          body.dimensions.heightInches *
-          100,
-      ) / 100
-    : base;
-
-  return {
-    unitAmount,
-    lineTotal: Math.round(unitAmount * body.quantity * 100) / 100,
-    originalUnitAmount: null,
-    currencyCode: priced?.currencyCode ?? "usd",
-    isAreaPriced: body.dimensions != null,
-    quoteToken: `quote-${body.variantId}-${body.quantity}`,
-  };
-}
-
-// Every variant any test in this file renders, so the double can price the one
-// that was actually chosen rather than guessing from the default fixture.
-let quotedVariants: ProductDetailVariant[] = [];
-
-function mockPriceQuote(priced: ProductDetailVariant[] = variants) {
-  quotedVariants = priced;
-  global.fetch = jest.fn(async (_url: unknown, init?: { body?: unknown }) => {
-    const body: {
-      variantId: string;
-      quantity: number;
-      dimensions?: { widthInches: number; heightInches: number };
-    } = JSON.parse(String(init?.body ?? "{}"));
-
-    return {
-      ok: true,
-      json: () => Promise.resolve(quoteFor(body)),
-    } as unknown as Response;
-  }) as unknown as typeof fetch;
-}
-
-// Lets the debounced quote fire and its answer land. The debounce is a real
-// timer even at zero, so a microtask flush alone never reaches it.
-async function settlePrice() {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
-
-// Add to cart waits on the price quote now, so every click settles it first.
-async function clickAddToCart() {
-  await settlePrice();
-  await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
-  });
-}
-
-function uploadedReference(widthPx: number) {
-  return {
-    uploadId: "upload-1",
-    storageKey: "staging/upload-1.png",
-    fileName: "screenshot.png",
-    mimeType: "image/png" as const,
-    sizeBytes: 51_200,
-    kind: "raster" as const,
-    widthPx,
-    heightPx: widthPx,
-  };
-}
-
-async function uploadArtworkOfWidth(widthPx: number) {
-  uploadArtworkMock.mockResolvedValue(uploadedReference(widthPx));
-
-  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
-  if (!input) throw new Error("no file input rendered");
-
-  await act(async () => {
-    fireEvent.change(input, {
-      target: {
-        files: [
-          new File([new Uint8Array(1)], "screenshot.png", {
-            type: "image/png",
-          }),
-        ],
-      },
-    });
-  });
-}
-
-function chooseBlush() {
-  fireEvent.click(screen.getByRole("radio", { name: "Blush" }));
-}
 
 describe("ProductDetailView", () => {
   beforeEach(() => {
@@ -231,6 +74,110 @@ describe("ProductDetailView", () => {
     expect(screen.getByRole("radio", { name: "Sage" })).not.toBeChecked();
     expect(screen.getByText("From")).toBeInTheDocument();
     expect(screen.getByText("$9.00")).toBeInTheDocument();
+  });
+
+  it("keeps add to cart focusable while blocked, described by what is outstanding", () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+
+    const button = screen.getByRole("button", { name: /add to cart/i });
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAccessibleDescription("Choose Color to continue.");
+  });
+
+  it("takes a blocked press to the first outstanding option and adds nothing", async () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+    });
+
+    expect(screen.getByRole("radio", { name: "Blush" })).toHaveFocus();
+    expect(readCart().lines).toHaveLength(0);
+    expect(readCartDrawerOpen()).toBe(false);
+  });
+
+  it("takes a blocked press to an empty required input once the options are chosen", async () => {
+    render(
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({
+          customization: resolveProductCustomization({
+            customizable: "true",
+            customization_text: "required",
+          }),
+        })}
+      />,
+    );
+    chooseBlush();
+    await clickAddToCart();
+
+    expect(screen.getByLabelText(/custom text/i)).toHaveFocus();
+    expect(readCart().lines).toHaveLength(0);
+  });
+
+  it("says nothing about a price the shopper did not ask for", async () => {
+    render(
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({
+          options: [
+            {
+              id: "opt_color",
+              title: "Color",
+              values: [options[0]!.values[0]!],
+            },
+          ],
+          variants: [variants[0]!],
+        })}
+      />,
+    );
+    await settlePrice();
+
+    expect(screen.getByText("$9.00")).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((region) => region.textContent?.includes("$9.00")),
+    ).toBe(false);
+  });
+
+  it("announces the settled price politely once the shopper changes the line", async () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+    chooseBlush();
+    await settlePrice();
+
+    expect(screen.getByText("Price: $9.00")).toHaveAttribute("role", "status");
+  });
+
+  it("announces a price that could not be worked out", async () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+    global.fetch = jest.fn(async () => ({ ok: false }) as Response);
+    chooseBlush();
+    await settlePrice();
+
+    expect(
+      screen.getByText("We could not price this just now."),
+    ).toHaveAttribute("role", "status");
+  });
+
+  it("leaves focus on add to cart after a plain add, so the drawer can return it there", async () => {
+    render(
+      <main id="main-content" tabIndex={-1}>
+        <ProductDetailView {...processNotes} product={makeProduct()} />
+      </main>,
+    );
+    chooseBlush();
+    await settlePrice();
+
+    const button = screen.getByRole("button", { name: /add to cart/i });
+    button.focus();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(readCart().lines).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /add to cart/i })).toHaveFocus();
   });
 
   it("answers a no-choice option itself and draws no group for it", async () => {
@@ -252,7 +199,9 @@ describe("ProductDetailView", () => {
     expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
 
     await settlePrice();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("still carries a no-choice option through to the cart line", async () => {
@@ -304,18 +253,24 @@ describe("ProductDetailView", () => {
     expect(
       screen.getByText("Choose Color and Size to continue."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     chooseBlush();
 
     expect(screen.getByText("Choose Size to continue.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.click(screen.getByRole("radio", { name: "Small" }));
 
     expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
     await settlePrice();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("strikes through a value no in-stock variant can satisfy (AC 4)", () => {
@@ -355,7 +310,9 @@ describe("ProductDetailView", () => {
     );
 
     expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("shows the ready-to-ship badge", () => {
@@ -478,13 +435,17 @@ describe("ProductDetailView", () => {
 
     chooseBlush();
 
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
     // The last good price stays on screen rather than blanking, so the panel
     // never reads as broken while it recalculates.
     expect(screen.getByText("$9.00")).toBeInTheDocument();
 
     await settlePrice();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("shows the unit price beside the line total once more than one is ordered", async () => {
@@ -538,8 +499,12 @@ describe("ProductDetailView", () => {
     chooseBlush();
     await settlePrice();
 
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
-    expect(screen.getByText(/could not price this/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByText(/try again — we could not price this/i),
+    ).toBeInTheDocument();
   });
 
   it("re-quotes the line total when the quantity changes", async () => {
@@ -652,6 +617,20 @@ describe("ProductDetailView", () => {
       return screen.getByRole("checkbox", { name: /enter my own size/i });
     }
 
+    it("groups the custom size under its own name, apart from the preset sizes", () => {
+      renderProduct();
+
+      expect(
+        screen.getByRole("radiogroup", { name: /^size/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole("group", { name: "Custom size" })).getByRole(
+          "checkbox",
+          { name: /enter my own size/i },
+        ),
+      ).toBeInTheDocument();
+    });
+
     it("keeps the preset sizes pickable and the custom value out of them", () => {
       renderProduct();
 
@@ -689,7 +668,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
 
       fireEvent.click(toggle());
 
@@ -698,7 +677,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     it("drops the preset group's availability note while it is disabled", () => {
@@ -726,7 +705,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/width/i), {
         target: { value: "8" },
@@ -738,7 +717,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("names the size once, as the dimensions rather than the Custom value", async () => {
@@ -830,6 +809,22 @@ describe("ProductDetailView", () => {
       customization_text: "required",
     });
 
+    it("names the configurator as a region of the page", () => {
+      render(
+        <ProductDetailView
+          {...processNotes}
+          product={makeProduct({ customization: textOnly })}
+        />,
+      );
+
+      expect(
+        within(screen.getByRole("region", { name: "Make it yours" })).getByRole(
+          "textbox",
+          { name: /custom text/i },
+        ),
+      ).toBeInTheDocument();
+    });
+
     it("renders only the inputs the product declares", () => {
       render(
         <ProductDetailView
@@ -858,7 +853,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("names the outstanding option and the missing input in one sentence", async () => {
@@ -876,7 +871,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       chooseBlush();
 
@@ -885,7 +880,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/custom text/i), {
         target: { value: "Ellie" },
@@ -895,7 +890,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("holds the one gate shut while the custom text runs past its limit", async () => {
@@ -916,7 +911,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/custom text/i), {
         target: { value: "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH) },
@@ -926,7 +921,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("counts the custom text against the limit the owner configured", () => {
@@ -955,7 +950,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     // Both configurator fields are one component, so what is worth pinning is
@@ -979,7 +974,7 @@ describe("ProductDetailView", () => {
       expect(screen.getByText("Keep this to one line.")).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     it("gives each text field its own required message", () => {
@@ -1029,7 +1024,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/order notes/i), {
         target: { value: "Matte finish" },
@@ -1038,7 +1033,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("carries the shopper's answers onto the cart line", async () => {
@@ -1108,14 +1103,7 @@ describe("ProductDetailView", () => {
       // jsdom implements neither, and ArtworkUpload builds a preview from the
       // chosen file the moment it is accepted.
       beforeEach(() => {
-        Object.defineProperty(URL, "createObjectURL", {
-          configurable: true,
-          value: jest.fn(() => "blob:artwork-preview"),
-        });
-        Object.defineProperty(URL, "revokeObjectURL", {
-          configurable: true,
-          value: jest.fn(),
-        });
+        stubObjectUrls();
       });
 
       const artworkAndSize = resolveProductCustomization({
@@ -1214,7 +1202,7 @@ describe("ProductDetailView", () => {
         ).toBeInTheDocument();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
       });
 
       it("re-blocks a passing file when the ordered size grows (AC 8)", async () => {
@@ -1226,14 +1214,14 @@ describe("ProductDetailView", () => {
         await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeEnabled();
+        ).not.toHaveAttribute("aria-disabled");
 
         chooseSize("Large");
 
         expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
       });
 
       it("measures against the size the shopper types once custom is on", async () => {
@@ -1252,7 +1240,7 @@ describe("ProductDetailView", () => {
         expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
       });
 
       it("lets a shopper past an optional file that failed by removing it", async () => {
@@ -1277,7 +1265,7 @@ describe("ProductDetailView", () => {
 
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
 
         fireEvent.click(screen.getByRole("button", { name: /remove file/i }));
 
@@ -1285,7 +1273,7 @@ describe("ProductDetailView", () => {
         await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeEnabled();
+        ).not.toHaveAttribute("aria-disabled");
       });
 
       it("carries the artwork reference onto the cart line", async () => {
@@ -1331,7 +1319,7 @@ describe("ProductDetailView", () => {
         await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeEnabled();
+        ).not.toHaveAttribute("aria-disabled");
       });
     });
 
@@ -1353,14 +1341,7 @@ describe("ProductDetailView editing a cart line", () => {
   // jsdom implements neither, and the upload flow reports a failed upload
   // without them.
   beforeAll(() => {
-    Object.defineProperty(URL, "createObjectURL", {
-      configurable: true,
-      value: jest.fn(() => "blob:artwork-preview"),
-    });
-    Object.defineProperty(URL, "revokeObjectURL", {
-      configurable: true,
-      value: jest.fn(),
-    });
+    stubObjectUrls();
   });
 
   const customizable = resolveProductCustomization({
@@ -1455,6 +1436,30 @@ describe("ProductDetailView editing a cart line", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith(editableProduct().href);
   });
 
+  it.each([
+    ["saved", /save changes/i],
+    ["cancelled", /cancel/i],
+  ])(
+    "leaves focus on the page's main content once the edit is %s",
+    async (_settled, buttonName) => {
+      const line = await seedLine();
+      cleanup();
+      searchParams = new URLSearchParams({ edit: line.lineId });
+      render(
+        <main id="main-content" tabIndex={-1}>
+          <ProductDetailView {...processNotes} product={editableProduct()} />
+        </main>,
+      );
+      await settlePrice();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: buttonName }));
+      });
+
+      expect(document.getElementById("main-content")).toHaveFocus();
+    },
+  );
+
   it("falls back to adding when the line named by the query is gone", async () => {
     openEditor("line-nobody-holds");
 
@@ -1485,7 +1490,9 @@ describe("ProductDetailView editing a cart line", () => {
 
     expect(screen.getByText(/screenshot\.png/)).toBeInTheDocument();
     await settlePrice();
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   describe("a custom size", () => {

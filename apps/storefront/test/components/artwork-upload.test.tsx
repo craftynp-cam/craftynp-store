@@ -1,5 +1,5 @@
 import { MAX_ARTWORK_BYTES } from "@craftynp/types";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 
 import { ArtworkUpload } from "@/components";
@@ -220,6 +220,83 @@ describe("ArtworkUpload", () => {
 
     expect(transport.upload).toHaveBeenCalledTimes(2);
     expect(transport.lastFile()).toBe(file);
+  });
+
+  it("describes both ways out of a failed upload with the error itself", async () => {
+    const transport = deferredUpload();
+
+    render(
+      <ArtworkUpload
+        value={null}
+        onChange={jest.fn()}
+        upload={transport.upload}
+      />,
+    );
+
+    selectFile(makeFile());
+    await transport.reject(new ArtworkUploadError("presign_failed"));
+
+    const message = screen.getByRole("alert").textContent ?? "";
+    expect(
+      screen.getByRole("button", { name: "Try again" }),
+    ).toHaveAccessibleDescription(message);
+    expect(
+      screen.getByRole("button", { name: "Choose a different file" }),
+    ).toHaveAccessibleDescription(message);
+  });
+
+  it("keeps every view's actions inside a group named by the field", async () => {
+    const transport = deferredUpload();
+    const file = makeFile();
+
+    render(<Harness onChange={jest.fn()} upload={transport.upload} />);
+
+    selectFile(file);
+    await transport.resolve(referenceFor(file));
+
+    expect(
+      within(screen.getByRole("group", { name: "Your artwork" })).getByRole(
+        "button",
+        { name: /replace file/i },
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("moves focus to the way out when a chosen file is refused", () => {
+    render(
+      <ArtworkUpload
+        value={null}
+        onChange={jest.fn()}
+        upload={deferredUpload().upload}
+      />,
+    );
+
+    screen.getByRole("button", { name: "Choose a file" }).focus();
+    act(() => {
+      selectFile(makeFile({ size: MAX_ARTWORK_BYTES + 1 }));
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Choose a different file" }),
+    ).toHaveFocus();
+  });
+
+  it("moves focus to the way out when several files are dropped at once", () => {
+    render(
+      <ArtworkUpload
+        value={null}
+        onChange={jest.fn()}
+        upload={deferredUpload().upload}
+      />,
+    );
+
+    act(() => {
+      dropFiles([makeFile({ name: "a.png" }), makeFile({ name: "b.png" })]);
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Choose a different file" }),
+    ).toHaveFocus();
   });
 
   it("offers no retry for a failure that retrying cannot fix", async () => {

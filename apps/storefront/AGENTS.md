@@ -192,6 +192,12 @@ here knows that a product might have a size or a material.
   would never be announced. Its visible `Required` marker is `aria-hidden` so it
   stays out of the group's accessible name; `isRequired` → `aria-required` is the
   programmatic half.
+- **An unanswered group's value is `null`, never `""`.** React Aria's
+  `useRadio` gives tab stop 0 only to the radio matching a non-null
+  `selectedValue`, so an empty string — which matches nothing — takes every
+  radio out of the tab order. The one gate leaves every real choice unanswered
+  on load, so `?? ""` meant a keyboard shopper could not reach a single option.
+  `variant-selector.test.tsx` tabs into an unanswered group to hold this.
 - **It must paint its own focus ring, and that is not decoration.** HeroUI hangs
   the radio ring off `.radio__control` — `<Radio.Control>` — which this component
   deliberately does not render, there being no dot to draw. Without the
@@ -209,6 +215,11 @@ here knows that a product might have a size or a material.
   and where there is no `ResizeObserver`. It is one element positioned two ways,
   never a second button: a duplicate would double every add-to-cart query in the
   tests.
+- **Every descendant of the grid carries a `scroll-margin-bottom` of the same
+  `--cta-bar-height`** below `lg`, so a field reached by Tab scrolls clear
+  of the fixed bar instead of under it. The margin resolves the custom property
+  from the grid, which is why it is set there rather than on `html`. jsdom
+  applies no CSS; check it in a browser.
 - **The gallery column is the sticky half, and it sticks from `lg` up only.**
   It carries its own `lg:max-h`/`lg:overflow-y-auto` against the viewport, the
   same shape `CheckoutSummary` uses: a square hero plus a thumbnail row is
@@ -256,6 +267,12 @@ the product query cannot answer this, is in
 - **The last good price stays on screen while a new one loads**, dimmed and
   `aria-busy`. Blanking it reads as broken, which is the same reason `From …`
   exists.
+- **One `role="status"` region speaks the price, and only once the shopper has
+  changed something.** It is always mounted, so its first message is announced
+  rather than arriving with the node. It says `Price: …` when a quote settles
+  and "We could not price this just now." when one fails, and is empty while
+  loading. `hasInteracted` is set in the change handlers, not an effect, so a
+  product whose only variant quotes on load stays silent.
 - **A quote in flight gets no clause in the hint.** It blocks add-to-cart like
   everything else in the one gate, but a hint that appears and vanishes within a
   second of every option change is noise, and the dimming already says it. Only
@@ -329,6 +346,15 @@ guard that validates them).
   continue." A second gate beside it is how a shopper ends up with a disabled
   button and no explanation, so CNP-37, CNP-38 and CNP-41 extend this one rather
   than adding their own.
+- **The add-to-cart button is `aria-disabled`, never `disabled`, while the
+  gate is shut.** A disabled button leaves the tab order, so a keyboard or
+  screen-reader shopper never reached it or heard why it was shut. It stays
+  focusable, is described by the hint (or the stock status when sold out), and
+  a press moves focus to the first outstanding control, walked in the same
+  order the hint names them. Keep `aria-disabled:pointer-events-auto` on it:
+  HeroUI's `status-disabled` sets `pointer-events: none` on
+  `[aria-disabled="true"]`, which would swallow a mouse or touch press, and
+  jsdom cannot see that.
 - `ProductConfigurator` renders one input per declared key and nothing else.
   Adding an input means adding it to `CUSTOMIZATION_INPUTS` in `@craftynp/types`
   first — the registry is what the admin widget, the backend guard and the gate
@@ -359,6 +385,11 @@ gate, the price quote and the artwork upload.
   sells, falls back silently to add-to-cart.** A notice cannot be rendered
   without either flashing during hydration or mismatching it, and checkout
   already declines to special-case the empty server snapshot.
+- **Save and Cancel move focus to `#main-content` before opening the
+  drawer.** The keyed remount removes the button that had focus, so the drawer
+  would otherwise return focus to `<body>` when it closes. Only an edit does
+  this: `onEditSettled` runs after every add, and a plain add keeps its button,
+  so moving focus there would stop the drawer returning it to Add to cart.
 - **Nothing is written until Save**, which is what makes Cancel safe without
   any undo machinery. Save re-quotes like every other change, so the line
   always lands with a fresh token.
@@ -611,6 +642,10 @@ in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
 - **`guidance` and `errorMessage` are derived by the parent**, which is the only
   thing that knows the ordered size. The component stays controlled on the
   durable reference alone.
+- **The drop zone is a `role="group"` named by the field's label**, which
+  renders in every view, so Replace, Remove and Try again are heard as part of
+  "Your artwork". A refused file moves focus to Choose a different file, and
+  the upload error describes both ways out.
 - **The drag counter is not incidental.** Crossing from the zone onto a child
   fires `dragleave` on the zone before `dragenter` on the child, so a plain
   boolean flickers off at every internal boundary. `dragDepthRef` is the fix.
@@ -663,6 +698,10 @@ built on React Aria Components.
   HeroUI and the React Aria packages because both React majors are installed. Do
   not "fix" a resulting type error by hoisting or by adding `@types/react` to
   the root `package.json` — see the root AGENTS.md.
+- **`FieldError` drops a `role` prop.** React Aria passes its props through
+  `filterDOMProps`, which keeps no `role`, so `TextInput` and `Textarea`
+  put `role="alert"` on a span inside it. The error is still the input's
+  description; the span is what announces it when it mounts.
 - **`Modal` and `AlertDialog` (`src/components/ui/dialog.tsx`) resolve their own
   `React.ReactNode` against a different `@types/react` copy than the rest of
   the app.** Typing a prop that gets embedded as their children with
@@ -862,6 +901,13 @@ path out of `test/`; tests that read source off disk reach back two levels into
 `eslint src test` lints both trees to the same standard, so a new top-level
 directory needs adding there and to `eslint.config.mjs`'s `files` glob.
 
+- **`product-detail-view-a11y.test.tsx` is the configurator's keyboard and axe
+  guard.** It drives the whole flow with `@testing-library/user-event`, never
+  `fireEvent`, and scans each configurator state with `jest-axe`
+  (registered in `jest.setup.ts`). jsdom has no CSS, so axe reports nothing on
+  contrast; the token tests own that. Shared product fixtures live in
+  `test/support/product-detail.ts` — `jest.mock` still has to be called in
+  each test file, because it hoists only within the file that calls it.
 - **Do not try to render `src/app/page.tsx`** or any other async server
   component.
 - **The header search and the drawer's mobile search coexist in the DOM**, one

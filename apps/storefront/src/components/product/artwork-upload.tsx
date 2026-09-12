@@ -43,6 +43,7 @@ export type ArtworkUploadProps = {
   // durable reference alone.
   guidance?: string;
   errorMessage?: string | null;
+  focusTargetId?: string;
 };
 
 type InternalState =
@@ -60,7 +61,7 @@ type PendingFocus = "browse" | "cancel" | "retry" | null;
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset";
 
-const primaryActionClassName = `inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+const primaryActionClassName = `inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 
 const secondaryActionClassName = `inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 
@@ -72,6 +73,7 @@ export function ArtworkUpload({
   upload = uploadArtwork,
   guidance,
   errorMessage = null,
+  focusTargetId,
 }: ArtworkUploadProps) {
   const [state, setState] = useState<InternalState>({ status: "quiet" });
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -89,6 +91,8 @@ export function ArtworkUpload({
 
   const hintId = useId();
   const guidanceId = useId();
+  const uploadErrorId = useId();
+  const labelId = useId();
 
   const view =
     state.status === "uploading"
@@ -197,6 +201,7 @@ export function ArtworkUpload({
         code: check.code,
         retryAfterSeconds: null,
       });
+      pendingFocusRef.current = "browse";
       return;
     }
 
@@ -276,6 +281,7 @@ export function ArtworkUpload({
         code: "multiple_files",
         retryAfterSeconds: null,
       });
+      pendingFocusRef.current = "browse";
       return;
     }
 
@@ -296,6 +302,8 @@ export function ArtworkUpload({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      role="group"
+      aria-labelledby={labelId}
       className={zoneClassName}
     >
       <input
@@ -315,10 +323,13 @@ export function ArtworkUpload({
       {view === "idle" ? (
         <div className="flex flex-col items-center gap-3 text-center">
           <FileArrowUp aria-hidden="true" size={28} />
-          <p className="font-medium text-foreground">{label}</p>
+          <p id={labelId} className="font-medium text-foreground">
+            {label}
+          </p>
           <button
             type="button"
             ref={browseRef}
+            id={focusTargetId}
             disabled={disabled}
             aria-describedby={hintId}
             onClick={openPicker}
@@ -332,6 +343,12 @@ export function ArtworkUpload({
               : `or drag one here — ${guidance ?? `${ARTWORK_ACCEPTED_LABEL}, up to ${ARTWORK_SIZE_LIMIT_LABEL}.`}`}
           </p>
         </div>
+      ) : null}
+
+      {view !== "idle" ? (
+        <p id={labelId} className="mb-3 font-medium text-foreground">
+          {label}
+        </p>
       ) : null}
 
       {state.status === "uploading" ? (
@@ -402,6 +419,7 @@ export function ArtworkUpload({
               <button
                 type="button"
                 ref={browseRef}
+                id={focusTargetId}
                 disabled={disabled}
                 aria-describedby={errorMessage ? guidanceId : undefined}
                 onClick={openPicker}
@@ -427,6 +445,7 @@ export function ArtworkUpload({
       {state.status === "failed" ? (
         <div className="flex flex-col gap-3">
           <p
+            id={uploadErrorId}
             role="alert"
             className="flex items-start gap-2 text-sm text-danger-foreground"
           >
@@ -446,6 +465,7 @@ export function ArtworkUpload({
               <button
                 type="button"
                 ref={retryRef}
+                aria-describedby={uploadErrorId}
                 onClick={handleRetry}
                 className={primaryActionClassName}
               >
@@ -455,7 +475,9 @@ export function ArtworkUpload({
             <button
               type="button"
               ref={browseRef}
+              id={focusTargetId}
               disabled={disabled}
+              aria-describedby={uploadErrorId}
               onClick={openPicker}
               className={secondaryActionClassName}
             >

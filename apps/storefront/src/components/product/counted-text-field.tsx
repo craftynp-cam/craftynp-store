@@ -11,6 +11,7 @@ import {
 } from "@/lib/product-customization";
 
 export type CountedTextFieldProps = {
+  id?: string;
   label: string;
   mode: Exclude<CustomizationInputMode, "off">;
   value: string;
@@ -46,6 +47,7 @@ function fieldDescription(
 // what they typed (CNP-37 AC 1). The value it carries is still one string —
 // nothing here adds line breaks.
 export function CountedTextField({
+  id,
   label,
   mode,
   value,
@@ -71,6 +73,7 @@ export function CountedTextField({
   return (
     <div className="flex flex-col gap-3">
       <Textarea
+        id={id}
         label={label}
         description={fieldDescription(guidance, mode, value, maxLength)}
         isRequired={mode === "required"}
