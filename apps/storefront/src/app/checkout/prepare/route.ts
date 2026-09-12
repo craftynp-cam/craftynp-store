@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import type { CheckoutPrepareResponse } from "@craftynp/types";
+import type {
+  CheckoutPrepareResponse,
+  LineItemCustomization,
+} from "@craftynp/types";
 
 import { sdk } from "@/lib/medusa";
 import { describeUpstreamError } from "@/lib/upstream-error";
@@ -29,6 +32,7 @@ type CheckoutPreparePayload = {
     details?: { label: string; value: string }[];
     dimensions?: { widthInches: number; heightInches: number };
     priceQuoteToken?: string;
+    customization?: LineItemCustomization;
   }[];
   shippingRateId: string;
   shippingServiceCode: string;
