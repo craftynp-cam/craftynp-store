@@ -238,6 +238,39 @@ export function missingInputLabels(
   return missing.map((key) => MISSING_LABELS[key]);
 }
 
+export function joinLabels(
+  labels: readonly string[],
+  conjunction = "and",
+): string {
+  const last = labels.at(-1);
+  if (last == null) return "";
+  if (labels.length === 1) return last;
+  return `${labels.slice(0, -1).join(", ")} ${conjunction} ${last}`;
+}
+
+const OFFERED_LABELS: Record<CustomizationInputKey, string> = {
+  artwork: "upload your artwork",
+  customText: "add the text you want on it",
+  dimensions: "set a custom size",
+  orderNotes: "tell us anything else about the piece",
+};
+
+export type OfferedInputLabels = { required: string[]; optional: string[] };
+
+export function offeredInputLabels(
+  customization: ProductCustomization,
+): OfferedInputLabels {
+  const labels: OfferedInputLabels = { required: [], optional: [] };
+
+  for (const input of CUSTOMIZATION_INPUTS) {
+    const mode = customization.inputs[input.key];
+    if (mode === "off") continue;
+    labels[mode].push(OFFERED_LABELS[input.key]);
+  }
+
+  return labels;
+}
+
 // Order notes are the one detail that may carry line breaks, so they are the
 // one that has to agree on what a line break is. A Windows textarea submits
 // \r\n and a Mac one \n, and cartLineKey builds the cart line's identity out

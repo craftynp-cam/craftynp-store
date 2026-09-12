@@ -131,8 +131,9 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
 ## Product configurator
 
 The product page is `ProductDetailView` → `ProductGallery` + `ProductPurchase` →
-`VariantSelector`. Option groups are built from whatever options Medusa returns;
-nothing here knows that a product might have a size or a material.
+`VariantSelector`, with `ProductDetails` and `ProcessPanel` under the purchase
+column. Option groups are built from whatever options Medusa returns; nothing
+here knows that a product might have a size or a material.
 
 - **Only a single-value option is chosen for the shopper, and it is not drawn.**
   Anything with a real choice starts unselected, so add-to-cart stays shut until
@@ -196,6 +197,33 @@ nothing here knows that a product might have a size or a material.
   and where there is no `ResizeObserver`. It is one element positioned two ways,
   never a second button: a duplicate would double every add-to-cart query in the
   tests.
+- **The gallery column is the sticky half, and it sticks from `lg` up only.**
+  It carries its own `lg:max-h`/`lg:overflow-y-auto` against the viewport, the
+  same shape `CheckoutSummary` uses: a square hero plus a thumbnail row is
+  taller than a short laptop viewport once `--chrome-height` is taken off, and a
+  sticky block taller than the space it sticks in puts its own bottom out of
+  reach. Below `lg` it must stay in flow — the gallery is the first thing on the
+  page there, so sticking it would pin it over the configurator.
+- **Everything on the product page stays inside `ProductDetailView`'s grid**,
+  `ProcessPanel` included. The grid is what reserves `--cta-bar-height` at its
+  foot for the phone CTA bar, so anything rendered after it from the page would
+  sit under that fixed bar with nothing clearing it.
+- **`ProcessPanel` takes its timings from site content, never from a constant.**
+  `order_turnaround_note` and `order_shipping_window_note` are the same two
+  lines the confirmation page and the confirmation email render, so a hard-coded
+  "3–5 business days" here would contradict the owner the day they edit them.
+  The panel supplies the step's meaning itself and treats the note as the
+  timing, so a blanked note leaves an explanation rather than an empty step.
+- **The customization step is built by walking `CUSTOMIZATION_INPUTS`**, through
+  `offeredInputLabels`, for the same reason the gate and the admin widget walk
+  it: a new input added to the registry without a phrase here is a type error
+  rather than a step that quietly fails to mention it. A ready-made product
+  offers nothing, so the step is dropped rather than rendered empty.
+- **`offeredInputLabels` keeps `required` and `optional` apart, and the step
+  gives them a sentence each.** One flat list reads as a list of instructions,
+  and an optional input is not one — a shopper told to "set a custom size" they
+  may leave alone is being described work they do not have to do, on the panel
+  whose whole job is telling them what to expect.
 
 ### Pricing
 
