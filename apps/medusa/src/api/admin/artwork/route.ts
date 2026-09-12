@@ -1,4 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
+import type { ArtworkOrderListResponse } from "@craftynp/types";
 
 import { ARTWORK_MODULE } from "../../../modules/artwork";
 import type ArtworkModuleService from "../../../modules/artwork/service";
@@ -16,7 +17,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
 
   const assets = await artwork.listForOrder(orderId);
 
-  return res.status(200).json({
+  const payload: ArtworkOrderListResponse = {
     artwork: assets.map((asset) => ({
       id: asset.id,
       fileName: asset.file_name,
@@ -27,5 +28,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       promotedAt: asset.promoted_at?.toISOString() ?? null,
       purgedAt: asset.purged_at?.toISOString() ?? null,
     })),
-  });
+  };
+
+  return res.status(200).json(payload);
 }

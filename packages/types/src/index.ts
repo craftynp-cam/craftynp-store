@@ -8,6 +8,8 @@ export {
   MAX_ARTWORK_BYTES,
   VECTOR_ARTWORK_MIME_TYPES,
   artworkDownloadResponseSchema,
+  artworkOrderAssetSchema,
+  artworkOrderListResponseSchema,
   artworkExtension,
   artworkInspectResponseSchema,
   artworkKindSchema,
@@ -157,6 +159,8 @@ export {
 
 export type {
   ArtworkDownloadResponse,
+  ArtworkOrderAsset,
+  ArtworkOrderListResponse,
   ArtworkInspectResponse,
   ArtworkKind,
   ArtworkMimeType,

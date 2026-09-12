@@ -117,3 +117,22 @@ export const artworkDownloadResponseSchema = z.object({
 export type ArtworkDownloadResponse = z.infer<
   typeof artworkDownloadResponseSchema
 >;
+
+export const artworkOrderAssetSchema = z.object({
+  id: z.string().min(1),
+  fileName: z.string().min(1),
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  lineItemId: z.string().nullable(),
+  uploadedAt: z.string().min(1),
+  promotedAt: z.string().nullable(),
+  purgedAt: z.string().nullable(),
+});
+export type ArtworkOrderAsset = z.infer<typeof artworkOrderAssetSchema>;
+
+export const artworkOrderListResponseSchema = z.object({
+  artwork: z.array(artworkOrderAssetSchema),
+});
+export type ArtworkOrderListResponse = z.infer<
+  typeof artworkOrderListResponseSchema
+>;
