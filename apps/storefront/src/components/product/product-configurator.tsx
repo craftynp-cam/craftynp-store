@@ -3,6 +3,7 @@
 import { ORDER_NOTES_MAX_LENGTH } from "@craftynp/types";
 import type {
   CustomDimensionErrors,
+  CustomizationInputKey,
   ProductCustomization,
 } from "@craftynp/types";
 
@@ -30,6 +31,13 @@ type ProductConfiguratorProps = {
   artworkGuidance: string;
   customTextError: string | null;
   orderNotesError: string | null;
+  fieldIds?: Partial<
+    Record<
+      | Exclude<CustomizationInputKey, "dimensions">
+      | keyof CustomDimensionErrors,
+      string
+    >
+  >;
 };
 
 export function ProductConfigurator({
@@ -42,6 +50,7 @@ export function ProductConfigurator({
   artworkGuidance,
   customTextError,
   orderNotesError,
+  fieldIds = {},
 }: ProductConfiguratorProps) {
   const { inputs, size, text } = customization;
   const showsCustomSize = usesCustomSize(customization, value);
@@ -56,6 +65,7 @@ export function ProductConfigurator({
 
       {inputs.artwork !== "off" ? (
         <ArtworkUpload
+          focusTargetId={fieldIds.artwork}
           value={value.artwork}
           onChange={(artwork) => patch({ artwork })}
           label={
@@ -70,6 +80,7 @@ export function ProductConfigurator({
 
       {inputs.customText !== "off" ? (
         <CountedTextField
+          id={fieldIds.customText}
           label="Custom text"
           mode={inputs.customText}
           value={value.customText}
@@ -98,6 +109,7 @@ export function ProductConfigurator({
           {showsCustomSize ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <TextInput
+                id={fieldIds.widthInches}
                 label="Width (inches)"
                 description={`Between ${size.minInches} and ${size.maxInches} inches.`}
                 inputMode="decimal"
@@ -108,6 +120,7 @@ export function ProductConfigurator({
                 onChange={(widthInches) => patch({ widthInches })}
               />
               <TextInput
+                id={fieldIds.heightInches}
                 label="Height (inches)"
                 description={`Between ${size.minInches} and ${size.maxInches} inches.`}
                 inputMode="decimal"
@@ -124,6 +137,7 @@ export function ProductConfigurator({
 
       {inputs.orderNotes !== "off" ? (
         <CountedTextField
+          id={fieldIds.orderNotes}
           label="Order notes"
           mode={inputs.orderNotes}
           value={value.orderNotes}

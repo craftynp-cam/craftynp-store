@@ -11,6 +11,7 @@ type VariantSelectorProps = {
   availability: Record<string, Record<string, OptionValueStatus>>;
   disabledOptionIds?: ReadonlySet<string>;
   hiddenValueIds?: ReadonlySet<string>;
+  groupId?: (optionId: string) => string;
 };
 
 const REASONS = {
@@ -40,6 +41,7 @@ export function VariantSelector({
   availability,
   disabledOptionIds,
   hiddenValueIds,
+  groupId,
 }: VariantSelectorProps) {
   const choices = options
     .map((option) => ({
@@ -58,6 +60,7 @@ export function VariantSelector({
         return (
           <RadioButtonGroup
             key={option.id}
+            id={groupId?.(option.id)}
             label={option.title}
             isRequired
             isDisabled={disabledOptionIds?.has(option.id)}

@@ -43,6 +43,7 @@ export type ArtworkUploadProps = {
   // durable reference alone.
   guidance?: string;
   errorMessage?: string | null;
+  focusTargetId?: string;
 };
 
 type InternalState =
@@ -72,6 +73,7 @@ export function ArtworkUpload({
   upload = uploadArtwork,
   guidance,
   errorMessage = null,
+  focusTargetId,
 }: ArtworkUploadProps) {
   const [state, setState] = useState<InternalState>({ status: "quiet" });
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -320,6 +322,7 @@ export function ArtworkUpload({
           <button
             type="button"
             ref={browseRef}
+            id={focusTargetId}
             disabled={disabled}
             aria-describedby={hintId}
             onClick={openPicker}
@@ -403,6 +406,7 @@ export function ArtworkUpload({
               <button
                 type="button"
                 ref={browseRef}
+                id={focusTargetId}
                 disabled={disabled}
                 aria-describedby={errorMessage ? guidanceId : undefined}
                 onClick={openPicker}
@@ -458,6 +462,7 @@ export function ArtworkUpload({
             <button
               type="button"
               ref={browseRef}
+              id={focusTargetId}
               disabled={disabled}
               aria-describedby={uploadErrorId}
               onClick={openPicker}

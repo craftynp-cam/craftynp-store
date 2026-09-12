@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { ProductCustomization } from "@craftynp/types";
 
@@ -83,6 +83,17 @@ export function ProductPurchase({
   const [addError, setAddError] = useState<string | null>(null);
   const presetSizeRef = useRef<string | null>(null);
   const ctaRef = useRef<HTMLDivElement | null>(null);
+  const baseId = useId();
+  const hintId = `${baseId}-hint`;
+  const stockStatusId = `${baseId}-stock`;
+  const fieldIds = {
+    artwork: `${baseId}-artwork`,
+    customText: `${baseId}-custom-text`,
+    widthInches: `${baseId}-width`,
+    heightInches: `${baseId}-height`,
+    orderNotes: `${baseId}-order-notes`,
+  };
+  const optionGroupId = (optionId: string) => `${baseId}-option-${optionId}`;
 
   useEffect(() => {
     const node = ctaRef.current;
@@ -232,6 +243,35 @@ export function ProductPurchase({
         ? asSentence(clauses)
         : undefined;
 
+  const focusTargets: string[] = [
+    ...outstanding.map((option) => optionGroupId(option.id)),
+    ...missingInputs.map((key) =>
+      key === "dimensions"
+        ? draft.widthInches.trim() === ""
+          ? fieldIds.widthInches
+          : fieldIds.heightInches
+        : fieldIds[key],
+    ),
+    ...(textProblem ? [fieldIds.customText] : []),
+    ...(notesProblem ? [fieldIds.orderNotes] : []),
+    ...(sizeErrors.widthInches ? [fieldIds.widthInches] : []),
+    ...(sizeErrors.heightInches ? [fieldIds.heightInches] : []),
+    ...(artworkError ? [fieldIds.artwork] : []),
+  ];
+
+  function focusFirstOutstanding() {
+    const target = focusTargets[0] && document.getElementById(focusTargets[0]);
+    if (!target) return;
+
+    const radio =
+      target.getAttribute("role") === "radiogroup"
+        ? (target.querySelector<HTMLInputElement>(
+            "input:checked:not(:disabled)",
+          ) ?? target.querySelector<HTMLInputElement>("input:not(:disabled)"))
+        : null;
+    (radio ?? target).focus();
+  }
+
   const quote = priceQuote.quote;
   const quotedUnitPrice = quote
     ? formatMoney(quote.unitAmount, quote.currencyCode)
@@ -261,7 +301,11 @@ export function ProductPurchase({
   ];
 
   function handleSubmit() {
-    if (!selectedVariant || !canAddToCart || !quote) return;
+    if (!canAddToCart) {
+      focusFirstOutstanding();
+      return;
+    }
+    if (!selectedVariant || !quote) return;
 
     const line = {
       id: selectedVariant.id,
@@ -345,7 +389,10 @@ export function ProductPurchase({
       ) : null}
 
       {selectedVariant ? (
-        <StockStatus availability={selectedVariant.availability} />
+        <StockStatus
+          id={stockStatusId}
+          availability={selectedVariant.availability}
+        />
       ) : null}
 
       <VariantSelector
@@ -353,6 +400,7 @@ export function ProductPurchase({
         selected={selected}
         onChange={onOptionChange}
         availability={availability}
+        groupId={optionGroupId}
         hiddenValueIds={
           customSizeOption
             ? new Set([customSizeOption.customValue.id])
@@ -376,6 +424,7 @@ export function ProductPurchase({
           artworkGuidance={artworkGuidance(artworkMinDpi, orderedSize)}
           customTextError={textProblem?.message ?? null}
           orderNotesError={notesProblem?.message ?? null}
+          fieldIds={fieldIds}
         />
       ) : null}
 
@@ -400,7 +449,11 @@ export function ProductPurchase({
         ref={ctaRef}
         className="flex flex-col gap-2 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:border-border max-lg:bg-surface max-lg:p-4"
       >
-        {hint ? <p className="text-sm text-foreground-muted">{hint}</p> : null}
+        {hint ? (
+          <p id={hintId} className="text-sm text-foreground-muted">
+            {hint}
+          </p>
+        ) : null}
 
         {addError ? (
           <p role="alert" className="text-sm text-danger-foreground">
@@ -411,7 +464,17 @@ export function ProductPurchase({
         <Button
           variant="primary"
           size="lg"
-          isDisabled={!canAddToCart}
+          aria-disabled={canAddToCart ? undefined : true}
+          aria-describedby={
+            canAddToCart
+              ? undefined
+              : isSoldOut
+                ? stockStatusId
+                : hint
+                  ? hintId
+                  : undefined
+          }
+          className="aria-disabled:pointer-events-auto"
           onPress={handleSubmit}
         >
           {isEditing ? "Save changes" : "Add to cart"}

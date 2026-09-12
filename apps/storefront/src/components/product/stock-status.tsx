@@ -15,7 +15,13 @@ const copy: Record<Availability, { label: string; dotClassName: string }> = {
   },
 };
 
-export function StockStatus({ availability }: { availability: Availability }) {
+export function StockStatus({
+  availability,
+  id,
+}: {
+  availability: Availability;
+  id?: string;
+}) {
   const { label, dotClassName } = copy[availability];
   const textClassName =
     availability === "out_of_stock"
@@ -24,6 +30,7 @@ export function StockStatus({ availability }: { availability: Availability }) {
 
   return (
     <p
+      id={id}
       className={`flex items-center gap-2 text-sm font-medium ${textClassName}`}
     >
       <span

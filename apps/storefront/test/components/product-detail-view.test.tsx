@@ -75,6 +75,46 @@ describe("ProductDetailView", () => {
     expect(screen.getByText("$9.00")).toBeInTheDocument();
   });
 
+  it("keeps add to cart focusable while blocked, described by what is outstanding", () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+
+    const button = screen.getByRole("button", { name: /add to cart/i });
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAccessibleDescription("Choose Color to continue.");
+  });
+
+  it("takes a blocked press to the first outstanding option and adds nothing", async () => {
+    render(<ProductDetailView {...processNotes} product={makeProduct()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /add to cart/i }));
+    });
+
+    expect(screen.getByRole("radio", { name: "Blush" })).toHaveFocus();
+    expect(readCart().lines).toHaveLength(0);
+    expect(readCartDrawerOpen()).toBe(false);
+  });
+
+  it("takes a blocked press to an empty required input once the options are chosen", async () => {
+    render(
+      <ProductDetailView
+        {...processNotes}
+        product={makeProduct({
+          customization: resolveProductCustomization({
+            customizable: "true",
+            customization_text: "required",
+          }),
+        })}
+      />,
+    );
+    chooseBlush();
+    await clickAddToCart();
+
+    expect(screen.getByLabelText(/custom text/i)).toHaveFocus();
+    expect(readCart().lines).toHaveLength(0);
+  });
+
   it("answers a no-choice option itself and draws no group for it", async () => {
     const singleValue = [
       { id: "opt_color", title: "Color", values: [options[0]!.values[0]!] },
@@ -94,7 +134,9 @@ describe("ProductDetailView", () => {
     expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
 
     await settlePrice();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("still carries a no-choice option through to the cart line", async () => {
@@ -146,18 +188,24 @@ describe("ProductDetailView", () => {
     expect(
       screen.getByText("Choose Color and Size to continue."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     chooseBlush();
 
     expect(screen.getByText("Choose Size to continue.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.click(screen.getByRole("radio", { name: "Small" }));
 
     expect(screen.queryByText(/to continue\./)).not.toBeInTheDocument();
     await settlePrice();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("strikes through a value no in-stock variant can satisfy (AC 4)", () => {
@@ -197,7 +245,9 @@ describe("ProductDetailView", () => {
     );
 
     expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("shows the ready-to-ship badge", () => {
@@ -320,13 +370,17 @@ describe("ProductDetailView", () => {
 
     chooseBlush();
 
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
     // The last good price stays on screen rather than blanking, so the panel
     // never reads as broken while it recalculates.
     expect(screen.getByText("$9.00")).toBeInTheDocument();
 
     await settlePrice();
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("shows the unit price beside the line total once more than one is ordered", async () => {
@@ -380,7 +434,9 @@ describe("ProductDetailView", () => {
     chooseBlush();
     await settlePrice();
 
-    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /add to cart/i }),
+    ).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText(/could not price this/i)).toBeInTheDocument();
   });
 
@@ -531,7 +587,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
 
       fireEvent.click(toggle());
 
@@ -540,7 +596,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     it("drops the preset group's availability note while it is disabled", () => {
@@ -568,7 +624,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/width/i), {
         target: { value: "8" },
@@ -580,7 +636,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("names the size once, as the dimensions rather than the Custom value", async () => {
@@ -700,7 +756,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("names the outstanding option and the missing input in one sentence", async () => {
@@ -718,7 +774,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       chooseBlush();
 
@@ -727,7 +783,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/custom text/i), {
         target: { value: "Ellie" },
@@ -737,7 +793,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("holds the one gate shut while the custom text runs past its limit", async () => {
@@ -758,7 +814,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/custom text/i), {
         target: { value: "a".repeat(CUSTOM_TEXT_FALLBACK_MAX_LENGTH) },
@@ -768,7 +824,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("counts the custom text against the limit the owner configured", () => {
@@ -797,7 +853,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     // Both configurator fields are one component, so what is worth pinning is
@@ -821,7 +877,7 @@ describe("ProductDetailView", () => {
       expect(screen.getByText("Keep this to one line.")).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     it("gives each text field its own required message", () => {
@@ -871,7 +927,7 @@ describe("ProductDetailView", () => {
       ).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeDisabled();
+      ).toHaveAttribute("aria-disabled", "true");
 
       fireEvent.change(screen.getByLabelText(/order notes/i), {
         target: { value: "Matte finish" },
@@ -880,7 +936,7 @@ describe("ProductDetailView", () => {
       await settlePrice();
       expect(
         screen.getByRole("button", { name: /add to cart/i }),
-      ).toBeEnabled();
+      ).not.toHaveAttribute("aria-disabled");
     });
 
     it("carries the shopper's answers onto the cart line", async () => {
@@ -1049,7 +1105,7 @@ describe("ProductDetailView", () => {
         ).toBeInTheDocument();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
       });
 
       it("re-blocks a passing file when the ordered size grows (AC 8)", async () => {
@@ -1061,14 +1117,14 @@ describe("ProductDetailView", () => {
         await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeEnabled();
+        ).not.toHaveAttribute("aria-disabled");
 
         chooseSize("Large");
 
         expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
       });
 
       it("measures against the size the shopper types once custom is on", async () => {
@@ -1087,7 +1143,7 @@ describe("ProductDetailView", () => {
         expect(screen.getByRole("alert")).toHaveTextContent(/at least 300 DPI/);
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
       });
 
       it("lets a shopper past an optional file that failed by removing it", async () => {
@@ -1112,7 +1168,7 @@ describe("ProductDetailView", () => {
 
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeDisabled();
+        ).toHaveAttribute("aria-disabled", "true");
 
         fireEvent.click(screen.getByRole("button", { name: /remove file/i }));
 
@@ -1120,7 +1176,7 @@ describe("ProductDetailView", () => {
         await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeEnabled();
+        ).not.toHaveAttribute("aria-disabled");
       });
 
       it("carries the artwork reference onto the cart line", async () => {
@@ -1166,7 +1222,7 @@ describe("ProductDetailView", () => {
         await settlePrice();
         expect(
           screen.getByRole("button", { name: /add to cart/i }),
-        ).toBeEnabled();
+        ).not.toHaveAttribute("aria-disabled");
       });
     });
 
@@ -1313,7 +1369,9 @@ describe("ProductDetailView editing a cart line", () => {
 
     expect(screen.getByText(/screenshot\.png/)).toBeInTheDocument();
     await settlePrice();
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   describe("a custom size", () => {
