@@ -262,6 +262,43 @@ describe("ArtworkUpload", () => {
     ).toBeInTheDocument();
   });
 
+  it("moves focus to the way out when a chosen file is refused", () => {
+    render(
+      <ArtworkUpload
+        value={null}
+        onChange={jest.fn()}
+        upload={deferredUpload().upload}
+      />,
+    );
+
+    screen.getByRole("button", { name: "Choose a file" }).focus();
+    act(() => {
+      selectFile(makeFile({ size: MAX_ARTWORK_BYTES + 1 }));
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Choose a different file" }),
+    ).toHaveFocus();
+  });
+
+  it("moves focus to the way out when several files are dropped at once", () => {
+    render(
+      <ArtworkUpload
+        value={null}
+        onChange={jest.fn()}
+        upload={deferredUpload().upload}
+      />,
+    );
+
+    act(() => {
+      dropFiles([makeFile({ name: "a.png" }), makeFile({ name: "b.png" })]);
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Choose a different file" }),
+    ).toHaveFocus();
+  });
+
   it("offers no retry for a failure that retrying cannot fix", async () => {
     const transport = deferredUpload();
 

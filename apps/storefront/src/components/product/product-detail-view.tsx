@@ -69,6 +69,7 @@ export function ProductDetailView({
 
   function settleEdit() {
     router.replace(product.href);
+    document.getElementById("main-content")?.focus({ preventScroll: true });
     openCartDrawer();
   }
 
@@ -114,7 +115,7 @@ function ProductConfigureView({
 
   return (
     <div
-      className="mt-6 grid gap-10 max-lg:pb-[calc(var(--cta-bar-height,7rem)+1rem)] lg:grid-cols-2"
+      className="mt-6 grid gap-10 max-lg:pb-[calc(var(--cta-bar-height,7rem)+1rem)] max-lg:[&_*]:scroll-mb-[calc(var(--cta-bar-height,7rem)+1rem)] lg:grid-cols-2"
       style={
         ctaHeight == null
           ? undefined

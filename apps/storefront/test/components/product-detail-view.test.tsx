@@ -1417,6 +1417,30 @@ describe("ProductDetailView editing a cart line", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith(editableProduct().href);
   });
 
+  it.each([
+    ["saved", /save changes/i],
+    ["cancelled", /cancel/i],
+  ])(
+    "leaves focus on the page's main content once the edit is %s",
+    async (_settled, buttonName) => {
+      const line = await seedLine();
+      cleanup();
+      searchParams = new URLSearchParams({ edit: line.lineId });
+      render(
+        <main id="main-content" tabIndex={-1}>
+          <ProductDetailView {...processNotes} product={editableProduct()} />
+        </main>,
+      );
+      await settlePrice();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: buttonName }));
+      });
+
+      expect(document.getElementById("main-content")).toHaveFocus();
+    },
+  );
+
   it("falls back to adding when the line named by the query is gone", async () => {
     openEditor("line-nobody-holds");
 

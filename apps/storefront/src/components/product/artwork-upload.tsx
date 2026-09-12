@@ -201,6 +201,7 @@ export function ArtworkUpload({
         code: check.code,
         retryAfterSeconds: null,
       });
+      pendingFocusRef.current = "browse";
       return;
     }
 
@@ -280,6 +281,7 @@ export function ArtworkUpload({
         code: "multiple_files",
         retryAfterSeconds: null,
       });
+      pendingFocusRef.current = "browse";
       return;
     }
 
