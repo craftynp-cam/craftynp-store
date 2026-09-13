@@ -9,6 +9,7 @@ import {
   sanitizeDesignReturnTo,
   sanitizeReturnTo,
   signInHref,
+  siteUrl,
 } from "@/lib/routes";
 
 describe("categoryHref", () => {
@@ -129,5 +130,30 @@ describe("sanitizeDesignReturnTo", () => {
   it("falls back to /design/tokens for null or undefined", () => {
     expect(sanitizeDesignReturnTo(null)).toBe("/design/tokens");
     expect(sanitizeDesignReturnTo(undefined)).toBe("/design/tokens");
+  });
+});
+
+describe("siteUrl", () => {
+  const original = process.env.NEXT_PUBLIC_SITE_URL;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = original;
+  });
+
+  it("prefers the configured site URL over the request's own origin", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "https://thecraftynp.org";
+
+    expect(siteUrl("http://0.0.0.0:8000/auth/callback?code=abc")).toBe(
+      "https://thecraftynp.org",
+    );
+  });
+
+  it("falls back to the request's origin when no site URL is configured", () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+
+    expect(siteUrl("http://localhost:8000/auth/callback?code=abc")).toBe(
+      "http://localhost:8000",
+    );
   });
 });
