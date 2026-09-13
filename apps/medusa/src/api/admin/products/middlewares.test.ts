@@ -33,7 +33,13 @@ const STORED = {
 };
 
 function runMiddleware(body: Record<string, unknown>, stored = STORED) {
-  const graph = jest.fn().mockResolvedValue({ data: [stored] });
+  const graph = jest.fn(async ({ fields }: { fields: string[] }) => {
+    const { product_options: _options, ...withoutOptions } = stored;
+    const loadsOptions =
+      fields.includes("product_options.product_option.title") &&
+      fields.includes("product_options.values.value");
+    return { data: [loadsOptions ? stored : withoutOptions] };
+  });
   const req = {
     body,
     params: { id: stored.id },
