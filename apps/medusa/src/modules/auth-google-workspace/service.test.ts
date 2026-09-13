@@ -3,6 +3,7 @@ import type {
   Logger,
 } from "@medusajs/framework/types";
 
+import { CALLBACK_URL_IGNORED_LOG_TAG } from "../../lib/callback-url";
 import GoogleWorkspaceAuthProviderService from "./service";
 
 const ADMIN_CALLBACK = "https://api.thecraftynp.com/app/login";
@@ -53,6 +54,12 @@ describe("GoogleWorkspaceAuthProviderService.authenticate", () => {
       ADMIN_CALLBACK,
     );
     expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(CALLBACK_URL_IGNORED_LOG_TAG),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("provider=google-workspace"),
+    );
   });
 
   it("honours a listed callback_url", async () => {

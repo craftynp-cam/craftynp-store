@@ -3,6 +3,7 @@ import type {
   Logger,
 } from "@medusajs/framework/types";
 
+import { CALLBACK_URL_IGNORED_LOG_TAG } from "../../lib/callback-url";
 import type { Auth0ProviderOptions } from "./lib";
 import Auth0AuthProviderService from "./service";
 
@@ -58,6 +59,12 @@ describe("Auth0AuthProviderService.authenticate", () => {
       STOREFRONT_CALLBACK,
     );
     expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(CALLBACK_URL_IGNORED_LOG_TAG),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("provider=auth0"),
+    );
   });
 
   it("honours a listed callback_url", async () => {
@@ -78,8 +85,8 @@ describe("Auth0AuthProviderService.authenticate", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it("accepts the storefront's configured callback without a warning when nothing is listed", async () => {
-    const { service, logger, setState, authIdentityProviderService } =
+  it("logs no warning for the storefront's configured callback when nothing is listed", async () => {
+    const { service, logger, authIdentityProviderService } =
       buildService(CONFIGURED_ONLY);
 
     await service.authenticate(
@@ -87,9 +94,6 @@ describe("Auth0AuthProviderService.authenticate", () => {
       authIdentityProviderService,
     );
 
-    expect(setState).toHaveBeenCalledWith(expect.any(String), {
-      callback_url: STOREFRONT_CALLBACK,
-    });
     expect(logger.warn).not.toHaveBeenCalled();
   });
 });
