@@ -65,6 +65,7 @@ describe("ProcessPanel", () => {
       screen.getByText(content.readyToShipDispatchNote),
     ).toBeInTheDocument();
     expect(screen.getByText(content.shippingWindowNote)).toBeInTheDocument();
+    expect(screen.queryByText(content.turnaroundNote)).not.toBeInTheDocument();
     expect(screen.getByRole("region")).not.toHaveTextContent(/made to order/i);
   });
 
@@ -109,6 +110,10 @@ describe("ProcessPanel", () => {
       "It ships to you",
     ]);
     expect(screen.getByText(content.readyToShipStepBody)).toBeInTheDocument();
+    expect(
+      screen.queryByText(siteContentDefault("ready_to_ship_dispatch_note")),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(content.turnaroundNote)).not.toBeInTheDocument();
     expect(screen.getByRole("region")).not.toHaveTextContent(/made to order/i);
   });
 
