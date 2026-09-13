@@ -346,7 +346,6 @@ export function ProductPurchase({
       minOrderQuantity,
       isCustomizable: customization.isCustomizable,
       details: detailsForCart,
-      dimensions: quoteDimensions,
       priceQuoteToken: quote.quoteToken,
       customization: lineItemCustomization(customization, draft),
     };

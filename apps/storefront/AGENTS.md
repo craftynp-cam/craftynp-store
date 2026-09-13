@@ -294,13 +294,16 @@ the product query cannot answer this, is in
 - **Nothing is quoted while a custom size is half-typed or out of range.** The
   backend would only refuse it and the shopper is already being told by the
   field itself.
-- **The cart line carries the quote token and the dimensions**, and
-  `setCartLineQuantity` **drops the token** when the drawer changes a quantity:
-  the quote was issued for the old quantity and a tier makes that a different
-  unit price, so `prepare-cart` asks for a fresh one rather than charging a
-  stale tier.
-- **`taxQuoteKey` includes each line's dimensions**, or a resized line reuses
-  the cached tax for the size it used to be.
+- **The cart line carries the quote token, and its size only as
+  `customization.dimensions`.** There is no top-level copy to disagree with
+  it: `prepare-cart` prices and makes the size the customization records
+  (CNP-85). `setCartLineQuantity` **drops the token** when the drawer changes a
+  quantity: the quote was issued for the old quantity and a tier makes that a
+  different unit price, so `prepare-cart` asks for a fresh one rather than
+  charging a stale tier.
+- **`taxQuoteKey` and `paymentPrepareKey` include each line's
+  `customization.dimensions`**, or a resized line reuses the cached tax, or the
+  PaymentIntent, minted for the size it used to be.
 
 ## Product customization
 

@@ -15,10 +15,9 @@ export type CartLine = {
   minOrderQuantity?: number;
   isCustomizable?: boolean;
   details?: readonly CartLineDetail[];
-  // What the backend quoted this line at, and the size it was quoted for.
-  // Both travel to prepare-cart, which re-derives the price rather than
-  // trusting either — the token only proves which line the quote was for.
-  dimensions?: { widthInches: number; heightInches: number };
+  // What the backend quoted this line at. It travels to prepare-cart, which
+  // re-derives the price from the customization's size rather than trusting
+  // it — the token only proves which line the quote was for.
   priceQuoteToken?: string;
   customization?: LineItemCustomization;
 };
