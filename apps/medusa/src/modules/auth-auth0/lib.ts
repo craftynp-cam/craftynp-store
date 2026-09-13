@@ -5,6 +5,7 @@ export type Auth0ProviderOptions = {
   clientId: string;
   clientSecret: string;
   callbackUrl: string;
+  allowedCallbackUrls?: string[];
 };
 
 export function validateAuth0Options(options: Record<string, unknown>): void {

@@ -12,6 +12,10 @@ import {
 } from "@medusajs/framework/utils";
 
 import {
+  allowedCallbackUrl,
+  CALLBACK_URL_IGNORED_LOG_TAG,
+} from "../../lib/callback-url";
+import {
   buildAuthorizeUrl,
   mapUserInfoToIdentity,
   validateAuth0Options,
@@ -46,7 +50,14 @@ class Auth0AuthProviderService extends AbstractAuthModuleProvider {
     authIdentityProviderService: AuthIdentityProviderService,
   ): Promise<AuthenticationResponse> {
     const state = randomBytes(32).toString("hex");
-    const callbackUrl = data.body?.callback_url ?? this.options_.callbackUrl;
+    const requested = data.body?.callback_url;
+    const callbackUrl = allowedCallbackUrl(requested, this.options_);
+
+    if (requested !== undefined && requested !== callbackUrl) {
+      this.logger_.warn(
+        `${CALLBACK_URL_IGNORED_LOG_TAG} provider=auth0 callback_url=${JSON.stringify(requested)}`,
+      );
+    }
 
     await authIdentityProviderService.setState(state, {
       callback_url: callbackUrl,

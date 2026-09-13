@@ -192,6 +192,11 @@ for both actors.
   page instead. The storefront needs no Medusa
   `user` row: it only reads the email off the resulting token, so an actorless
   token is a success there where the admin flow would go on to `/admin-sso/link`.
+- **`auth-auth0` applies the same `callback_url` allowlist** through
+  `AUTH0_ALLOWED_CALLBACK_URLS`, with `AUTH0_CALLBACK_URL` always accepted. The
+  storefront's `/auth/login` sends `${siteUrl}/auth/callback`, which is that
+  configured URL, so the list normally stays empty. A storefront whose site URL
+  disagrees with `AUTH0_CALLBACK_URL` is sent back to the configured callback.
 - **There is no admin auto-provisioning.** Google sign-in produces an actorless
   token; the login widget then calls `POST /admin-sso/link`, which links only an
   existing Medusa `user` matched by verified email. Create the admin with
