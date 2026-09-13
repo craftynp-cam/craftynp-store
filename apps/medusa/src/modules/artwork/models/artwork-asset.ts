@@ -18,7 +18,8 @@ const ArtworkAsset = model
     width_px: model.number().nullable(),
     height_px: model.number().nullable(),
     dpi: model.number().nullable(),
+    inspected_at: model.dateTime().nullable(),
   })
-  .indexes([{ on: ["order_id"] }]);
+  .indexes([{ on: ["order_id"] }, { on: ["staging_key"] }]);
 
 export default ArtworkAsset;

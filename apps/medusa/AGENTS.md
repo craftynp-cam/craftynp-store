@@ -605,6 +605,14 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   gated on is the one an order can be checked against later. `dpi` is not
   stored: it is a function of the pixel width and the ordered size, and a
   stored copy could disagree with both.
+  **The same write stamps `inspected_at`, and only a success stamps it** — a
+  422 or a 502 leaves the column null. The pixels cannot say whether the bytes
+  were ever read: a vector file is recorded with null pixels, and so is an
+  upload that never reached this route, so a file presigned as SVG, PUT as a
+  PNG and never inspected would be indistinguishable from a genuine SVG.
+  `inspected_at` is the column that tells them apart, and `staging_key` is
+  indexed so `listByStagingKeys` can resolve a request's storage keys in one
+  query.
 - **The inspect route is anonymous, and that is the considered position, not an
   oversight.** A shopper uploads before any cart or session exists, so there is
   no identity to bind it to — the same reason the presign route is anonymous.
