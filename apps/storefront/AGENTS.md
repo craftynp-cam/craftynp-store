@@ -245,12 +245,27 @@ here knows that a product might have a size or a material.
   `ProcessPanel` included. The grid is what reserves `--cta-bar-height` at its
   foot for the phone CTA bar, so anything rendered after it from the page would
   sit under that fixed bar with nothing clearing it.
-- **`ProcessPanel` takes its timings from site content, never from a constant.**
-  `order_turnaround_note` and `order_shipping_window_note` are the same two
-  lines the confirmation page and the confirmation email render, so a hard-coded
-  "3–5 business days" here would contradict the owner the day they edit them.
-  The panel supplies the step's meaning itself and treats the note as the
-  timing, so a blanked note leaves an explanation rather than an empty step.
+- **`ProcessPanel` takes its timings, and all of its ready-to-ship wording,
+  from site content, never from a constant.** `order_turnaround_note` and
+  `order_shipping_window_note` are the same two lines the confirmation page and
+  the confirmation email render, so a hard-coded "3–5 business days" here would
+  contradict the owner the day they edit them. The panel supplies the
+  made-to-order step's meaning itself and treats the note as the timing, so a
+  blanked note leaves an explanation rather than an empty step.
+- **`customization.isCustomizable` picks the panel's branch**, the same boolean
+  that picks the Made to order / Ready to ship badge above it, so the two cannot
+  disagree. A ready-made product used to be told its piece was "made to order in
+  the workshop" right under a Ready to ship badge (CNP-99). Made to order keeps
+  "How your order is made", "We make it by hand" and the turnaround note.
+  Ready to ship shows neither. Its heading, first step title and body come from
+  the `ready_to_ship_*` fields, the step's note is `ready_to_ship_dispatch_note`,
+  and the shipping step stays as it is. If the owner blanks the heading, title
+  or body, the panel falls back to that field's default through
+  `siteContentDefault`, so a step is never empty. A blanked dispatch note is just
+  left out, like the other notes. Steps are keyed by position, not by title,
+  because the owner could type "It ships to you" as a title. The confirmation
+  page and email still show the turnaround note on every order; that is a
+  follow-up.
 - **The customization step is built by walking `CUSTOMIZATION_INPUTS`**, through
   `offeredInputLabels`, for the same reason the gate and the admin widget walk
   it: a new input added to the registry without a phrase here is a type error
