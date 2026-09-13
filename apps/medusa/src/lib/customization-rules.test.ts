@@ -138,6 +138,31 @@ describe("customizationRulesForVariant", () => {
     },
   );
 
+  it.each([
+    ["missing", undefined],
+    ["empty", []],
+  ] satisfies [string, ProductOptionRow[] | undefined][])(
+    "falls back to the variant when the product's options come back %s",
+    (_label, productOptions) => {
+      const customSizeVariant = (options: OptionRow[]) =>
+        customizationRulesForVariant({
+          id: "variant_01",
+          product: {
+            metadata: PRODUCT_METADATA,
+            product_options: productOptions,
+          },
+          options,
+        }).customSizeVariant;
+
+      expect(
+        customSizeVariant([{ value: "Custom", option: { title: "Size" } }]),
+      ).toBe(true);
+      expect(
+        customSizeVariant([{ value: "Medium", option: { title: "Size" } }]),
+      ).toBe(false);
+    },
+  );
+
   it("accepts a size on a preset variant of a product that lacks its named Custom option", () => {
     const rules = customizationRulesForVariant(
       variant({

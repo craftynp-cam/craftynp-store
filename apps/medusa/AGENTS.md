@@ -82,6 +82,10 @@ tax provider), `notification-resend`, `auth-auth0`, and
   A product whose own options do not carry the named value counts as naming
   none, as it does for the storefront's `resolveCustomSizeOption`, so the
   dimensions mode alone decides rather than every variant refusing a size.
+  Options that did not load are not options that lack it: every Medusa
+  product has at least one, so a missing or empty `product_options` means the
+  relation never arrived, and the variant alone decides — the rule fails
+  closed rather than letting a size onto a cheaper preset.
   Only a line that sent a customization has one stored — an empty one would
   change `customizationSignature` and supersede a cart the shopper could reuse.
 - **The custom size carries two more keys again, and they are money:**

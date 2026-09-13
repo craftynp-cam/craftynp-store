@@ -80,14 +80,17 @@ function isCustomSizeVariant(
   if (inputs.dimensions === "off") return null;
   if (size.optionTitle === null || size.optionValue === null) return null;
 
-  const productCarriesIt = (variant.product?.product_options ?? []).some(
-    (productOption) =>
-      productOption?.product_option?.title === size.optionTitle &&
-      (productOption.values ?? []).some(
-        (value) => value?.value === size.optionValue,
-      ),
-  );
-  if (!productCarriesIt) return null;
+  const productOptions = variant.product?.product_options ?? [];
+  const productLacksIt =
+    productOptions.length > 0 &&
+    !productOptions.some(
+      (productOption) =>
+        productOption?.product_option?.title === size.optionTitle &&
+        (productOption.values ?? []).some(
+          (value) => value?.value === size.optionValue,
+        ),
+    );
+  if (productLacksIt) return null;
 
   return (variant.options ?? []).some(
     (option) =>
