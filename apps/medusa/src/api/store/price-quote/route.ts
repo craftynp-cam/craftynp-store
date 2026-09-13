@@ -116,7 +116,7 @@ export async function POST(
       return res.status(400).json({
         error: "invalid_line",
         reason: result.reason,
-        message: result.message,
+        message: `invalid_line:${result.reason} ${result.message}`,
       });
     }
 
@@ -126,7 +126,7 @@ export async function POST(
     return res.status(502).json({
       error: "price_unavailable",
       reason: result.reason,
-      message: result.message,
+      message: `price_unavailable:${result.reason} ${result.message}`,
     });
   }
 

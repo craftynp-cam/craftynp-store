@@ -204,6 +204,7 @@ describe("POST /store/price-quote", () => {
       expect.objectContaining({
         error: "invalid_line",
         reason: "bad_dimensions",
+        message: expect.stringMatching(/^invalid_line:bad_dimensions /),
       }),
     );
   });
@@ -225,6 +226,7 @@ describe("POST /store/price-quote", () => {
       expect.objectContaining({
         error: "price_unavailable",
         reason: "unconfigured",
+        message: expect.stringMatching(/^price_unavailable:unconfigured /),
       }),
     );
   });

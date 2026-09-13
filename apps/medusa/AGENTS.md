@@ -479,6 +479,13 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   Pricing one size while recording another was the under-payment CNP-85
   closed. The storefront re-quotes a stale token before it prepares, so an
   honest cart meets these only through clock skew or a token it could not read.
+- **A `/store/price-quote` error's `message` starts with a fixed head**,
+  `invalid_line:<reason>` on a 400 (`unknown_variant`, `bad_dimensions`) and
+  `price_unavailable:<reason>` on a 502 (`unpriced`, `unconfigured`,
+  `misconfigured`), with `resolveLinePrice`'s own text after a space.
+  `sdk.client.fetch` keeps only the status and `message`, so the head is how
+  the storefront's checkout tells a line Medusa refuses to price from a
+  transient failure. Keep the heads' wording; the storefront reads them.
 - **`/store/tax-quote` must keep passing the quantity and the dimensions.**
   Without the quantity it taxes every line at the single-unit tier; without the
   dimensions it taxes a custom size at its variant's price rather than its own.
