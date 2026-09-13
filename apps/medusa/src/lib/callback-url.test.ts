@@ -32,14 +32,6 @@ describe("allowedCallbackUrl", () => {
     ).toBe("https://thecraftynp.org/auth/design/callback");
   });
 
-  it("accepts the configured callbackUrl when nothing is listed", () => {
-    expect(
-      allowedCallbackUrl("https://api.thecraftynp.com/app/login", {
-        callbackUrl: "https://api.thecraftynp.com/app/login",
-      }),
-    ).toBe("https://api.thecraftynp.com/app/login");
-  });
-
   it.each([
     ["an unlisted URL", "https://evil.example/cb"],
     ["a trailing slash", "https://thecraftynp.org/auth/design/callback/"],

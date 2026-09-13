@@ -18,7 +18,5 @@ export function allowedCallbackUrl(
 ): string {
   if (typeof requested !== "string") return callbackUrl;
 
-  return requested === callbackUrl || allowedCallbackUrls.includes(requested)
-    ? requested
-    : callbackUrl;
+  return allowedCallbackUrls.includes(requested) ? requested : callbackUrl;
 }
