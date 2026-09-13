@@ -107,6 +107,14 @@ export const DISALLOWED_PATHS = [
   "/design",
 ] as const;
 
+export function disallowRules(): string[] {
+  return DISALLOWED_PATHS.flatMap((path) => [
+    `${path}$`,
+    `${path}/`,
+    `${path}?`,
+  ]);
+}
+
 export function sanitizeReturnTo(value: string | null | undefined): string {
   if (value && value.startsWith("/") && !/^\/[/\\]/.test(value)) {
     return value;

@@ -6,6 +6,7 @@ import {
   authLogoutHref,
   categoryHref,
   checkoutHref,
+  disallowRules,
   productHref,
   sanitizeDesignReturnTo,
   sanitizeReturnTo,
@@ -79,6 +80,17 @@ describe("authLoginHref", () => {
 describe("authLogoutHref", () => {
   it("points at /auth/logout", () => {
     expect(authLogoutHref()).toBe("/auth/logout");
+  });
+});
+
+describe("disallowRules", () => {
+  it("disallows a reserved route, its subpaths and its query strings without disallowing handles that only start with it", () => {
+    const rules = disallowRules();
+
+    expect(rules).toEqual(
+      expect.arrayContaining(["/design$", "/design/", "/sign-in?"]),
+    );
+    expect(rules).not.toContain("/design");
   });
 });
 

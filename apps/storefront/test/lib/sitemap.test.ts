@@ -28,19 +28,23 @@ describe("toSitemapEntries", () => {
     ]);
   });
 
-  it("leaves out every path robots.txt disallows, matching it as a prefix the way crawlers do", () => {
+  it("leaves out reserved routes but keeps a category whose handle only starts with one", () => {
     expect(
       urls([
         "/account",
-        "/design/banner",
-        "/checkout/mug",
+        "/account/addresses",
+        "/design/tokens",
+        "/checkout",
         "/accounting-gifts",
+        "/designs",
         "/glitter",
       ]),
     ).toEqual([
       "https://thecraftynp.org/",
       "https://thecraftynp.org/products",
       "https://thecraftynp.org/about",
+      "https://thecraftynp.org/accounting-gifts",
+      "https://thecraftynp.org/designs",
       "https://thecraftynp.org/glitter",
     ]);
   });

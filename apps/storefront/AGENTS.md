@@ -975,10 +975,13 @@ tabs are not built yet — CNP-60 covers them.
 - Composition is the pure `toSitemapEntries` in `src/lib/sitemap.ts`: the static
   pages, the top-level categories `fetchNavCategories` returns (the only
   `/{category}` pages that resolve), and each product's `card.href`. It drops a
-  product with no category (`//handle`) and anything under `DISALLOWED_PATHS`,
-  which `robots.ts` shares, **matched as a prefix** because that is how
-  crawlers read `Disallow`: a category called `accounts` is disallowed too. It
-  inherits the fetchers' limit of 100 with no pagination.
+  product with no category (`//handle`) and any route in `DISALLOWED_PATHS`,
+  which `robots.ts` shares. **Both match a reserved route as a whole segment**:
+  `disallowRules()` sends `/design$`, `/design/` and `/design?` rather than the
+  bare `/design` prefix crawlers would otherwise apply, so a category such as
+  `designs` or `accounting-gifts` stays listed and crawlable. Change the two
+  together — a sitemap URL that robots.txt blocks is flagged by Search Console.
+  It inherits the fetchers' limit of 100 with no pagination.
 
 ### Security headers
 

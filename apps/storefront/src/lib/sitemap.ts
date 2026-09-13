@@ -8,7 +8,12 @@ function isListable(path: string): boolean {
   const segments = path.slice(1).split("/");
   return (
     segments.every((segment) => segment !== "") &&
-    !DISALLOWED_PATHS.some((prefix) => path.startsWith(prefix))
+    !DISALLOWED_PATHS.some(
+      (reserved) =>
+        path === reserved ||
+        path.startsWith(`${reserved}/`) ||
+        path.startsWith(`${reserved}?`),
+    )
   );
 }
 
