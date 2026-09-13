@@ -245,13 +245,14 @@ here knows that a product might have a size or a material.
   `ProcessPanel` included. The grid is what reserves `--cta-bar-height` at its
   foot for the phone CTA bar, so anything rendered after it from the page would
   sit under that fixed bar with nothing clearing it.
-- **`ProcessPanel` takes its timings, and all of its ready-to-ship wording,
-  from site content, never from a constant.** `order_turnaround_note` and
-  `order_shipping_window_note` are the same two lines the confirmation page and
-  the confirmation email render, so a hard-coded "3–5 business days" here would
-  contradict the owner the day they edit them. The panel supplies the
-  made-to-order step's meaning itself and treats the note as the timing, so a
-  blanked note leaves an explanation rather than an empty step.
+- **`ProcessPanel` takes its timings, and its ready-to-ship heading, first step
+  and dispatch note, from site content, never from a constant.**
+  `order_turnaround_note` and `order_shipping_window_note` are the same two
+  lines the confirmation page and the confirmation email render, so a
+  hard-coded "3–5 business days" here would contradict the owner the day they
+  edit them. The panel supplies the made-to-order step's meaning itself and
+  treats the note as the timing, so a blanked note leaves an explanation rather
+  than an empty step.
 - **`customization.isCustomizable` picks the panel's branch**, the same boolean
   that picks the Made to order / Ready to ship badge above it, so the two cannot
   disagree. A ready-made product used to be told its piece was "made to order in
