@@ -268,6 +268,24 @@ describe("validateCustomization", () => {
       ).toThrow(/Invalid line item customization/);
     });
 
+    it("rejects on a typed size larger than the preset measurement", () => {
+      expect(() =>
+        validateCustomization(lowResArtwork, {
+          ...RULES,
+          orderedSize: { widthInches: 2, heightInches: 2 },
+        }),
+      ).toThrow(/75 DPI/);
+    });
+
+    it("accepts on a typed size smaller than the preset measurement", () => {
+      expect(
+        validateCustomization(
+          { ...lowResArtwork, dimensions: { widthInches: 2, heightInches: 2 } },
+          { ...RULES, orderedSize: { widthInches: 8, heightInches: 8 } },
+        ).artwork?.widthPx,
+      ).toBe(600);
+    });
+
     it("rejects a file starved on the height even where the width clears", () => {
       const banner = {
         artwork: { ...lowResArtwork.artwork, widthPx: 2400, heightPx: 600 },

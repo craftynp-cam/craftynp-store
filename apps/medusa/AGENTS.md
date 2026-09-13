@@ -702,9 +702,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   own option values — to confirm the product carries that value at all. Not
   `product.options.values`: a variant query does not narrow those to the
   product, so an option shared across products lists every product's values.
-  On the Custom variant the preset measurement is
-  skipped, so a custom size answers DPI from `customization.dimensions` alone
-  and a measurement left on the Custom value cannot stand in for it.
+  A typed size always answers DPI — `customization.dimensions` survives the
+  mode checks only as the size being made and priced — and a preset
+  measurement only when no size was typed, so a measurement left on the Custom
+  value cannot stand in for the size the shopper chose.
 - **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,
   written by `src/admin/widgets/category-artwork.tsx` and read through
   `resolveArtworkMinDpi` in `@craftynp/types`, which takes the strictest value
@@ -712,9 +713,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   `DEFAULT_ARTWORK_MIN_DPI` (150) **is reachable on a live product** — a
   product need not belong to any category, so nothing can force a threshold to
   be declared. It is deliberate policy, not a hidden one.
-  The ordered physical size comes from the size option value's own
-  `width_inches` / `height_inches` metadata, or from the shopper's typed
-  dimensions; see [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
+  The ordered physical size comes from the shopper's typed dimensions when
+  there are any, and otherwise from the size option value's own
+  `width_inches` / `height_inches` metadata; see
+  [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
   **Both axes are measured, and the coarsest one decides.** A 2400x600 file
   ordered at 8" x 40" clears 300 DPI across and prints at 15 DPI down the
   banner — checking the width alone, which is what the story's acceptance

@@ -111,14 +111,13 @@ export function validateCustomization(
   }
 
   if (artwork) {
-    // A preset size carries its measurements on the option value rather than
-    // the payload, so the caller may name them; the typed dimensions are the
-    // fallback.
+    // Typed dimensions survive the mode checks only as the size being made and
+    // priced, so they answer first; a preset's measurements only without them.
     const resolution = checkArtworkResolution(artwork, {
       minDpi,
-      widthInches: orderedSize?.widthInches ?? dimensions?.widthInches ?? null,
+      widthInches: dimensions?.widthInches ?? orderedSize?.widthInches ?? null,
       heightInches:
-        orderedSize?.heightInches ?? dimensions?.heightInches ?? null,
+        dimensions?.heightInches ?? orderedSize?.heightInches ?? null,
     });
 
     if (!resolution.ok) reject(`artwork: ${resolution.message}`);

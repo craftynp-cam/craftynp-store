@@ -115,7 +115,7 @@ export function customizationRulesForVariant(
         (category) => category != null,
       ),
     ),
-    orderedSize: customSizeVariant === true ? undefined : presetSize(variant),
+    orderedSize: presetSize(variant),
   };
 }
 
