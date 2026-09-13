@@ -30,46 +30,52 @@ export async function purgeArtwork(
     container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
 
   const policy = readRetentionPolicy();
-  const rows = await artwork.listPromotedUnpurged();
+  const claims = await artwork.listPromotedUnpurgedClaims();
 
   // The cross-module join lives here, in the job: neither module reaches into
   // the other.
-  const orderIds = [
-    ...new Set(
-      rows.map((row) => row.order_id).filter((id): id is string => !!id),
-    ),
-  ];
+  const orderIds = [...new Set(claims.map((claim) => claim.order_id))];
   const deliveredByOrder = await orderStatus.deliveredAtByOrder(orderIds);
 
-  const deliveredByAsset = new Map<string, Date | null>(
-    rows.map((row) => [
-      row.id,
-      row.order_id ? (deliveredByOrder.get(row.order_id) ?? null) : null,
+  const deliveredByClaim = new Map<string, Date | null>(
+    claims.map((claim) => [
+      claim.id,
+      deliveredByOrder.get(claim.order_id) ?? null,
     ]),
   );
+  const candidates = claims.map((claim) => ({
+    ...claim,
+    uploaded_at: claim.asset.uploaded_at,
+  }));
 
-  const due = selectPurgeCandidates(rows, deliveredByAsset, new Date(), policy);
+  const due = selectPurgeCandidates(
+    candidates,
+    deliveredByClaim,
+    new Date(),
+    policy,
+  );
 
   let purged = 0;
   let failed = 0;
 
   for (const { row, reason } of due) {
     try {
-      // Only the artwork row and its object are ever touched. The order and
-      // its line items are left exactly as they are.
+      // Only this line's claim and its own object are ever touched. The order,
+      // its line items and any other line's copy of the same upload are left
+      // exactly as they are.
       await deleteArtwork(row.storage_key as string);
-      await artwork.markPurged(row.id, reason);
+      await artwork.markClaimPurged(row.id, reason);
       purged += 1;
     } catch (error) {
       failed += 1;
       logger.warn(
-        `${ARTWORK_PURGE_FAILED_LOG_TAG} asset=${row.id} key=${row.storage_key} error=${describeError(error)}`,
+        `${ARTWORK_PURGE_FAILED_LOG_TAG} claim=${row.id} key=${row.storage_key} error=${describeError(error)}`,
       );
     }
   }
 
   const summary: PurgeSummary = {
-    scanned: rows.length,
+    scanned: claims.length,
     due: due.length,
     purged,
     failed,

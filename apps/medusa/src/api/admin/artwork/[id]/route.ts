@@ -1,7 +1,11 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
-import type { ArtworkDownloadResponse } from "@craftynp/types";
+import { artworkLineState } from "@craftynp/types";
+import type {
+  ArtworkDownloadResponse,
+  ArtworkLineState,
+} from "@craftynp/types";
 
 import { ARTWORK_MODULE } from "../../../../modules/artwork";
 import type ArtworkModuleService from "../../../../modules/artwork/service";
@@ -13,19 +17,41 @@ import { describeError } from "../../../../lib/describe-error";
 
 export const ARTWORK_DOWNLOAD_FAILED_LOG_TAG = "[artwork:download-failed]";
 
+const UNAVAILABLE_MESSAGES = {
+  missing: "No stored artwork for that id.",
+  filing: "This artwork is still being filed. Try again shortly.",
+  never_filed:
+    "This artwork was never filed: its upload expired before it could be copied onto the order.",
+  replaced:
+    "This artwork was changed after it was checked, so it was not filed.",
+  deleted: "This artwork has passed its retention window and was deleted.",
+} as const satisfies Record<
+  Exclude<ArtworkLineState["kind"], "download"> | "missing",
+  string
+>;
+
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const logger = req.scope.resolve<Logger>(ContainerRegistrationKeys.LOGGER);
   const artwork = req.scope.resolve<ArtworkModuleService>(ARTWORK_MODULE);
   const id = req.params.id as string;
 
-  const asset = await artwork.findAsset(id);
+  const claim = await artwork.findClaim(id);
+  const state = claim
+    ? artworkLineState({
+        id: claim.id,
+        promotedAt: claim.promoted_at?.toISOString() ?? null,
+        purgedAt: claim.purged_at?.toISOString() ?? null,
+        purgeReason: claim.purge_reason,
+      })
+    : null;
 
-  if (!asset || asset.purged_at != null || asset.storage_key == null) {
+  if (!claim || state?.kind !== "download" || claim.storage_key == null) {
     return res.status(404).json({
       error: "artwork_unavailable",
-      message: asset?.purged_at
-        ? "This artwork has passed its retention window and was deleted."
-        : "No stored artwork for that id.",
+      message:
+        UNAVAILABLE_MESSAGES[
+          state && state.kind !== "download" ? state.kind : "missing"
+        ],
     });
   }
 
@@ -34,8 +60,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     // print-resolution file is far larger than a label PDF, and there is no
     // reason to move those bytes through Medusa.
     const url = await presignArtworkDownload({
-      key: asset.storage_key,
-      fileName: asset.file_name,
+      key: claim.storage_key,
+      fileName: claim.asset.file_name,
       expiresInSeconds: DEFAULT_SIGNED_URL_SECONDS,
     });
 
@@ -44,7 +70,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       expiresAt: new Date(
         Date.now() + DEFAULT_SIGNED_URL_SECONDS * 1000,
       ).toISOString(),
-      fileName: asset.file_name,
+      fileName: claim.asset.file_name,
     };
 
     res.setHeader("Cache-Control", "private, no-store");

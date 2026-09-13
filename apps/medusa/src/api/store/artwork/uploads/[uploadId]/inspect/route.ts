@@ -34,9 +34,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
   const asset = await artwork.findByUploadId(uploadId);
 
-  // A promoted or purged upload has no staging object left to read, so it is
-  // as absent as one that never existed.
-  if (!asset || asset.promoted_at !== null || asset.purged_at !== null) {
+  // A claimed upload already belongs to an order, whose line was checked
+  // against what was measured here, and a purged one has no staging object
+  // left to read. Either is as absent as one that never existed.
+  if (!asset || asset.claimed || asset.purged_at !== null) {
     return res.status(404).json({
       error: "artwork_not_found",
       message: "That upload could not be found. Upload the file again.",

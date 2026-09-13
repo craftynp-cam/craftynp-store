@@ -44,19 +44,16 @@ function asset(overrides: Record<string, unknown> = {}) {
     id: "asset_1",
     upload_id: "upl_1",
     staging_key: "staging/upl_1.png",
-    storage_key: null,
-    order_id: null,
-    line_item_id: null,
     file_name: "logo.png",
     mime_type: "image/png",
     size_bytes: 1024,
     uploaded_at: new Date(),
-    promoted_at: null,
     purged_at: null,
     purge_reason: null,
     width_px: null,
     height_px: null,
     inspected_at: null,
+    claimed: false,
     ...overrides,
   };
 }
@@ -219,10 +216,9 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
   });
 
   it.each([
-    ["already promoted onto an order", { promoted_at: new Date() }],
+    ["already claimed by an order, even before it is filed", { claimed: true }],
     ["already purged", { purged_at: new Date() }],
   ])("answers 404 for an upload %s", async (_label, overrides) => {
-    // Either way the staging object is gone, so there is nothing to read.
     const { req, res, status } = harness(asset(overrides));
 
     await POST(req, res);
