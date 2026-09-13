@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 import { lineItemCustomizationSchema } from "./customization.js";
+import {
+  CUSTOMIZATION_INPUTS,
+  type CustomizationInputKey,
+} from "./product-customization.js";
 import { shippingRateItemSchema } from "./shipping-rates.js";
 
 export const checkoutAddressSchema = z.object({
@@ -83,3 +87,113 @@ export const checkoutCompleteResponseSchema = z.object({
 export type CheckoutCompleteResponse = z.infer<
   typeof checkoutCompleteResponseSchema
 >;
+
+export const CHECKOUT_LINE_REFUSAL_REASONS = {
+  invalid_customization: [
+    "unknown_variant",
+    "artwork_not_found",
+    "artwork_not_inspected",
+    "missing_required",
+    "input_off",
+    "rejected",
+  ],
+  invalid_price_quote: [
+    "missing",
+    "malformed",
+    "bad_signature",
+    "expired",
+    "line_mismatch",
+    "unknown_variant",
+    "unpriced",
+    "unconfigured",
+    "bad_dimensions",
+  ],
+} as const;
+
+type LineRefusalReasons = typeof CHECKOUT_LINE_REFUSAL_REASONS;
+
+export type CheckoutLineRefusalError = keyof LineRefusalReasons;
+export type CheckoutLineRefusalReason<
+  E extends CheckoutLineRefusalError = CheckoutLineRefusalError,
+> = LineRefusalReasons[E][number];
+
+export type CheckoutLineRefusal = {
+  [E in CheckoutLineRefusalError]: {
+    error: E;
+    reason: CheckoutLineRefusalReason<E>;
+    input?: CustomizationInputKey;
+    line: number;
+  };
+}[CheckoutLineRefusalError];
+
+const INPUT_REASONS: readonly string[] = ["missing_required", "input_off"];
+
+const LINE_REFUSAL_HEAD =
+  /^([a-z_]+(?::[a-z_]+){1,2}@\d+(?:,[a-z_]+(?::[a-z_]+){1,2}@\d+)*)(?:\s|$)/;
+
+export function isCheckoutLineRefusal(
+  value: unknown,
+): value is CheckoutLineRefusal {
+  if (typeof value !== "object" || value === null) return false;
+  const { error, reason, input, line } = value as Record<string, unknown>;
+
+  if (
+    typeof error !== "string" ||
+    !Object.hasOwn(CHECKOUT_LINE_REFUSAL_REASONS, error)
+  ) {
+    return false;
+  }
+  const reasons: readonly string[] =
+    CHECKOUT_LINE_REFUSAL_REASONS[error as CheckoutLineRefusalError];
+  if (typeof reason !== "string" || !reasons.includes(reason)) return false;
+  if (typeof line !== "number" || !Number.isSafeInteger(line) || line < 0) {
+    return false;
+  }
+
+  const takesInput =
+    error === "invalid_customization" && INPUT_REASONS.includes(reason);
+  if (!takesInput) return input === undefined;
+
+  return CUSTOMIZATION_INPUTS.some((candidate) => candidate.key === input);
+}
+
+export function formatCheckoutLineRefusals(
+  refusals: readonly (CheckoutLineRefusal & { detail?: string })[],
+): string {
+  const head = refusals
+    .map(
+      ({ error, reason, input, line }) =>
+        `${error}:${reason}${input ? `:${input}` : ""}@${line}`,
+    )
+    .join(",");
+  const details = refusals.flatMap(({ line, detail }) =>
+    detail ? [`line ${line}: ${detail}`] : [],
+  );
+
+  return details.length > 0 ? `${head} ${details.join("; ")}` : head;
+}
+
+export function parseCheckoutLineRefusals(
+  message: string,
+): CheckoutLineRefusal[] | null {
+  const head = LINE_REFUSAL_HEAD.exec(message)?.[1];
+  if (head === undefined) return null;
+
+  const refusals: CheckoutLineRefusal[] = [];
+
+  for (const entry of head.split(",")) {
+    const [code = "", line = ""] = entry.split("@");
+    const [error, reason, input] = code.split(":");
+    const candidate = {
+      error,
+      reason,
+      ...(input === undefined ? {} : { input }),
+      line: Number(line),
+    };
+
+    if (!isCheckoutLineRefusal(candidate)) return null;
+    refusals.push(candidate);
+  }
+
+  return refusals;
+}
