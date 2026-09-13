@@ -142,8 +142,9 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   was the only casualty. `artwork-upload.ts` was the second — and it is worse
   placed, because it lands in a **client** bundle, so the same failure mode
   (`(void 0)(…)` at runtime, a green `tsc`, a green Jest) would reach shoppers
-  directly rather than only a server render. `product-customization.ts` and
-  `product-purchase.tsx` value-import it into that client bundle too.
+  directly rather than only a server render. Several client modules
+  value-import the package, so treat any value import of it as able to reach
+  shoppers.
 
 ## Product configurator
 

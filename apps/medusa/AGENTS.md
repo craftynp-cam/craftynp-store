@@ -675,7 +675,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   point before money and the only server path a configured line reaches.
   `customizationRulesForVariant` (`src/lib/customization-rules.ts`) resolves
   the bounds, text limit, minimum DPI and ordered size that
-  `validateCustomization` needs.
+  `validateCustomization` needs. The artwork input mode is held here too: a
+  line missing artwork the product requires is refused
+  `invalid_customization:missing_required:artwork`, and artwork on a product
+  whose artwork mode is `off` is `invalid_customization:input_off:artwork` (see
+  the input modes paragraph under [Layout and config](#layout-and-config)).
   **`prepare-cart` takes the artwork's facts from the upload ledger, never from
   the request.** The request only names which upload it means. The route
   collects the unique storage keys and, only when there are some, resolves them
@@ -694,8 +698,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   `invalid_customization:<reason>`, and a lookup that throws answers
   `502 checkout_unavailable:misconfigured`. The same upload on two lines of one
   request is legal. `artworkReferenceSchema` caps `storageKey` at 128
-  characters and `fileName` at 255, which bounds what a request can put into
-  that query.
+  characters, which bounds what a request can put into that query, and
+  `fileName` at 255, which only bounds the request body — the stored name comes
+  from the ledger row.
   **The preset case is why the variant query asks for its option values.** The
   payload names a variant, not the option values under it, so a preset size's
   inches are reachable only through `variant.options[].metadata`. It asks for
