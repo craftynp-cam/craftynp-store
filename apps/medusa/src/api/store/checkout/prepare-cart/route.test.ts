@@ -562,6 +562,32 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     );
   });
 
+  it("still checks a later line's token after an earlier line's pricing throws", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          areaItems[0]!,
+          { ...areaItems[0]!, priceQuoteToken: undefined },
+        ],
+      }),
+      before: null,
+      pricingError: new Error("connection refused"),
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "invalid_price_quote",
+        reason: "missing",
+        line: 1,
+        message: "invalid_price_quote:missing@1",
+      }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
   it("refuses dimensions outside the product's own bounds", async () => {
     const outOfBounds = { widthInches: 8, heightInches: 500 };
     const { req, res, status, json } = buildHarness({
