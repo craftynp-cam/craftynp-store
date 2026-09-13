@@ -685,7 +685,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   an SVG or at 99,999 pixels is held to what inspect actually measured. A key
   with no row, or a row that is purged, already claimed (`order_id` or
   `promoted_at` set), of a type the store refuses, or uploaded more than
-  `STAGING_WINDOW_DAYS` ago (its staging object is gone) is
+  `STAGING_WINDOW_DAYS` less `CHECKOUT_ARTWORK_MARGIN_DAYS` ago
+  (`checkoutWindowClosedBefore` — a day before its staging object expires, so
+  payment and promotion still have time; the sweepers keep the exact window) is
   `artwork_not_found`; a row never stamped `inspected_at`, or a raster row
   without pixels, is `artwork_not_inspected`. Both answer
   `400 invalid_customization` with that `reason` and the message

@@ -2,12 +2,19 @@ import type { ArtworkReference } from "@craftynp/types";
 
 import type { ArtworkAssetRow } from "../modules/artwork/service";
 import { artworkFromLedger } from "./artwork-ledger.js";
-import { STAGING_WINDOW_DAYS } from "./artwork-retention.js";
+import {
+  CHECKOUT_ARTWORK_MARGIN_DAYS,
+  STAGING_WINDOW_DAYS,
+} from "./artwork-retention.js";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
 const NOW = new Date(Date.UTC(2026, 8, 13, 12));
 
 const daysAgo = (days: number) => new Date(NOW.getTime() - days * DAY_MS);
+const checkoutCutoff = daysAgo(
+  STAGING_WINDOW_DAYS - CHECKOUT_ARTWORK_MARGIN_DAYS,
+);
 
 const REFERENCE: ArtworkReference = {
   storageKey: "staging/up_1.png",
@@ -83,11 +90,25 @@ describe("artworkFromLedger", () => {
       "an upload whose staging object has aged out of the bucket",
       ledgerRow({ uploaded_at: daysAgo(STAGING_WINDOW_DAYS + 1) }),
     ],
+    [
+      "an upload just past the checkout margin, before its staging copy expires",
+      ledgerRow({
+        uploaded_at: new Date(checkoutCutoff.getTime() - MINUTE_MS),
+      }),
+    ],
   ])("reports %s as not found", (_label, row) => {
     expect(artworkFromLedger(REFERENCE, row, NOW)).toEqual({
       ok: false,
       reason: "artwork_not_found",
     });
+  });
+
+  it("accepts an upload just inside the checkout margin", () => {
+    const row = ledgerRow({
+      uploaded_at: new Date(checkoutCutoff.getTime() + MINUTE_MS),
+    });
+
+    expect(artworkFromLedger(REFERENCE, row, NOW)).toMatchObject({ ok: true });
   });
 
   it("refuses a vector upload that never went through inspect", () => {

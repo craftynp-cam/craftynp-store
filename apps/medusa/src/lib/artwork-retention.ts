@@ -9,6 +9,7 @@ export const ARTWORK_PROMOTE_ABANDONED_LOG_TAG = "[artwork:promote-abandoned]";
 // succeeded never will, and an upload that never reached an order never will
 // either. Both are given up on rather than retried forever.
 export const STAGING_WINDOW_DAYS = 7;
+export const CHECKOUT_ARTWORK_MARGIN_DAYS = 1;
 
 export const DEFAULT_RETENTION_DAYS = 30;
 export const DEFAULT_FALLBACK_DAYS = 60;
@@ -17,6 +18,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function stagingWindowClosedBefore(now: Date): Date {
   return new Date(now.getTime() - STAGING_WINDOW_DAYS * MS_PER_DAY);
+}
+
+export function checkoutWindowClosedBefore(now: Date): Date {
+  return new Date(
+    now.getTime() -
+      (STAGING_WINDOW_DAYS - CHECKOUT_ARTWORK_MARGIN_DAYS) * MS_PER_DAY,
+  );
 }
 
 export type RetentionPolicy = {

@@ -5,7 +5,7 @@ import {
 } from "@craftynp/types";
 
 import type { ArtworkAssetRow } from "../modules/artwork/service";
-import { stagingWindowClosedBefore } from "./artwork-retention";
+import { checkoutWindowClosedBefore } from "./artwork-retention";
 
 export type ArtworkLedgerRejection =
   "artwork_not_found" | "artwork_not_inspected";
@@ -24,7 +24,7 @@ export function artworkFromLedger(
     row.purged_at !== null ||
     row.order_id !== null ||
     row.promoted_at !== null ||
-    row.uploaded_at.getTime() < stagingWindowClosedBefore(now).getTime() ||
+    row.uploaded_at.getTime() < checkoutWindowClosedBefore(now).getTime() ||
     !isArtworkMimeType(row.mime_type)
   ) {
     return { ok: false, reason: "artwork_not_found" };
