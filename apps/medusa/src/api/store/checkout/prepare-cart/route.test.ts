@@ -116,6 +116,10 @@ function priceQuoteToken(
 function buildBody(
   overrides: Partial<CheckoutPrepareRequest> = {},
 ): CheckoutPrepareRequest {
+  const quotedItems = (overrides.items ?? ITEMS).map(
+    ({ variantId, quantity }) => ({ variantId, quantity }),
+  );
+
   const shippingQuoteToken = signShippingQuote(
     {
       rid: "rate_01",
@@ -124,7 +128,7 @@ function buildBody(
       svc: "usps_ground_advantage",
       car: "usps",
       cs: cartSignature({
-        items: ITEMS,
+        items: quotedItems,
         postalCode: ADDRESS.postalCode,
         countryCode: ADDRESS.countryCode,
       }),
@@ -139,7 +143,7 @@ function buildBody(
       amt: 1.23,
       cur: "usd",
       ts: taxSignature({
-        items: ITEMS,
+        items: quotedItems,
         postalCode: ADDRESS.postalCode,
         countryCode: ADDRESS.countryCode,
         state: ADDRESS.state,
@@ -218,6 +222,7 @@ type Harness = {
   res: MedusaResponse;
   json: jest.Mock;
   status: jest.Mock;
+  listByStagingKeys: jest.Mock;
 };
 
 type OptionValueRow = {
@@ -239,13 +244,14 @@ function buildHarness(options: {
   after?: CartRow;
   productMetadata?: Record<string, unknown>;
   optionValues?: OptionValueRow[];
-  ledger?: ArtworkAssetRow[];
+  ledger?: ArtworkAssetRow[] | Error;
 }): Harness {
   let mutated = false;
   const ledger = options.ledger ?? [ledgerRow()];
-  const listByStagingKeys = jest.fn(async (keys: string[]) =>
-    ledger.filter((row) => keys.includes(row.staging_key)),
-  );
+  const listByStagingKeys = jest.fn(async (keys: string[]) => {
+    if (ledger instanceof Error) throw ledger;
+    return ledger.filter((row) => keys.includes(row.staging_key));
+  });
   const markMutated = async (result: unknown) => {
     mutated = true;
     return result;
@@ -321,6 +327,7 @@ function buildHarness(options: {
     res: { json, status } as unknown as MedusaResponse,
     json,
     status,
+    listByStagingKeys,
   };
 }
 
@@ -1116,5 +1123,62 @@ describe("POST /store/checkout/prepare-cart customization", () => {
 
     expect(mockUpdateCartRun).toHaveBeenCalled();
     expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("answers 502 when the upload ledger cannot be read, before any cart exists", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({ items: customizedItems({ artwork: ARTWORK }) }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+      ledger: new Error("connection refused"),
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(502);
+    expect(json).toHaveBeenCalledWith({
+      error: "checkout_unavailable",
+      reason: "misconfigured",
+      message: "checkout_unavailable:misconfigured",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("lets two lines of one request share an upload, each keeping its own text", async () => {
+    const { req, res, listByStagingKeys } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            customization: { artwork: ARTWORK, customText: { value: "Ellie" } },
+          },
+          {
+            variantId: "variant_01",
+            quantity: 1,
+            customization: { artwork: ARTWORK, customText: { value: "Max" } },
+          },
+        ],
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(listByStagingKeys).toHaveBeenCalledWith([ARTWORK.storageKey]);
+    expect(mockCreateCartRun).toHaveBeenCalledTimes(1);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0].metadata.customization).toEqual({
+      artwork: ARTWORK,
+      customText: { value: "Ellie" },
+    });
+    expect(input.items[1].metadata.customization).toEqual({
+      artwork: ARTWORK,
+      customText: { value: "Max" },
+    });
   });
 });

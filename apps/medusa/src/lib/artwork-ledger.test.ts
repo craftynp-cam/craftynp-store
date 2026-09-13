@@ -111,19 +111,23 @@ describe("artworkFromLedger", () => {
     expect(artworkFromLedger(REFERENCE, row, NOW)).toMatchObject({ ok: true });
   });
 
-  it("refuses a vector upload that never went through inspect", () => {
-    const row = ledgerRow({
-      mime_type: "image/svg+xml",
-      width_px: null,
-      height_px: null,
-      inspected_at: null,
-    });
+  it.each([
+    [
+      "a vector upload",
+      { mime_type: "image/svg+xml", width_px: null, height_px: null },
+    ],
+    ["a raster upload that has pixels", {}],
+  ] satisfies [string, Partial<ArtworkAssetRow>][])(
+    "refuses %s that never went through inspect",
+    (_label, overrides) => {
+      const row = ledgerRow({ ...overrides, inspected_at: null });
 
-    expect(artworkFromLedger(REFERENCE, row, NOW)).toEqual({
-      ok: false,
-      reason: "artwork_not_inspected",
-    });
-  });
+      expect(artworkFromLedger(REFERENCE, row, NOW)).toEqual({
+        ok: false,
+        reason: "artwork_not_inspected",
+      });
+    },
+  );
 
   it("refuses a raster upload whose pixels were never recorded", () => {
     const row = ledgerRow({ width_px: null, height_px: null });
