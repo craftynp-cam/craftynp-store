@@ -1,4 +1,7 @@
-import { describeUpstreamError } from "@/lib/upstream-error";
+import {
+  describeUpstreamError,
+  prepareFailureResponse,
+} from "@/lib/upstream-error";
 
 class FetchErrorLike extends Error {
   constructor(
@@ -43,6 +46,63 @@ describe("describeUpstreamError", () => {
     expect(describeUpstreamError("boom")).toEqual({
       upstreamStatus: null,
       reason: "boom",
+    });
+  });
+});
+
+describe("prepareFailureResponse", () => {
+  it("passes a refused line through as a 400 naming every refused line", () => {
+    expect(
+      prepareFailureResponse(
+        new FetchErrorLike(
+          "invalid_customization:missing_required:dimensions@1,invalid_price_quote:expired@2 line 1: detail",
+          400,
+        ),
+      ),
+    ).toEqual({
+      status: 400,
+      body: {
+        error: "invalid_customization",
+        reason: "missing_required",
+        line: 1,
+        lines: [
+          {
+            error: "invalid_customization",
+            reason: "missing_required",
+            input: "dimensions",
+            line: 1,
+          },
+          { error: "invalid_price_quote", reason: "expired", line: 2 },
+        ],
+      },
+    });
+  });
+
+  it.each([
+    [
+      "a refusal about the whole checkout",
+      new FetchErrorLike("invalid_tax_quote:expired", 400),
+      400,
+    ],
+    [
+      "an older Medusa's refusal that names no line",
+      new FetchErrorLike("invalid_customization:artwork_not_found", 400),
+      400,
+    ],
+    [
+      "a line-shaped message on a server error",
+      new FetchErrorLike("invalid_price_quote:expired@0", 502),
+      502,
+    ],
+    ["a failure that never reached Medusa", new Error("fetch failed"), null],
+  ])("keeps %s as today's 502", (_case, error, upstreamStatus) => {
+    expect(prepareFailureResponse(error)).toEqual({
+      status: 502,
+      body: {
+        error: "checkout_unavailable",
+        upstreamStatus,
+        reason: error.message,
+      },
     });
   });
 });
