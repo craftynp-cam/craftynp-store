@@ -387,8 +387,11 @@ abandoned upload ages purely on upload date and needs no scheduler.
 Promotion removes a staging object itself, but only once every order line
 claiming that upload has its own copy under `artwork/`. A later order on the
 same upload copies from one of those copies instead of from staging. The rule
-reaps what promotion never reaches: an upload nobody ordered, or a staging
-delete that failed.
+reaps what promotion never reaches: an upload nobody ordered, one whose bytes
+changed after the inspect route measured them and so was never filed
+(`changed_after_inspect`), or a staging delete that failed. A re-PUT restarts
+an object's lifecycle clock, so a changed upload's staging object can outlive
+the 7 days counted from its first upload.
 
 The 7-day staging window must stay comfortably longer than the promotion retry
 horizon (`promote-pending-artwork`, every 15 minutes). Shortening it risks
