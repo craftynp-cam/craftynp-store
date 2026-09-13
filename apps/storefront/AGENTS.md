@@ -856,7 +856,10 @@ routes, different audience. Do not merge the two.
 - **`DESIGN_GATE` is three-state**: `on`/`off` win, anything else means "on in
   production only", so `next dev` serves these pages with no sign-in round trip.
   Set it to `on` to exercise the real flow locally, which also needs a localhost
-  redirect URI on the Google OAuth client.
+  redirect URI on the Google OAuth client and
+  `http://localhost:8000/auth/design/callback` listed in Medusa's
+  `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS`. `apps/medusa/.env.example` lists it; an
+  older `apps/medusa/.env` may not.
 - **`DESIGN_GATE` is unset in production**, so the gate follows `NODE_ENV` and
   is on. Production is the only deployed environment (CNP-81). Any new one
   needs its callback URL registered on the Google OAuth client and listed in

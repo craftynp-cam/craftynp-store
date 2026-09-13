@@ -235,7 +235,11 @@ Google, not in our code.
 
 **As of CNP-81 the gate's code is on `dev` but not yet on `main`**, so
 `/design/*` on production is public until the next promotion, exactly as it was
-on Vercel. The variables are in place for when it lands.
+on Vercel. The storefront's variables are in place for when it lands, but
+**`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` must be set on `medusa-server` and
+`medusa-worker`, listing `https://thecraftynp.org/auth/design/callback`, before
+that promotion.** Unlisted, Google returns the design sign-in to the admin login
+page, whose widget redeems the code as an admin sign-in.
 
 **Backups are scheduled on the Postgres volume, daily and monthly**, from the
 service's Backups tab. Railway fixes the retention per schedule: daily is kept 6
