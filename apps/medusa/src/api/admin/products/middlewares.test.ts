@@ -15,9 +15,17 @@ const STORED = {
     customization_size: "optional",
     customization_size_min_inches: "2",
     customization_size_max_inches: "48",
+    customization_size_option: "Size",
+    customization_size_option_value: "Custom",
     customization_size_rate_per_sq_inch: "0.055",
     customization_size_price_floor: "4",
   },
+  product_options: [
+    {
+      product_option: { title: "Size" },
+      values: [{ value: "Medium" }, { value: "Custom" }],
+    },
+  ],
   weight: 900,
   length: 45,
   width: 22,
@@ -105,6 +113,37 @@ describe("validateProductUpdate", () => {
 
     expect(error).toBeInstanceOf(MedusaError);
     expect(String(error)).toMatch(/customization_size_rate_per_sq_inch/);
+  });
+
+  it("refuses to publish a custom size whose Custom option was cleared", async () => {
+    const { error } = await runMiddleware({
+      metadata: {
+        customization_size_option: "",
+        customization_size_option_value: "",
+      },
+    });
+
+    expect(error).toBeInstanceOf(MedusaError);
+    expect(String(error)).toMatch(
+      /customization_size_option and customization_size_option_value/,
+    );
+  });
+
+  it("refuses a save while the product's own options lack its named Custom value", async () => {
+    const withoutCustom = {
+      ...STORED,
+      product_options: [
+        { product_option: { title: "Size" }, values: [{ value: "Medium" }] },
+      ],
+    };
+
+    const { error } = await runMiddleware(
+      { metadata: { customization_size_min_inches: "4" } },
+      withoutCustom,
+    );
+
+    expect(error).toBeInstanceOf(MedusaError);
+    expect(String(error)).toMatch(/no value "Custom"/);
   });
 
   it("repairs a product whose stored declaration is already broken", async () => {
