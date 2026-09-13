@@ -133,13 +133,22 @@ describe("readArtworkHead", () => {
   const send = jest.fn<Promise<unknown>, [GetObjectCommand]>();
 
   function storedBody(object: Buffer, chunkSize = 1_000_000) {
-    const chunks: Buffer[] = [];
-    for (let offset = 0; offset < object.length; offset += chunkSize) {
-      chunks.push(object.subarray(offset, offset + chunkSize));
+    const served = { bytes: 0 };
+
+    function* chunks() {
+      for (let offset = 0; offset < object.length; offset += chunkSize) {
+        const chunk = object.subarray(offset, offset + chunkSize);
+        served.bytes += chunk.length;
+        yield chunk;
+      }
     }
 
-    return Object.assign(Readable.from(chunks), {
-      transformToByteArray: async () => new Uint8Array(object),
+    return Object.assign(Readable.from(chunks()), {
+      served,
+      transformToByteArray: async () => {
+        served.bytes = object.length;
+        return new Uint8Array(object);
+      },
     });
   }
 
@@ -164,6 +173,8 @@ describe("readArtworkHead", () => {
     expect(head.length).toBe(4 * MIB);
     expect(Buffer.from(head).equals(object.subarray(0, 4 * MIB))).toBe(true);
     expect(body.destroyed).toBe(true);
+    expect(body.readableEnded).toBe(false);
+    expect(body.served.bytes).toBeLessThanOrEqual(4 * MIB + 1_000_000);
   });
 
   it("reads a ranged response that ends exactly at the cap to its end, so its connection can be reused", async () => {

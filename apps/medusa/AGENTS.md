@@ -601,10 +601,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **The inspect route's second read stops at `ARTWORK_FALLBACK_READ_BYTES`
   (4 MiB), and a raster whose frame marker lies past it is `unreadable`.** The
   first read takes `ARTWORK_HEADER_BYTES`; only a raster it could not measure
-  is read again. A JPEG segment's length is a 16-bit field, so one APP segment
-  is at most 64 KiB, and the colour profiles and thumbnails that push a real
-  export's start-of-frame past the first read sit far inside 4 MiB. The route
-  is anonymous and shares its process with checkout, so an uncapped re-read
+  is read again. That is a trade-off, not a guarantee: an ICC profile can span
+  many APP2 segments and Extended XMP many APP1, so nothing in the format bounds
+  how far in the start-of-frame sits. Most exports put it a few hundred KiB in,
+  and a file whose frame lies past 4 MiB is rejected on purpose, because the
+  route is anonymous and shares its process with checkout — an uncapped re-read
   would let any caller make Medusa buffer a whole 25 MB upload per request.
   **`readArtworkHead` enforces the cap itself**, whatever byte count it is
   asked for: it clamps the `Range` it sends, and it reads the body as a stream

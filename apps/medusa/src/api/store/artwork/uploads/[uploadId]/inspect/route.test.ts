@@ -133,7 +133,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     expect(recordDimensions).not.toHaveBeenCalled();
   });
 
-  it("re-reads the whole object when the head stopped short of the size", async () => {
+  it("re-reads up to the object's size when the head stopped short of it", async () => {
     // A JPEG's colour profile can push its frame marker past the head we read.
     // Rejecting a good file is the worst way for this gate to fail.
     readHead
@@ -147,7 +147,6 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     await POST(req, res);
 
     expect(readHead).toHaveBeenCalledTimes(2);
-    // The second read is bounded by the object's own size, not left open.
     expect(readHead.mock.calls[1]?.[1]).toBe(400_000);
     expect(status).toHaveBeenCalledWith(422);
     expect(json.mock.calls[0]?.[0]).toMatchObject({
