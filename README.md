@@ -374,9 +374,11 @@ rather than producing a half-configured store.
 1. Provision Postgres and Redis, and point `DATABASE_URL` and `REDIS_URL` at
    them.
 2. Fill `apps/medusa/.env` **completely** from `apps/medusa/.env.example`, with
-   this environment's own `JWT_SECRET`, `COOKIE_SECRET`, `SHIPPING_QUOTE_SECRET`
-   and `ORDER_ACCESS_SECRET`, its Auth0 and Google Workspace OAuth clients, its
-   Stripe and ShipStation keys, and the real `SHIP_FROM_*` address.
+   this environment's own `JWT_SECRET`, `COOKIE_SECRET`, `MFA_ENCRYPTION_KEY`,
+   `SHIPPING_QUOTE_SECRET`, `TAX_QUOTE_SECRET`, `PRICE_QUOTE_SECRET` and
+   `ORDER_ACCESS_SECRET` (each its own random value), its Auth0 and Google
+   Workspace OAuth clients, its Stripe and ShipStation keys, its three R2
+   buckets' credentials, and the real `SHIP_FROM_*` address.
 3. `pnpm install && pnpm run build`.
 4. `pnpm run db:migrate`. Watch for `seed-defaults` running before
    `seed-us-region`; if it does not, the region seed fails on the missing
@@ -503,11 +505,12 @@ along with the handful of places reality had to diverge from the plan below.
 
 ### Before the first public deploy
 
-Four store routes take no session at all, and two of them spend money on every
-call — `/store/tax-quote` bills a Stripe Tax calculation, and
-`/store/shipping-rates` burns the ShipStation rate limit, which returns
-`502 shipping_unavailable` and blocks checkout for real customers once
-exhausted. The app carries per-IP limits on all four (see
+Seven store routes take no session and carry the app's own per-IP limit. Two
+of them spend money on every call — `/store/tax-quote` bills a Stripe Tax
+calculation, and `/store/shipping-rates` burns the ShipStation rate limit,
+which returns `502 shipping_unavailable` and blocks checkout for real customers
+once exhausted — and the two artwork routes write to and read from R2. The app
+carries per-IP limits on all seven (see
 `RATE_LIMIT_*` in `apps/medusa/.env.example`), but those are a second line of
 defence, shared across processes wherever `REDIS_URL` is set and per-process
 where it is not.
@@ -567,8 +570,9 @@ orange-clouded zone hits the Bot Fight Mode problem above.
    ceilings so Cloudflare sheds volume and the app limit only catches leakage:
 
    ```
-   (http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates"})
+   (http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates" "/store/price-quote"})
    or (starts_with(http.request.uri.path, "/store/checkout/"))
+   or (starts_with(http.request.uri.path, "/store/artwork/"))
    ```
 
    Characteristic IP, 60 requests per minute, Block for 1 minute.
@@ -651,7 +655,9 @@ hand the storefront origin admin-API access for no reason.
 `AUTH0_CALLBACK_URL` and
 `GOOGLE_ADMIN_CALLBACK_URL` need production values **and** matching entries in
 the Auth0 and Google Cloud dashboards — the Google one must match exactly or
-admin sign-in breaks, with no useful error.
+admin sign-in breaks, with no useful error. The Google client also lists the
+storefront's `https://thecraftynp.org/auth/design/callback`, and Medusa accepts
+that second callback only because `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` names it.
 
 **Both webhooks must be re-pointed and re-registered** (CNP-16): a new Stripe
 endpoint, which mints a new `STRIPE_WEBHOOK_SECRET`, and

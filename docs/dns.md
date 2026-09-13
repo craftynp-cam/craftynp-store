@@ -122,12 +122,16 @@ On the `http_ratelimit` phase of the `.com` zone.
 
 ```
 (http.host eq "api.thecraftynp.com") and
-((http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates"})
- or (starts_with(http.request.uri.path, "/store/checkout/")))
+((http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates" "/store/price-quote"})
+ or (starts_with(http.request.uri.path, "/store/checkout/"))
+ or (starts_with(http.request.uri.path, "/store/artwork/")))
 ```
 
 10 requests per 10 seconds, block for 10 seconds, characteristics `ip.src` and
-`cf.colo.id`.
+`cf.colo.id`. `/store/price-quote` and `/store/artwork/*` joined the rule in
+CNP-89. It was checked by sending POSTs to `/store/price-quote` one after
+another: the eleventh inside ten seconds got Cloudflare's `429`
+(`error code: 1015`) instead of the app's own reply.
 
 **This is not quite what the README describes, and the difference is the Free
 plan, not a choice.** It asks for 60 requests per minute blocking for one
@@ -138,9 +142,14 @@ minute. On this plan:
 - the only permitted mitigation timeout is **10 seconds**, not 60;
 - `cf.colo.id` is a **required** characteristic, so counting is per-datacenter
   rather than global. A single client normally reaches one datacenter, but the
-  ceiling is not the global one the README implies.
+  ceiling is not the global one the README implies;
+- only **one** rate-limiting rule is permitted, so every path above shares one
+  counter per client. A shopper's price quotes, artwork uploads and checkout
+  calls all count against the same 10 per 10 s. Price quotes are debounced in
+  the storefront, so an ordinary session stays well inside it, and the app's
+  per-route `RATE_LIMIT_*` ceilings stay the finer-grained second line.
 
-Upgrading the plan is what closes those three gaps.
+Upgrading the plan is what closes those four gaps.
 
 ### Origin secret
 
@@ -375,12 +384,16 @@ is longer than the rule, it retries objects that no longer exist.
 
 Needed because the browser PUTs straight to R2 against a presigned URL.
 
-| Field   | Value                                                                             |
-| ------- | --------------------------------------------------------------------------------- |
-| Origins | `https://thecraftynp.org`, `https://www.thecraftynp.org`, `http://localhost:8000` |
-| Methods | `PUT`, `GET`, `HEAD`                                                              |
-| Headers | `content-type`                                                                    |
-| Max age | 3600                                                                              |
+| Field   | Value                                                    |
+| ------- | -------------------------------------------------------- |
+| Origins | `https://thecraftynp.org`, `https://www.thecraftynp.org` |
+| Methods | `PUT`, `GET`, `HEAD`                                     |
+| Headers | `content-type`                                           |
+| Max age | 3600                                                     |
+
+`http://localhost:8000` was removed in CNP-92. Local development uploads to the
+MinIO container, never to this bucket, so production has no reason to admit a
+localhost origin.
 
 ### R2 credentials
 

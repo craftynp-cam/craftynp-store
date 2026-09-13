@@ -241,7 +241,7 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
 
 ## Abuse and rate limiting
 
-Four store routes are reachable with no session at all, and two of them spend
+Seven store routes are reachable with no session at all, and two of them spend
 money on every call: `/store/tax-quote` bills a Stripe Tax calculation and
 `/store/shipping-rates` burns the ShipStation limit. Because there is
 deliberately no flat-rate fallback, exhausting ShipStation returns
@@ -287,9 +287,11 @@ this is a denial-of-checkout vector, not only a cost one.
 
 **Cloudflare is the first line and has no in-repo representation** — like the
 Auth0 and Stripe Tax dashboard state above, don't search for it here. The
-rate-limiting rule on `/store/tax-quote`, `/store/shipping-rates` and
-`/store/checkout/*` lives there and sheds volume long before it reaches this
-limiter.
+rate-limiting rule on `/store/tax-quote`, `/store/shipping-rates`,
+`/store/price-quote`, `/store/checkout/*` and `/store/artwork/*` lives there and
+sheds volume long before it reaches this limiter. It is one rule on the Free
+plan, so those paths share one counter per client (see
+[docs/dns.md](../../docs/dns.md)).
 
 - **Medusa is served from `api.thecraftynp.com`, a different zone from the
   storefront's `thecraftynp.org`, and Bot Fight Mode is deliberately off on
