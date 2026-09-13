@@ -66,6 +66,21 @@ tax provider), `notification-resend`, `auth-auth0`, and
   the ordered width and the custom text limit the same way, for the same
   reason. Its one caller is `prepare-cart`, through
   `customizationRulesForVariant` (`src/lib/customization-rules.ts`).
+  **The input modes are enforced there too, not only by the storefront's
+  gate.** `prepare-cart` validates every line, including one that sent no
+  customization, because a required input is exactly what a line can leave
+  out. A `required` input that is missing, or an `off` one that is present,
+  throws `CustomizationRejection`, answered as `400 invalid_customization`
+  with `reason` `missing_required` or `input_off` and the message
+  `invalid_customization:<reason>:<input>`. Blank order notes count as absent.
+  The size is held to the server's copy of the storefront's `usesCustomSize`:
+  on a product that names its Custom option, a line on the variant carrying
+  that value must send `customization.dimensions` and a line on any other
+  variant may not. Without the first a `Custom` variant sells at its own
+  multiplier price; without the second a size is priced against a cheaper
+  preset's base, since `/store/price-quote` quotes dimensions on any variant.
+  Only a line that sent a customization has one stored — an empty one would
+  change `customizationSignature` and supersede a cart the shopper could reuse.
 - **The custom size carries two more keys again, and they are money:**
   `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
   written by the same widget and patch. They are what `areaUnitPrice` in
@@ -625,9 +640,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   DPI and ordered size that `validateCustomization` needs.
   **The preset case is why the variant query asks for its option values.** The
   payload names a variant, not the option values under it, so a preset size's
-  inches are reachable only through `variant.options[].metadata`; a custom size
-  answers from the payload's own `dimensions`, which `validateCustomization`
-  already falls back to.
+  inches are reachable only through `variant.options[].metadata`. It asks for
+  `options.option.title` as well, which is how the variant carrying the named
+  Custom value is recognised; on that variant the preset measurement is
+  skipped, so a custom size answers DPI from `customization.dimensions` alone
+  and a measurement left on the Custom value cannot stand in for it.
 - **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,
   written by `src/admin/widgets/category-artwork.tsx` and read through
   `resolveArtworkMinDpi` in `@craftynp/types`, which takes the strictest value

@@ -29,7 +29,10 @@ import {
   customizationRulesForVariant,
   type VariantWithCustomization,
 } from "../../../../lib/customization-rules";
-import { validateCustomization } from "../../../../lib/validate-customization";
+import {
+  CustomizationRejection,
+  validateCustomization,
+} from "../../../../lib/validate-customization";
 
 const STRIPE_PAYMENT_PROVIDER_ID = "pp_stripe_stripe";
 const LIVE_SHIPPING_OPTION_NAME = "Live USPS Rate";
@@ -241,64 +244,67 @@ export async function POST(
   // reaches. The pixels were measured at inspect; the comparison against the
   // product's threshold happens here.
   const validated = new Map<number, LineItemCustomization>();
-  const customizedItems = items.filter((item) => item.customization != null);
+  let variants: VariantWithCustomization[];
 
-  if (customizedItems.length > 0) {
-    let variants: VariantWithCustomization[];
+  try {
+    const { data } = await query.graph({
+      entity: "variant",
+      fields: VARIANT_CUSTOMIZATION_FIELDS,
+      filters: {
+        id: [...new Set(items.map((item) => item.variantId))],
+      },
+    });
+    variants = data as VariantWithCustomization[];
+  } catch (error) {
+    logger.error(
+      `[checkout:unavailable] reason=customization_lookup_failed error=${describeError(error)}`,
+    );
+    return res.status(502).json({
+      error: "checkout_unavailable",
+      reason: "misconfigured",
+      message: "checkout_unavailable:misconfigured",
+    });
+  }
+
+  const byId = new Map(variants.map((variant) => [variant.id, variant]));
+
+  for (const [index, item] of items.entries()) {
+    const variant = byId.get(item.variantId);
+
+    // A customization we cannot resolve rules for is one we cannot check, and
+    // storing an unchecked one is the hole this closes.
+    if (!variant) {
+      return res.status(400).json({
+        error: "invalid_customization",
+        reason: "unknown_variant",
+        message: `invalid_customization:unknown_variant:${item.variantId}`,
+      });
+    }
+
+    let customization: LineItemCustomization;
 
     try {
-      const { data } = await query.graph({
-        entity: "variant",
-        fields: VARIANT_CUSTOMIZATION_FIELDS,
-        filters: {
-          id: [...new Set(customizedItems.map((item) => item.variantId))],
-        },
-      });
-      variants = data as VariantWithCustomization[];
-    } catch (error) {
-      logger.error(
-        `[checkout:unavailable] reason=customization_lookup_failed error=${describeError(error)}`,
+      customization = validateCustomization(
+        item.customization ?? {},
+        customizationRulesForVariant(variant),
       );
-      return res.status(502).json({
-        error: "checkout_unavailable",
-        reason: "misconfigured",
-        message: "checkout_unavailable:misconfigured",
+    } catch (error) {
+      if (error instanceof CustomizationRejection) {
+        return res.status(400).json({
+          error: "invalid_customization",
+          reason: error.reason,
+          message: error.message,
+        });
+      }
+
+      return res.status(400).json({
+        error: "invalid_customization",
+        reason: "rejected",
+        message: describeError(error),
       });
     }
 
-    const byId = new Map(variants.map((variant) => [variant.id, variant]));
-
-    for (const [index, item] of items.entries()) {
-      if (item.customization == null) continue;
-
-      const variant = byId.get(item.variantId);
-
-      // A customization we cannot resolve rules for is one we cannot check, and
-      // storing an unchecked one is the hole this closes.
-      if (!variant) {
-        return res.status(400).json({
-          error: "invalid_customization",
-          reason: "unknown_variant",
-          message: `invalid_customization:unknown_variant:${item.variantId}`,
-        });
-      }
-
-      try {
-        validated.set(
-          index,
-          validateCustomization(
-            item.customization,
-            customizationRulesForVariant(variant),
-          ),
-        );
-      } catch (error) {
-        return res.status(400).json({
-          error: "invalid_customization",
-          reason: "rejected",
-          message: describeError(error),
-        });
-      }
-    }
+    if (item.customization != null) validated.set(index, customization);
   }
 
   // An area-priced line cannot be left to Medusa: the amount depends on the

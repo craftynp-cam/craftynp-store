@@ -56,6 +56,13 @@ const AREA_METADATA = {
   customization_size_price_floor: "4",
 };
 
+const CONFIGURATOR_METADATA = {
+  customizable: "true",
+  customization_artwork: "optional",
+  customization_text: "optional",
+  customization_notes: "optional",
+};
+
 const DIMENSIONS = { widthInches: 8, heightInches: 10 };
 
 // 1.15 * 0.055 * 80, with no tier in play since the mock prices every quantity
@@ -186,6 +193,12 @@ type Harness = {
   status: jest.Mock;
 };
 
+type OptionValueRow = {
+  value: string;
+  option: { title: string };
+  metadata: Record<string, unknown>;
+};
+
 /**
  * Cart reads return `before` until a mutating workflow has run and `after`
  * once one has. That distinction is the whole point of this route's ordering:
@@ -197,7 +210,8 @@ function buildHarness(options: {
   body: CheckoutPrepareRequest;
   before?: CartRow | null;
   after?: CartRow;
-  optionValues?: { metadata: Record<string, unknown> }[];
+  productMetadata?: Record<string, unknown>;
+  optionValues?: OptionValueRow[];
 }): Harness {
   let mutated = false;
   const markMutated = async (result: unknown) => {
@@ -232,7 +246,7 @@ function buildHarness(options: {
           {
             id: "variant_01",
             product: {
-              metadata: AREA_METADATA,
+              metadata: options.productMetadata ?? AREA_METADATA,
               categories: [{ metadata: { artwork_min_dpi: "300" } }],
             },
             options: options.optionValues ?? [],
@@ -763,7 +777,11 @@ describe("POST /store/checkout/prepare-cart customization", () => {
   };
 
   const PRESET_SIZE = [
-    { metadata: { width_inches: "8", height_inches: "10" } },
+    {
+      value: "8 × 10",
+      option: { title: "Size" },
+      metadata: { width_inches: "8", height_inches: "10" },
+    },
   ];
 
   function customizedItems(
@@ -788,6 +806,7 @@ describe("POST /store/checkout/prepare-cart customization", () => {
         }),
       }),
       before: null,
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
     });
 
@@ -801,6 +820,31 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     });
   });
 
+  it("refuses a Custom-variant line that names no size, before any cart exists", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({ items: ITEMS }),
+      before: null,
+      productMetadata: {
+        ...AREA_METADATA,
+        customization_size_option: "Size",
+        customization_size_option_value: "Custom",
+      },
+      optionValues: [
+        { value: "Custom", option: { title: "Size" }, metadata: {} },
+      ],
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_customization",
+      reason: "missing_required",
+      message: "invalid_customization:missing_required:dimensions",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
   it("refuses artwork too coarse for the size the option value names", async () => {
     const { req, res, status, json } = buildHarness({
       body: buildBody({
@@ -809,6 +853,7 @@ describe("POST /store/checkout/prepare-cart customization", () => {
         }),
       }),
       before: null,
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
     });
 
@@ -832,7 +877,14 @@ describe("POST /store/checkout/prepare-cart customization", () => {
         }),
       }),
       before: null,
-      optionValues: [{ metadata: { width_inches: "1", height_inches: "1" } }],
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: [
+        {
+          value: "1 × 1",
+          option: { title: "Size" },
+          metadata: { width_inches: "1", height_inches: "1" },
+        },
+      ],
     });
 
     await POST(req, res);
@@ -859,6 +911,7 @@ describe("POST /store/checkout/prepare-cart customization", () => {
           },
         ],
       }),
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
     });
 
@@ -883,6 +936,7 @@ describe("POST /store/checkout/prepare-cart customization", () => {
           },
         ],
       }),
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
     });
 

@@ -1,10 +1,31 @@
 import { MedusaError } from "@medusajs/framework/utils";
-import { validateCustomization } from "./validate-customization.js";
+import {
+  CustomizationRejection,
+  validateCustomization,
+  type CustomizationRules,
+} from "./validate-customization.js";
 
-const RULES = {
+const RULES: CustomizationRules = {
+  inputs: {
+    artwork: "optional",
+    customText: "optional",
+    dimensions: "optional",
+    orderNotes: "optional",
+  },
+  customSizeVariant: null,
   bounds: { minInches: 2, maxInches: 48 },
   textMaxLength: 120,
   minDpi: 300,
+};
+
+const READY_MADE_RULES: CustomizationRules = {
+  ...RULES,
+  inputs: {
+    artwork: "off",
+    customText: "off",
+    dimensions: "off",
+    orderNotes: "off",
+  },
 };
 
 const lowResArtwork = {
@@ -44,7 +65,68 @@ describe("validateCustomization", () => {
   });
 
   it("accepts an empty payload for a ready-made product", () => {
-    expect(validateCustomization({}, RULES)).toEqual({});
+    expect(validateCustomization({}, READY_MADE_RULES)).toEqual({});
+  });
+
+  describe("input modes", () => {
+    it.each([
+      [
+        "missing required artwork",
+        {},
+        { ...RULES, inputs: { ...RULES.inputs, artwork: "required" } },
+        "missing_required",
+        "artwork",
+      ],
+      [
+        "a missing required size",
+        {},
+        { ...RULES, inputs: { ...RULES.inputs, dimensions: "required" } },
+        "missing_required",
+        "dimensions",
+      ],
+      [
+        "an input the product switched off",
+        { customText: { value: "Ellie" } },
+        { ...RULES, inputs: { ...RULES.inputs, customText: "off" } },
+        "input_off",
+        "customText",
+      ],
+      [
+        "a Custom variant with no size",
+        {},
+        { ...RULES, customSizeVariant: true },
+        "missing_required",
+        "dimensions",
+      ],
+      [
+        "a size on a preset variant",
+        { dimensions: { widthInches: 8, heightInches: 10 } },
+        { ...RULES, customSizeVariant: false },
+        "input_off",
+        "dimensions",
+      ],
+      [
+        "blank notes when notes are required",
+        { orderNotes: "   " },
+        { ...RULES, inputs: { ...RULES.inputs, orderNotes: "required" } },
+        "missing_required",
+        "orderNotes",
+      ],
+    ] as [string, unknown, CustomizationRules, string, string][])(
+      "refuses %s",
+      (_label, payload, rules, reason, input) => {
+        const thrown = captureThrown(() =>
+          validateCustomization(payload, rules),
+        );
+
+        expect(thrown).toBeInstanceOf(CustomizationRejection);
+        expect(thrown).toMatchObject({
+          reason,
+          input,
+          message: `invalid_customization:${reason}:${input}`,
+        });
+      },
+    );
   });
 
   it("throws when custom text is empty", () => {
