@@ -1,14 +1,15 @@
 import type { Logger } from "@medusajs/framework/types";
 
 import {
+  ARTWORK_CHANGED_AFTER_INSPECT_LOG_TAG,
   ARTWORK_PROMOTE_FAILED_LOG_TAG,
   ARTWORK_PROMOTE_LOG_TAG,
 } from "./artwork-retention";
 import {
+  ArtworkChangedAfterInspectError,
   artworkObjectKey,
   copyArtwork,
   deleteArtwork,
-  headArtwork,
   isMissingObject,
 } from "./artwork-storage";
 import { describeError } from "./describe-error";
@@ -30,16 +31,21 @@ export type PromotionSource =
   | { kind: "sibling"; key: string; claimId: string }
   | { kind: "missing" };
 
-export type PromotionOutcome = "promoted" | "source_missing" | "failed";
+export type PromotionOutcome =
+  "promoted" | "source_missing" | "changed_after_inspect" | "failed";
 
-export function selectPromotionSource(
-  target: { claimId: string; stagingKey: string; stagingExists: boolean },
+function isPending(
+  claim: Pick<ClaimState, "promoted_at" | "purged_at">,
+): boolean {
+  return claim.promoted_at == null && claim.purged_at == null;
+}
+
+export function selectSiblingSource(
+  claimId: string,
   claims: readonly ClaimState[],
 ): PromotionSource {
-  if (target.stagingExists) return { kind: "staging", key: target.stagingKey };
-
   for (const claim of claims) {
-    if (claim.id === target.claimId) continue;
+    if (claim.id === claimId) continue;
     if (claim.promoted_at == null || claim.purged_at != null) continue;
     if (claim.storage_key == null) continue;
 
@@ -52,19 +58,7 @@ export function selectPromotionSource(
 export function stagingStillNeeded(
   claims: readonly Pick<ClaimState, "promoted_at" | "purged_at">[],
 ): boolean {
-  return claims.some(
-    (claim) => claim.promoted_at == null && claim.purged_at == null,
-  );
-}
-
-async function stagingExists(key: string): Promise<boolean> {
-  try {
-    await headArtwork(key);
-    return true;
-  } catch (error) {
-    if (isMissingObject(error)) return false;
-    throw error;
-  }
+  return claims.some(isPending);
 }
 
 async function copyToClaim(
@@ -72,29 +66,42 @@ async function copyToClaim(
   destination: string,
   artwork: ArtworkModuleService,
 ): Promise<PromotionSource> {
-  const target = { claimId: claim.id, stagingKey: claim.asset.staging_key };
-  const exists = await stagingExists(target.stagingKey);
-
-  let source = selectPromotionSource(
-    { ...target, stagingExists: exists },
-    exists ? [] : await artwork.listClaimsForAsset(claim.asset_id),
-  );
-  if (source.kind === "missing") return source;
+  const { asset } = claim;
 
   try {
-    await copyArtwork(source.key, destination);
-    return source;
+    await copyArtwork(asset.staging_key, destination, undefined, {
+      sourceEtag: asset.inspected_etag,
+    });
+    return { kind: "staging", key: asset.staging_key };
   } catch (error) {
-    if (source.kind !== "staging" || !isMissingObject(error)) throw error;
+    if (!isMissingObject(error)) throw error;
   }
 
-  source = selectPromotionSource(
-    { ...target, stagingExists: false },
+  const source = selectSiblingSource(
+    claim.id,
     await artwork.listClaimsForAsset(claim.asset_id),
   );
-  if (source.kind !== "missing") await copyArtwork(source.key, destination);
+  if (source.kind === "sibling") await copyArtwork(source.key, destination);
 
   return source;
+}
+
+async function retireChangedUpload(
+  claim: ArtworkClaimRow,
+  artwork: ArtworkModuleService,
+  logger: Logger,
+  context: string,
+): Promise<void> {
+  try {
+    for (const sibling of await artwork.listClaimsForAsset(claim.asset_id)) {
+      if (!isPending(sibling)) continue;
+      await artwork.markClaimPurged(sibling.id, "changed_after_inspect");
+    }
+  } catch (error) {
+    logger.warn(
+      `${ARTWORK_PROMOTE_FAILED_LOG_TAG} ${context} outcome=changed_not_retired error=${describeError(error)}`,
+    );
+  }
 }
 
 export async function promoteArtworkClaim(
@@ -130,6 +137,14 @@ export async function promoteArtworkClaim(
 
     await artwork.markClaimPromoted(claim.id, destination);
   } catch (error) {
+    if (error instanceof ArtworkChangedAfterInspectError) {
+      logger.warn(
+        `${ARTWORK_CHANGED_AFTER_INSPECT_LOG_TAG} ${context} key=${asset.staging_key} inspected_etag=${asset.inspected_etag}`,
+      );
+      await retireChangedUpload(claim, artwork, logger, context);
+      return "changed_after_inspect";
+    }
+
     logger.warn(
       `${ARTWORK_PROMOTE_FAILED_LOG_TAG} ${context} key=${asset.staging_key} error=${describeError(error)}`,
     );
@@ -150,8 +165,13 @@ export async function promoteArtworkClaim(
     }
   }
 
+  const binding =
+    source.kind === "staging" && asset.inspected_etag == null
+      ? " etag=unbound"
+      : "";
+
   logger.info(
-    `${ARTWORK_PROMOTE_LOG_TAG} ${context} source=${source.kind} key=${destination}`,
+    `${ARTWORK_PROMOTE_LOG_TAG} ${context} source=${source.kind} key=${destination}${binding}`,
   );
 
   return "promoted";

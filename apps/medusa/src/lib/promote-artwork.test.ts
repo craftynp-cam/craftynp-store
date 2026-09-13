@@ -1,30 +1,35 @@
 import type { Logger } from "@medusajs/framework/types";
 
-import { copyArtwork, deleteArtwork, headArtwork } from "./artwork-storage";
+import {
+  ArtworkChangedAfterInspectError,
+  copyArtwork,
+  deleteArtwork,
+} from "./artwork-storage";
 import type ArtworkModuleService from "../modules/artwork/service";
 import type { ArtworkClaimRow } from "../modules/artwork/service";
 import {
   keyExtension,
   promoteArtworkClaim,
-  selectPromotionSource,
+  selectSiblingSource,
   stagingStillNeeded,
 } from "./promote-artwork.js";
 
 jest.mock("./artwork-storage", () => ({
   ...jest.requireActual("./artwork-storage"),
-  headArtwork: jest.fn(),
   copyArtwork: jest.fn(),
   deleteArtwork: jest.fn(),
 }));
 
-const head = headArtwork as jest.MockedFunction<typeof headArtwork>;
 const copy = copyArtwork as jest.MockedFunction<typeof copyArtwork>;
 const remove = deleteArtwork as jest.MockedFunction<typeof deleteArtwork>;
+
+const STAGING_KEY = "staging/up_1.png";
+const INSPECTED_ETAG = '"etag-inspected"';
 
 const ASSET: ArtworkClaimRow["asset"] = {
   id: "asset_1",
   upload_id: "up_1",
-  staging_key: "staging/up_1.png",
+  staging_key: STAGING_KEY,
   file_name: "logo.png",
   mime_type: "image/png",
   size_bytes: 51_200,
@@ -34,7 +39,7 @@ const ASSET: ArtworkClaimRow["asset"] = {
   width_px: 3000,
   height_px: 3000,
   inspected_at: new Date(Date.UTC(2026, 8, 10)),
-  inspected_etag: '"etag-1"',
+  inspected_etag: INSPECTED_ETAG,
 };
 
 const FILED = new Date(Date.UTC(2026, 8, 11));
@@ -65,22 +70,22 @@ const filedSibling = claim({
 const missing = (name: string) =>
   Object.assign(new Error(name), { name, $metadata: { httpStatusCode: 404 } });
 
-function bucket(keys: string[]) {
-  const objects = new Set(keys);
+function bucket(objects: Record<string, string>) {
+  const stored = new Map(Object.entries(objects));
 
-  head.mockImplementation(async (key) => {
-    if (!objects.has(key)) throw missing("NotFound");
-    return { sizeBytes: 51_200 };
-  });
-  copy.mockImplementation(async (from, to) => {
-    if (!objects.has(from)) throw missing("NoSuchKey");
-    objects.add(to);
+  copy.mockImplementation(async (from, to, _options, condition) => {
+    const etag = stored.get(from);
+    if (etag === undefined) throw missing("NoSuchKey");
+    if (condition?.sourceEtag != null && condition.sourceEtag !== etag) {
+      throw new ArtworkChangedAfterInspectError(from);
+    }
+    stored.set(to, etag);
   });
   remove.mockImplementation(async (key) => {
-    objects.delete(key);
+    stored.delete(key);
   });
 
-  return objects;
+  return stored;
 }
 
 function ledger(seed: ArtworkClaimRow[]) {
@@ -94,9 +99,17 @@ function ledger(seed: ArtworkClaimRow[]) {
       if (row)
         Object.assign(row, { storage_key: storageKey, promoted_at: FILED });
     }),
+    markClaimPurged: jest.fn(async (id: string, reason: string) => {
+      const row = rows.find((candidate) => candidate.id === id);
+      if (row) Object.assign(row, { purged_at: FILED, purge_reason: reason });
+    }),
   };
 
-  return { rows, service: service as unknown as ArtworkModuleService };
+  return {
+    rows,
+    service,
+    artwork: service as unknown as ArtworkModuleService,
+  };
 }
 
 function logger() {
@@ -104,7 +117,7 @@ function logger() {
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-  } as unknown as Logger & { warn: jest.Mock };
+  } as unknown as Logger & { info: jest.Mock; warn: jest.Mock };
 }
 
 beforeEach(() => {
@@ -121,24 +134,9 @@ describe("keyExtension", () => {
   });
 });
 
-describe("selectPromotionSource", () => {
-  const target = (stagingExists: boolean) => ({
-    claimId: "claim_B",
-    stagingKey: "staging/up_1.png",
-    stagingExists,
-  });
-
-  it("copies from staging while the staging object is still there", () => {
-    expect(selectPromotionSource(target(true), [filedSibling])).toEqual({
-      kind: "staging",
-      key: "staging/up_1.png",
-    });
-  });
-
+describe("selectSiblingSource", () => {
   it("copies from another line's filed copy once staging is gone", () => {
-    expect(
-      selectPromotionSource(target(false), [claim(), filedSibling]),
-    ).toEqual({
+    expect(selectSiblingSource("claim_B", [claim(), filedSibling])).toEqual({
       kind: "sibling",
       key: "artwork/order_A/li_A/up_1.png",
       claimId: "claim_A",
@@ -159,7 +157,7 @@ describe("selectPromotionSource", () => {
     ],
     ["no other line at all", [claim()]],
   ])("finds nothing to copy from with %s", (_label, claims) => {
-    expect(selectPromotionSource(target(false), claims)).toEqual({
+    expect(selectSiblingSource("claim_B", claims)).toEqual({
       kind: "missing",
     });
   });
@@ -181,12 +179,102 @@ describe("stagingStillNeeded", () => {
 });
 
 describe("promoteArtworkClaim", () => {
-  it("copies from a filed sibling when staging disappears between the check and the copy", async () => {
-    const objects = bucket(["artwork/order_A/li_A/up_1.png"]);
-    head.mockResolvedValueOnce({ sizeBytes: 51_200 });
-    const { rows, service } = ledger([filedSibling, claim()]);
+  it("files the bytes inspect measured when staging still carries their ETag", async () => {
+    const objects = bucket({ [STAGING_KEY]: INSPECTED_ETAG });
+    const { rows, artwork } = ledger([claim()]);
 
-    const outcome = await promoteArtworkClaim(claim(), service, logger());
+    const outcome = await promoteArtworkClaim(claim(), artwork, logger());
+
+    expect(outcome).toBe("promoted");
+    expect(objects.get("artwork/order_B/li_B/up_1.png")).toBe(INSPECTED_ETAG);
+    expect(rows[0]?.storage_key).toBe("artwork/order_B/li_B/up_1.png");
+  });
+
+  it("refuses to file bytes swapped in after inspect, and retires every line still waiting on that upload", async () => {
+    const objects = bucket({ [STAGING_KEY]: '"etag-swapped"' });
+    const other = claim({
+      id: "claim_C",
+      order_id: "order_C",
+      line_item_id: "li_C",
+    });
+    const { rows, service, artwork } = ledger([claim(), other]);
+    const log = logger();
+
+    const outcome = await promoteArtworkClaim(claim(), artwork, log);
+
+    expect(outcome).toBe("changed_after_inspect");
+    expect(objects.has("artwork/order_B/li_B/up_1.png")).toBe(false);
+    expect(objects.has(STAGING_KEY)).toBe(true);
+    expect(service.markClaimPromoted).not.toHaveBeenCalled();
+    expect(rows.map((row) => row.purge_reason)).toEqual([
+      "changed_after_inspect",
+      "changed_after_inspect",
+    ]);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "[artwork:changed-after-inspect] claim=claim_B asset=asset_1 order=order_B",
+      ),
+    );
+    expect(log.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("[artwork:promote-failed]"),
+    );
+  });
+
+  it("leaves a line whose copy failed for any other reason pending, for the sweeper to retry", async () => {
+    bucket({
+      [STAGING_KEY]: INSPECTED_ETAG,
+      "artwork/order_A/li_A/up_1.png": INSPECTED_ETAG,
+    });
+    copy.mockRejectedValueOnce(
+      Object.assign(new Error("InternalError"), {
+        name: "InternalError",
+        $metadata: { httpStatusCode: 500 },
+      }),
+    );
+    const { rows, service, artwork } = ledger([filedSibling, claim()]);
+
+    const outcome = await promoteArtworkClaim(claim(), artwork, logger());
+
+    expect(outcome).toBe("failed");
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(service.markClaimPurged).not.toHaveBeenCalled();
+    expect(rows.find((row) => row.id === "claim_B")?.promoted_at).toBeNull();
+  });
+
+  it("still never throws when retiring a changed upload's lines fails, and leaves the line to the sweeper", async () => {
+    bucket({ [STAGING_KEY]: '"etag-swapped"' });
+    const { service, artwork } = ledger([claim()]);
+    service.markClaimPurged.mockRejectedValue(new Error("connection reset"));
+    const log = logger();
+
+    await expect(promoteArtworkClaim(claim(), artwork, log)).resolves.toBe(
+      "changed_after_inspect",
+    );
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("[artwork:promote-failed] claim=claim_B"),
+    );
+  });
+
+  it("files an upload inspected before ETags were recorded without holding it to one, and logs it as unbound", async () => {
+    const legacy = claim({ asset: { ...ASSET, inspected_etag: null } });
+    const objects = bucket({ [STAGING_KEY]: '"etag-any"' });
+    const { artwork } = ledger([legacy]);
+    const log = logger();
+
+    const outcome = await promoteArtworkClaim(legacy, artwork, log);
+
+    expect(outcome).toBe("promoted");
+    expect(objects.has("artwork/order_B/li_B/up_1.png")).toBe(true);
+    expect(log.info).toHaveBeenCalledWith(
+      expect.stringContaining("etag=unbound"),
+    );
+  });
+
+  it("copies from a filed sibling once staging is gone", async () => {
+    const objects = bucket({ "artwork/order_A/li_A/up_1.png": INSPECTED_ETAG });
+    const { rows, artwork } = ledger([filedSibling, claim()]);
+
+    const outcome = await promoteArtworkClaim(claim(), artwork, logger());
 
     expect(outcome).toBe("promoted");
     expect(objects.has("artwork/order_B/li_B/up_1.png")).toBe(true);
@@ -195,24 +283,8 @@ describe("promoteArtworkClaim", () => {
     );
   });
 
-  it("treats a storage outage while checking staging as a failure to retry, not as a missing file", async () => {
-    bucket(["artwork/order_A/li_A/up_1.png"]);
-    head.mockRejectedValueOnce(
-      Object.assign(new Error("InternalError"), {
-        name: "InternalError",
-        $metadata: { httpStatusCode: 500 },
-      }),
-    );
-    const { service } = ledger([filedSibling, claim()]);
-
-    const outcome = await promoteArtworkClaim(claim(), service, logger());
-
-    expect(outcome).toBe("failed");
-    expect(copy).not.toHaveBeenCalled();
-  });
-
   it("removes staging only after the last line waiting on it is filed", async () => {
-    const objects = bucket(["staging/up_1.png"]);
+    const objects = bucket({ [STAGING_KEY]: INSPECTED_ETAG });
     const first = claim({
       id: "claim_1",
       order_id: "order_1",
@@ -223,13 +295,13 @@ describe("promoteArtworkClaim", () => {
       order_id: "order_1",
       line_item_id: "li_2",
     });
-    const { service } = ledger([first, second]);
+    const { artwork } = ledger([first, second]);
 
-    await promoteArtworkClaim(first, service, logger());
-    expect(objects.has("staging/up_1.png")).toBe(true);
+    await promoteArtworkClaim(first, artwork, logger());
+    expect(objects.has(STAGING_KEY)).toBe(true);
 
-    await promoteArtworkClaim(second, service, logger());
-    expect(objects.has("staging/up_1.png")).toBe(false);
+    await promoteArtworkClaim(second, artwork, logger());
+    expect(objects.has(STAGING_KEY)).toBe(false);
     expect(objects.has("artwork/order_1/li_1/up_1.png")).toBe(true);
     expect(objects.has("artwork/order_1/li_2/up_1.png")).toBe(true);
   });

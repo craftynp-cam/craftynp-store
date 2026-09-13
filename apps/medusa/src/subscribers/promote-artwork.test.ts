@@ -2,11 +2,7 @@ import type { SubscriberArgs } from "@medusajs/framework";
 import type { Logger } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
-import {
-  copyArtwork,
-  deleteArtwork,
-  headArtwork,
-} from "../lib/artwork-storage";
+import { copyArtwork, deleteArtwork } from "../lib/artwork-storage";
 import type { ArtworkClaimRow } from "../modules/artwork/service";
 import promoteArtworkHandler, {
   artworkKeyOnLineItem,
@@ -14,12 +10,10 @@ import promoteArtworkHandler, {
 
 jest.mock("../lib/artwork-storage", () => ({
   ...jest.requireActual("../lib/artwork-storage"),
-  headArtwork: jest.fn(),
   copyArtwork: jest.fn(),
   deleteArtwork: jest.fn(),
 }));
 
-const head = headArtwork as jest.MockedFunction<typeof headArtwork>;
 const copy = copyArtwork as jest.MockedFunction<typeof copyArtwork>;
 const remove = deleteArtwork as jest.MockedFunction<typeof deleteArtwork>;
 
@@ -100,10 +94,6 @@ describe("promoteArtworkHandler", () => {
   function bucket(keys: string[]) {
     const objects = new Set(keys);
 
-    head.mockImplementation(async (key) => {
-      if (!objects.has(key)) throw missing("NotFound");
-      return { sizeBytes: 51_200 };
-    });
     copy.mockImplementation(async (from, to) => {
       if (!objects.has(from)) throw missing("NoSuchKey");
       objects.add(to);

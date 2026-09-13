@@ -4,6 +4,8 @@ export const ARTWORK_PROMOTE_LOG_TAG = "[artwork:promote]";
 export const ARTWORK_PROMOTE_FAILED_LOG_TAG = "[artwork:promote-failed]";
 export const ARTWORK_PROMOTE_ABANDONED_LOG_TAG = "[artwork:promote-abandoned]";
 export const ARTWORK_PROMOTE_SHARED_LOG_TAG = "[artwork:promote-shared]";
+export const ARTWORK_CHANGED_AFTER_INSPECT_LOG_TAG =
+  "[artwork:changed-after-inspect]";
 
 // Must equal the staging/ lifecycle rule on the bucket (docs/dns.md). Past
 // this point the staging object is gone, so a promotion that has not

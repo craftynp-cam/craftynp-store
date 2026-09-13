@@ -3,7 +3,6 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
-  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -217,17 +216,6 @@ export function contentDisposition(fileName: string): string {
   );
 
   return `attachment; filename="${ascii}"; filename*=UTF-8''${extended}`;
-}
-
-export async function headArtwork(
-  key: string,
-  options: ArtworkStorageOptions = readArtworkStorageOptions(),
-): Promise<{ sizeBytes: number }> {
-  const result = await s3(options).send(
-    new HeadObjectCommand({ Bucket: options.bucket, Key: key }),
-  );
-
-  return { sizeBytes: result.ContentLength ?? 0 };
 }
 
 // The head of the object is all any of the supported formats needs to name its
