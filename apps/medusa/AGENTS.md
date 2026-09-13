@@ -333,8 +333,10 @@ plan, so those paths share one counter per client (see
   in its `lib.ts`. Leaking cents outside that module multiplies money by 100.
 - **Resolve weight, dimensions, and `calculated_price` server-side via
   `query.graph`.** Store request bodies carry only `{ variantId, quantity }`
-  plus, since CNP-42, the `dimensions` an area price is computed from — never
-  accept a client-supplied weight or price on a `/store` route. The one
+  plus the dimensions an area price is computed from — a top-level
+  `dimensions` on `/store/price-quote` and `/store/tax-quote`, and on
+  `prepare-cart` only the line's `customization.dimensions`, since CNP-85.
+  Never accept a client-supplied weight or price on a `/store` route. The one
   exception is the authenticated admin parcel override on
   `/admin/orders/:id/shipment/rates` and `/buy`: the shop owner is looking at
   the packed box and the product defaults are only a guess, so she may correct
@@ -456,6 +458,15 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   re-derives the amount from the product's metadata rather than reading
   `payload.amt`. A token minted against a rate the owner has since changed
   buys nothing. The client never names a price, here as everywhere.
+- **In `prepare-cart`, a custom size has one source of truth: the line's
+  validated `customization.dimensions`.** The quote token is verified against
+  it, `resolveLinePrice` prices it, the cart-reuse comparison and the stored
+  `metadata.dimensions` are taken from it, and it is what gets made. There is
+  no second, top-level size to price from — `checkoutLineItemSchema` has none,
+  so zod strips one an old client still sends. A line that records a size with
+  no token is refused `400 invalid_price_quote:missing`, and a token quoted for
+  any other size is `line_mismatch`. Pricing one size while recording another
+  was the under-payment CNP-85 closed.
 - **`/store/tax-quote` must keep passing the quantity and the dimensions.**
   Without the quantity it taxes every line at the single-unit tier; without the
   dimensions it taxes a custom size at its variant's price rather than its own.
@@ -517,11 +528,15 @@ customization? }`.** `details` is the rendered half — label/value rows the
   cart, the confirmation page and the order email all print — and
   `customization` is the structured half the maker and the admin widget work
   from. `dimensions` sits at the line's top level as well as inside the
-  customization, and that duplication is deliberate: `priceSignature`,
-  `resolveLinePrice` and the tax-quote key all predate customization and none of
-  them should have to reach through one to price a line. **What is stored is the
-  value `validateCustomization` returned, not the request's** — the zod-trimmed
-  one is what `promote-artwork` later reads.
+  customization, and both are written from the same validated
+  `customization.dimensions` — never from the request, which has had no
+  top-level size of its own since CNP-85. The top-level copy is what the
+  cart-reuse comparison reads off a stored cart, so it must keep being written
+  whenever the customization carries a size: without it every stored
+  custom-size line reads as sizeless and supersedes a cart the shopper could
+  have reused. **What is stored is the value `validateCustomization` returned,
+  not the request's** — the zod-trimmed one, with its artwork facts taken from
+  the ledger, is what `promote-artwork` later reads.
 - **`prepare-cart` re-attaches the shipping method on every call.** The workflow
   replaces rather than duplicates; skipping it leaves the previous address's
   `quoteToken` attached, which blocks checkout on the next address edit.

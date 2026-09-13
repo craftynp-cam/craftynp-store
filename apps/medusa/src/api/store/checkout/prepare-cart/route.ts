@@ -364,22 +364,31 @@ export async function POST(
   }
 
   // An area-priced line cannot be left to Medusa: the amount depends on the
-  // dimensions, which no price set knows about. The token proves which line the
-  // shopper was quoted for; the amount is re-derived here rather than read off
-  // the request, so a tampered quote buys nothing.
+  // size the line's customization records, which no price set knows about. The
+  // token proves which line the shopper was quoted for; the amount is re-derived
+  // here rather than read off the request, so a tampered quote buys nothing.
   const unitPrices = new Map<number, number>();
 
   for (const [index, item] of items.entries()) {
-    if (item.dimensions == null) continue;
+    const dimensions = validated.get(index)?.dimensions;
+    if (dimensions == null) continue;
+
+    if (item.priceQuoteToken == null) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: "missing",
+        message: "invalid_price_quote:missing",
+      });
+    }
 
     const expected = priceSignature({
       variantId: item.variantId,
       quantity: item.quantity,
-      widthInches: item.dimensions.widthInches,
-      heightInches: item.dimensions.heightInches,
+      widthInches: dimensions.widthInches,
+      heightInches: dimensions.heightInches,
     });
     const quoteResult = verifyPriceQuote(
-      item.priceQuoteToken ?? "",
+      item.priceQuoteToken,
       process.env.PRICE_QUOTE_SECRET as string,
       { priceSignature: expected },
     );
@@ -398,7 +407,7 @@ export async function POST(
       priced = await resolveLinePrice(pricedVariantQuery(query, region), {
         variantId: item.variantId,
         quantity: item.quantity,
-        dimensions: item.dimensions,
+        dimensions,
       });
     } catch (error) {
       logger.error(
@@ -427,8 +436,8 @@ export async function POST(
       lineSignature({
         variantId: item.variantId,
         quantity: item.quantity,
-        widthInches: item.dimensions?.widthInches ?? null,
-        heightInches: item.dimensions?.heightInches ?? null,
+        widthInches: validated.get(index)?.dimensions?.widthInches ?? null,
+        heightInches: validated.get(index)?.dimensions?.heightInches ?? null,
         unitPrice: unitPrices.get(index) ?? null,
         customization: customizationSignature(validated.get(index)),
       }),
@@ -504,25 +513,29 @@ export async function POST(
         email,
         shipping_address: toCartAddress(shippingAddress),
         billing_address: toCartAddress(billingAddress),
-        items: items.map((item, index) => ({
-          variant_id: item.variantId,
-          quantity: item.quantity,
-          // Set only for an area-priced line. Medusa marks such a line
-          // is_custom_price and stops re-pricing it, which is wanted here and
-          // wrong everywhere else — an ordinary line must keep picking up its
-          // quantity break on every cart refresh.
-          ...(unitPrices.has(index)
-            ? { unit_price: unitPrices.get(index) }
-            : {}),
-          metadata: {
-            isCustomizable: item.isCustomizable ?? false,
-            details: item.details ?? [],
-            ...(item.dimensions ? { dimensions: item.dimensions } : {}),
-            ...(validated.has(index)
-              ? { customization: validated.get(index) }
+        items: items.map((item, index) => {
+          const customization = validated.get(index);
+
+          return {
+            variant_id: item.variantId,
+            quantity: item.quantity,
+            // Set only for an area-priced line. Medusa marks such a line
+            // is_custom_price and stops re-pricing it, which is wanted here and
+            // wrong everywhere else — an ordinary line must keep picking up its
+            // quantity break on every cart refresh.
+            ...(unitPrices.has(index)
+              ? { unit_price: unitPrices.get(index) }
               : {}),
-          },
-        })),
+            metadata: {
+              isCustomizable: item.isCustomizable ?? false,
+              details: item.details ?? [],
+              ...(customization?.dimensions
+                ? { dimensions: customization.dimensions }
+                : {}),
+              ...(customization ? { customization } : {}),
+            },
+          };
+        }),
       },
     });
 

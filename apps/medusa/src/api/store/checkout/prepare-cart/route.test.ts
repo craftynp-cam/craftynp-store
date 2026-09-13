@@ -92,7 +92,11 @@ function ledgerRow(overrides: Partial<ArtworkAssetRow> = {}): ArtworkAssetRow {
 // the same.
 const AREA_UNIT_PRICE = 5.06;
 
-function priceQuoteToken(overrides: { quantity?: number } = {}) {
+function priceQuoteToken(
+  overrides: { quantity?: number; dimensions?: typeof DIMENSIONS } = {},
+) {
+  const dimensions = overrides.dimensions ?? DIMENSIONS;
+
   return signPriceQuote(
     {
       amt: AREA_UNIT_PRICE,
@@ -100,8 +104,8 @@ function priceQuoteToken(overrides: { quantity?: number } = {}) {
       ps: priceSignature({
         variantId: "variant_01",
         quantity: overrides.quantity ?? 2,
-        widthInches: DIMENSIONS.widthInches,
-        heightInches: DIMENSIONS.heightInches,
+        widthInches: dimensions.widthInches,
+        heightInches: dimensions.heightInches,
       }),
       exp: Date.now() + 60_000,
     },
@@ -333,8 +337,8 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     },
   ];
 
@@ -418,12 +422,21 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 
-  it("refuses an area-priced line that carries no quote at all", async () => {
-    const { req, res, status } = buildHarness({
+  it("refuses a quote for a smaller size than the one the line records", async () => {
+    const quoted = { widthInches: 2, heightInches: 2 };
+    const { req, res, status, json } = buildHarness({
       body: buildBody({
         items: [
-          { variantId: "variant_01", quantity: 2, dimensions: DIMENSIONS },
-        ],
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            dimensions: quoted,
+            priceQuoteToken: priceQuoteToken({ dimensions: quoted }),
+            customization: {
+              dimensions: { widthInches: 40, heightInches: 40 },
+            },
+          },
+        ] as unknown as CheckoutPrepareRequest["items"],
       }),
       before: null,
     });
@@ -431,32 +444,24 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     await POST(req, res);
 
     expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_price_quote",
+      reason: "line_mismatch",
+      message: "invalid_price_quote:line_mismatch",
+    });
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 
-  it("refuses dimensions outside the product's own bounds", async () => {
-    const outOfBounds = { widthInches: 8, heightInches: 500 };
-    const { req, res, status } = buildHarness({
+  it("refuses a recorded size that carries no quote at all", async () => {
+    const { req, res, status, json } = buildHarness({
       body: buildBody({
         items: [
           {
             variantId: "variant_01",
             quantity: 2,
-            dimensions: outOfBounds,
-            priceQuoteToken: signPriceQuote(
-              {
-                amt: 1,
-                cur: "usd",
-                ps: priceSignature({
-                  variantId: "variant_01",
-                  quantity: 2,
-                  widthInches: outOfBounds.widthInches,
-                  heightInches: outOfBounds.heightInches,
-                }),
-                exp: Date.now() + 60_000,
-              },
-              PRICE_SECRET,
-            ),
+            customization: {
+              dimensions: { widthInches: 40, heightInches: 40 },
+            },
           },
         ],
       }),
@@ -466,6 +471,36 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     await POST(req, res);
 
     expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_price_quote",
+      reason: "missing",
+      message: "invalid_price_quote:missing",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses dimensions outside the product's own bounds", async () => {
+    const outOfBounds = { widthInches: 8, heightInches: 500 };
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            priceQuoteToken: priceQuoteToken({ dimensions: outOfBounds }),
+            customization: { dimensions: outOfBounds },
+          },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "invalid_customization" }),
+    );
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 });
@@ -631,9 +666,10 @@ describe("POST /store/checkout/prepare-cart", () => {
     const areaItem = {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     };
+    const previousSize = { widthInches: 12, heightInches: 16 };
 
     const { req, res } = buildHarness({
       body: buildBody({ cartId: CART_ID, items: [areaItem] }),
@@ -645,7 +681,8 @@ describe("POST /store/checkout/prepare-cart", () => {
             unit_price: AREA_UNIT_PRICE,
             is_custom_price: true,
             metadata: {
-              dimensions: { widthInches: 12, heightInches: 16 },
+              dimensions: previousSize,
+              customization: { dimensions: previousSize },
             },
           },
         ],
@@ -662,8 +699,8 @@ describe("POST /store/checkout/prepare-cart", () => {
     const areaItem = {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     };
 
     const { req, res } = buildHarness({
@@ -675,7 +712,10 @@ describe("POST /store/checkout/prepare-cart", () => {
             quantity: 2,
             unit_price: AREA_UNIT_PRICE,
             is_custom_price: true,
-            metadata: { dimensions: DIMENSIONS },
+            metadata: {
+              dimensions: DIMENSIONS,
+              customization: { dimensions: DIMENSIONS },
+            },
           },
         ],
       }),
@@ -693,8 +733,8 @@ describe("POST /store/checkout/prepare-cart", () => {
     const areaItem = {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     };
 
     const { req, res } = buildHarness({
@@ -706,7 +746,10 @@ describe("POST /store/checkout/prepare-cart", () => {
             quantity: 2,
             unit_price: 1.23,
             is_custom_price: true,
-            metadata: { dimensions: DIMENSIONS },
+            metadata: {
+              dimensions: DIMENSIONS,
+              customization: { dimensions: DIMENSIONS },
+            },
           },
         ],
       }),
