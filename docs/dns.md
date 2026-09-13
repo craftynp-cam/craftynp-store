@@ -384,6 +384,12 @@ job stops running, and is deliberately far past any window the job can produce.
 The `staging/` rule is the one place a native rule genuinely fits — an
 abandoned upload ages purely on upload date and needs no scheduler.
 
+Promotion removes a staging object itself, but only once every order line
+claiming that upload has its own copy under `artwork/`. A later order on the
+same upload copies from one of those copies instead of from staging. The rule
+reaps what promotion never reaches: an upload nobody ordered, or a staging
+delete that failed.
+
 The 7-day staging window must stay comfortably longer than the promotion retry
 horizon (`promote-pending-artwork`, every 15 minutes). Shortening it risks
 destroying artwork for an order that has already been paid for.

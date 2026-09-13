@@ -609,9 +609,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **Uploads are two-phase, and the key is the point.** A shopper uploads before
   a cart exists, so there is no order to key on: the object lands at
   `staging/{uploadId}.{ext}`, and the `order.placed` subscriber copies it to
-  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` and deletes the staging
-  copy. That is what makes every stored file traceable to its order without
-  consulting the database.
+  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` once for every line that
+  carries it, deleting the staging copy once no line on that upload is still
+  waiting for its own. That is what makes every stored file traceable to its
+  order and line without consulting the database.
 - **`presignArtworkUpload` binds Content-Length and does not bind
   Content-Type.** The length is in the signature, so a URL can only ever write
   the number of bytes it was minted for — that is the ceiling on what one
@@ -646,7 +647,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   PNG and never inspected would be indistinguishable from a genuine SVG.
   `inspected_at` is the column that tells them apart, and `staging_key` is
   indexed so `listByStagingKeys` can resolve a request's storage keys in one
-  query.
+  query. The route answers 404 for an upload any order has claimed, filed or
+  not, so the measurement an order was checked against cannot be rewritten
+  after checkout.
 - **The inspect route is anonymous, and that is the considered position, not an
   oversight.** A shopper uploads before any cart or session exists, so there is
   no identity to bind it to — the same reason the presign route is anonymous.
@@ -691,8 +694,8 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   (`src/lib/artwork-ledger.ts`) then keeps the request's `storageKey` and takes
   the file name, MIME type, size and pixels from the row, so a file claimed as
   an SVG or at 99,999 pixels is held to what inspect actually measured. A key
-  with no row, or a row that is purged, already claimed (`order_id` or
-  `promoted_at` set), of a type the store refuses, or uploaded more than
+  with no row, or a row that is purged, already claimed by an order (it has an
+  `artwork_claim`, read as `claimed`), of a type the store refuses, or uploaded more than
   `STAGING_WINDOW_DAYS` less `CHECKOUT_ARTWORK_MARGIN_DAYS` ago
   (`checkoutWindowClosedBefore` — a day before its staging object expires, so
   payment and promotion still have time; the sweepers keep the exact window) is
@@ -745,25 +748,68 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **`GET /admin/artwork/:id` returns a signed URL where the label route streams
   bytes.** That divergence is deliberate — a print-resolution file is far larger
   than a label PDF and there is no reason to move it through Medusa. Do not
-  "unify" the two routes.
+  "unify" the two routes. **Its id is a claim id**, one per order line: the
+  list route returns one entry per claim and the widget downloads by that id.
+  The CNP-97 migration gave every claim it backfilled its asset's id, so a
+  link built before it still resolves. A claim not yet filed answers 404, and
+  the message follows `purge_reason` through `artworkLineState` in
+  `@craftynp/types` — never filed (`staging_expired`) is not deleted after
+  retention (`delivered` / `undelivered`). `order-customization.tsx` renders
+  each line from the same function, which is why a line still waiting for its
+  copy shows "Still being filed" rather than a Download that cannot work.
 - **Promotion must never throw.** It runs on `order.placed`, after payment, and
   the repo rule that nothing after payment rolls back a paid order applies. It
   swallows every failure, which means the event bus never sees one to retry —
   so `promote-pending-artwork` (every 15 minutes) is the only retry there is.
-  The row is claimed onto the order _before_ the copy so a failure still leaves
-  the sweeper something to find, and a failed staging delete is not a failed
-  promotion: the R2 lifecycle rule reaps the leftover, and treating it as a
-  failure would send the sweeper back to re-copy an object already in place.
+  Every line is claimed _before_ any copy so a failure part-way through still
+  leaves the sweeper a claim for each line, and a failed staging delete is not
+  a failed promotion: the R2 lifecycle rule reaps the leftover, and treating it
+  as a failure would send the sweeper back to re-copy an object already in
+  place.
 - **`STAGING_WINDOW_DAYS` must equal the bucket's `staging/` lifecycle rule.**
-  Past it the staging object is gone, so the sweeper gives up once — marking
-  the row `staging_expired` and logging `[artwork:promote-abandoned]` — rather
-  than emitting a warn every 15 minutes forever on a tag that is an alerting
-  target. The same cutoff retires upload rows that never reached an order
-  (`never_ordered`); those rows are otherwise immortal, since a shopper who
+  Past it the staging object is gone, so a claim with no filed sibling to copy
+  from either is given up on once — the sweeper marks that claim
+  `staging_expired` and logs `[artwork:promote-abandoned]` — rather than
+  emitting a warn every 15 minutes forever on a tag that is an alerting target.
+  The same cutoff retires upload rows no order ever claimed (`never_ordered`,
+  on `artwork_asset`); those rows are otherwise immortal, since a shopper who
   abandons a cart leaves one behind.
-- **One upload can belong to two line items** — the same logo on two variants —
-  so the subscriber claims an asset only when it is unclaimed. Re-claiming
-  would repoint `line_item_id` at an item the stored key does not match.
+- **One upload can belong to many order lines, so every line has its own
+  claim** (CNP-97). `artwork_asset` stays one row per upload — what was
+  uploaded, measured and inspected — and `artwork_claim` holds one row per line
+  that carries it: `order_id`, a unique `line_item_id`, and that line's own
+  `storage_key`, `promoted_at`, `purged_at` and `purge_reason`. The same logo on
+  two variants, or a second order placed on an upload before the first order's
+  claim was written, is filed for every line under its own key. A copied asset
+  row per line was rejected because the upload's facts could drift between the
+  copies and `upload_id` would stop being unique; one object shared by many
+  lines was rejected because it breaks key-to-order traceability and needs
+  purge ref-counting across two orders' delivery clocks.
+  **Claimed is derived from the claims, never stored on the asset.**
+  `ArtworkAssetRow.claimed` is computed from the `claims` relation, which every
+  asset read in the service loads; a stored copy is the drift CNP-98 removed.
+  `listAbandonedUploads` asks for "no claims" in the query (`$none`), not in
+  JS. `claimLine` inserts first and re-reads by `line_item_id` on a failure
+  (the `recordWebhookEvent` pattern), so a redelivered `order.placed` or two
+  handlers at once make one claim per line — the unique index is the
+  idempotency key, not a read before the write.
+  **Staging is deleted only once no claim on the upload is pending.** A claim
+  whose staging object is gone copies from a filed, unpurged sibling claim's
+  object instead, and so does one whose copy answers `NoSuchKey` after a
+  successful HEAD — the race where another order deletes staging between the
+  two. Only `isMissingObject` (`NotFound`, `NoSuchKey` or a 404) counts as
+  gone; any other storage failure is retried and never falls back. A second
+  order on an already-claimed upload is promoted too, and logged
+  `[artwork:promote-shared] asset= order= other_orders=` so the owner can spot
+  a possible duplicate purchase: `prepare-cart` already accepted that order,
+  and the key is never shown to anyone but the admin. With
+  `ARTWORK_RETENTION_DAYS=0` a sibling can be purged before a later claim copies
+  from it; that claim then has no source and is given up on at the staging
+  window.
+  **Known gap:** a line whose subscriber failed before its claim was written —
+  the order query or `findByStagingKey` threw — has no claim, so the sweeper
+  cannot see it. It is logged `[artwork:promote-failed] order=`, and the widget
+  keeps showing the line as still being filed.
 - **`requestChecksumCalculation: "WHEN_REQUIRED"` on the S3 client is
   load-bearing.** Without it the SDK bakes `x-amz-checksum-crc32=AAAAAA==` —
   the CRC32 of an empty body, because presigning sees no body — into the signed
@@ -786,9 +832,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   history entry, because the owner can move an order to delivered by hand and
   that leaves the shipment column null. The cross-module join lives in the purge
   job — neither module reaches into the other.
-- **The purge job writes `artwork_asset` and nothing else.** That is what makes
+- **The purge job writes `artwork_claim` and nothing else.** That is what makes
   "deleting artwork does not touch the order" structural rather than a promise.
-  Keep it that way.
+  Keep it that way. It works one claim at a time, deleting that line's own
+  object on its own order's delivery clock, so one order's retention never
+  removes another order's copy of a shared upload.
 - **Both `@aws-sdk` packages move together.** A version split between
   `client-s3` and `s3-request-presigner` puts two copies of `@smithy/types` in
   the tree and `getSignedUrl` stops accepting the `S3Client`, with a type error
@@ -912,8 +960,10 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   `[email:send-failed]`, `[email:quota]`, `[email:quota-low]`,
   `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]`,
   `[email:order-failed]`, `[artwork:purge]`, `[artwork:purge-failed]`,
-  `[artwork:promote]` and `[artwork:promote-failed]` rather than inventing an
-  alerting system now.
+  `[artwork:promote]`, `[artwork:promote-failed]`,
+  `[artwork:promote-abandoned]`, `[artwork:promote-shared]`,
+  `[artwork:inspect-failed]`, `[artwork:download-failed]` and
+  `[artwork:upload-url-failed]` rather than inventing an alerting system now.
 - **`STOREFRONT_URL` is what builds the tokenized order link.** `order-email.ts`
   constructs `/checkout/confirmation?order=&number=&token=` independently of the
   storefront's own `checkoutConfirmationHref()`; the two drifting is the
