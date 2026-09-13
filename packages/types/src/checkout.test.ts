@@ -242,6 +242,27 @@ describe("checkout line refusals", () => {
     expect(parseCheckoutLineRefusals(message)).toEqual(refusals);
   });
 
+  it("reads an input key the registry spells in camelCase", () => {
+    expect(
+      parseCheckoutLineRefusals(
+        "invalid_customization:missing_required:customText@0,invalid_customization:input_off:orderNotes@1",
+      ),
+    ).toEqual([
+      {
+        error: "invalid_customization",
+        reason: "missing_required",
+        input: "customText",
+        line: 0,
+      },
+      {
+        error: "invalid_customization",
+        reason: "input_off",
+        input: "orderNotes",
+        line: 1,
+      },
+    ]);
+  });
+
   it("carries free-text detail after the head without disturbing the parse", () => {
     const message = formatCheckoutLineRefusals([
       {

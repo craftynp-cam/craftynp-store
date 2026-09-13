@@ -128,8 +128,10 @@ export type CheckoutLineRefusal = {
 
 const INPUT_REASONS: readonly string[] = ["missing_required", "input_off"];
 
-const LINE_REFUSAL_HEAD =
-  /^([a-z_]+(?::[a-z_]+){1,2}@\d+(?:,[a-z_]+(?::[a-z_]+){1,2}@\d+)*)(?:\s|$)/;
+const LINE_REFUSAL_ENTRY = "[a-z_]+:[a-z_]+(?::[A-Za-z]+)?@\\d+";
+const LINE_REFUSAL_HEAD = new RegExp(
+  `^(${LINE_REFUSAL_ENTRY}(?:,${LINE_REFUSAL_ENTRY})*)(?:\\s|$)`,
+);
 
 export function isCheckoutLineRefusal(
   value: unknown,
