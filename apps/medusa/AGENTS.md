@@ -181,12 +181,22 @@ for both actors.
 - **`auth-google-workspace` has two callers, and the second is not the admin.**
   The storefront's `/design/*` gate signs in through this same provider (see
   [apps/storefront/AGENTS.md](../storefront/AGENTS.md)), passing its own
-  `callback_url` — which `authenticate()` honours per request and stashes in the
-  OAuth state for the token exchange, so `GOOGLE_ADMIN_CALLBACK_URL` remains the
-  admin's default and that flow is unchanged. **Both callback URLs have to be
-  registered on the Google Cloud OAuth client.** The storefront needs no Medusa
+  `callback_url`. `authenticate()` honours it only on an exact match with
+  `GOOGLE_ADMIN_CALLBACK_URL` or an entry in `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS`
+  (`src/lib/callback-url.ts`); anything else falls back to
+  `GOOGLE_ADMIN_CALLBACK_URL` and logs `[auth:callback-url-ignored]`. The URL it
+  settles on is stashed in the OAuth state for the token exchange. The admin
+  sends none, so its flow is unchanged. **Both callback URLs have to be
+  registered on the Google Cloud OAuth client, and the storefront's listed in
+  the allowlist** — unlisted, the design sign-in returns to the admin login
+  page instead. The storefront needs no Medusa
   `user` row: it only reads the email off the resulting token, so an actorless
   token is a success there where the admin flow would go on to `/admin-sso/link`.
+- **`auth-auth0` applies the same `callback_url` allowlist** through
+  `AUTH0_ALLOWED_CALLBACK_URLS`, with `AUTH0_CALLBACK_URL` always accepted. The
+  storefront's `/auth/login` sends `${siteUrl}/auth/callback`, which is that
+  configured URL, so the list normally stays empty. A storefront whose site URL
+  disagrees with `AUTH0_CALLBACK_URL` is sent back to the configured callback.
 - **There is no admin auto-provisioning.** Google sign-in produces an actorless
   token; the login widget then calls `POST /admin-sso/link`, which links only an
   existing Medusa `user` matched by verified email. Create the admin with

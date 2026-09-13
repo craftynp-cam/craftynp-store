@@ -227,12 +227,19 @@ environment variables on `storefront` drive it — `DESIGN_SESSION_SECRET`,
 
 **The Google Cloud OAuth Web client needs two authorized redirect URIs**, not
 one: the admin's `GOOGLE_ADMIN_CALLBACK_URL` and the storefront's
-`https://thecraftynp.org/auth/design/callback`. The provider takes the callback
-URL per request, so an unregistered URI fails at Google, not in our code.
+`https://thecraftynp.org/auth/design/callback`. The provider takes the
+storefront's callback URL from the request only when Medusa's
+`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` lists it exactly; an unlisted URL falls
+back to `GOOGLE_ADMIN_CALLBACK_URL`, and a listed but unregistered one fails at
+Google, not in our code.
 
 **As of CNP-81 the gate's code is on `dev` but not yet on `main`**, so
 `/design/*` on production is public until the next promotion, exactly as it was
-on Vercel. The variables are in place for when it lands.
+on Vercel. The storefront's variables are in place for when it lands, but
+**`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` must be set on `medusa-server` and
+`medusa-worker`, listing `https://thecraftynp.org/auth/design/callback`, before
+that promotion.** Unlisted, Google returns the design sign-in to the admin login
+page, whose widget redeems the code as an admin sign-in.
 
 **Backups are scheduled on the Postgres volume, daily and monthly**, from the
 service's Backups tab. Railway fixes the retention per schedule: daily is kept 6

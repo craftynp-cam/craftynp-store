@@ -829,8 +829,10 @@ routes, different audience. Do not merge the two.
   signs in through, because that provider's check — the verified `hd` claim
   _and_ the email's own domain — is called load-bearing in
   [apps/medusa/AGENTS.md](../medusa/AGENTS.md) and must not be duplicated here.
-  `/auth/design/login` passes its own `callback_url`, which the provider honours
-  per request, so the admin flow is unaffected.
+  `/auth/design/login` passes its own `callback_url`, so the admin flow is
+  unaffected. The provider honours it only while Medusa's
+  `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` lists it exactly; unlisted, Google
+  returns to the admin login page instead.
 - **Never gate on the customer session.** Customer sign-up is open to anyone, so
   an email-domain check over `cnp_customer_token` would be a weak gate over an
   open door.
@@ -854,11 +856,15 @@ routes, different audience. Do not merge the two.
 - **`DESIGN_GATE` is three-state**: `on`/`off` win, anything else means "on in
   production only", so `next dev` serves these pages with no sign-in round trip.
   Set it to `on` to exercise the real flow locally, which also needs a localhost
-  redirect URI on the Google OAuth client.
+  redirect URI on the Google OAuth client and
+  `http://localhost:8000/auth/design/callback` listed in Medusa's
+  `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS`. `apps/medusa/.env.example` lists it; an
+  older `apps/medusa/.env` may not.
 - **`DESIGN_GATE` is unset in production**, so the gate follows `NODE_ENV` and
   is on. Production is the only deployed environment (CNP-81). Any new one
-  needs its callback URL registered on the Google OAuth client before the flow
-  can complete there — an unregistered URI fails at Google, not in our code.
+  needs its callback URL registered on the Google OAuth client and listed in
+  Medusa's `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` before the flow can complete
+  there — an unregistered URI fails at Google, not in our code.
   See [docs/dns.md](../../docs/dns.md).
 - These pages read cookies and so are no longer prerendered. They are internal;
   that was never load-bearing.
