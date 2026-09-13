@@ -1,6 +1,7 @@
 import { isVectorArtwork, type ArtworkMimeType } from "@craftynp/types";
 
 export const ARTWORK_HEADER_BYTES = 64 * 1024;
+export const ARTWORK_FALLBACK_READ_BYTES = 4 * 1024 * 1024;
 
 export type ArtworkFormat =
   "png" | "jpeg" | "webp" | "svg" | "pdf" | "postscript";

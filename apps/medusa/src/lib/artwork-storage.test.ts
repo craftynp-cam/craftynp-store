@@ -1,16 +1,30 @@
+import { randomBytes } from "node:crypto";
+import { Readable } from "node:stream";
+import { S3Client } from "@aws-sdk/client-s3";
+import type { GetObjectCommand } from "@aws-sdk/client-s3";
+
 import {
   ArtworkStorageNotConfiguredError,
   DEFAULT_SIGNED_URL_SECONDS,
   MAX_SIGNED_URL_SECONDS,
   MIN_SIGNED_URL_SECONDS,
   UnsafeArtworkKeyPartError,
+  __resetForTests,
   artworkObjectKey,
   clampExpiry,
   contentDisposition,
+  readArtworkHead,
   readArtworkStorageOptions,
   readUploadUrlTtlSeconds,
   stagingObjectKey,
 } from "./artwork-storage.js";
+
+jest.mock("@aws-sdk/client-s3", () => ({
+  ...jest.requireActual("@aws-sdk/client-s3"),
+  S3Client: jest.fn(),
+}));
+
+const MIB = 1024 * 1024;
 
 const COMPLETE = {
   ARTWORK_STORAGE_ENDPOINT: "http://localhost:9002",
@@ -113,6 +127,76 @@ describe("readUploadUrlTtlSeconds", () => {
       readUploadUrlTtlSeconds({ ARTWORK_UPLOAD_URL_TTL_SECONDS: "600" }),
     ).toBe(600);
   });
+});
+
+describe("readArtworkHead", () => {
+  const send = jest.fn<Promise<unknown>, [GetObjectCommand]>();
+
+  function storedBody(object: Buffer, chunkSize = 1_000_000) {
+    const served = { bytes: 0 };
+
+    function* chunks() {
+      for (let offset = 0; offset < object.length; offset += chunkSize) {
+        const chunk = object.subarray(offset, offset + chunkSize);
+        served.bytes += chunk.length;
+        yield chunk;
+      }
+    }
+
+    return Object.assign(Readable.from(chunks()), {
+      served,
+      transformToByteArray: async () => {
+        served.bytes = object.length;
+        return new Uint8Array(object);
+      },
+    });
+  }
+
+  beforeEach(() => {
+    __resetForTests();
+    send.mockReset();
+    (S3Client as unknown as jest.Mock).mockImplementation(() => ({ send }));
+  });
+
+  it("never holds more than 4 MiB of a 25 MB object, even when storage ignores the Range", async () => {
+    const object = randomBytes(25 * MIB);
+    const body = storedBody(object);
+    send.mockResolvedValue({ Body: body, ContentLength: object.length });
+
+    const head = await readArtworkHead(
+      "staging/upl_1.jpg",
+      object.length,
+      readArtworkStorageOptions(COMPLETE),
+    );
+
+    expect(send.mock.calls[0]?.[0].input.Range).toBe("bytes=0-4194303");
+    expect(head.length).toBe(4 * MIB);
+    expect(Buffer.from(head).equals(object.subarray(0, 4 * MIB))).toBe(true);
+    expect(body.destroyed).toBe(true);
+    expect(body.readableEnded).toBe(false);
+    expect(body.served.bytes).toBeLessThanOrEqual(4 * MIB + 1_000_000);
+  });
+
+  it.each([
+    ["a ranged response", 64 * 1024],
+    ["a chunked response", undefined],
+  ])(
+    "reads %s that ends exactly at the requested length to its end, so its connection can be reused",
+    async (_label, contentLength) => {
+      const object = randomBytes(64 * 1024);
+      const body = storedBody(object, 16 * 1024);
+      send.mockResolvedValue({ Body: body, ContentLength: contentLength });
+
+      const head = await readArtworkHead(
+        "staging/upl_1.jpg",
+        object.length,
+        readArtworkStorageOptions(COMPLETE),
+      );
+
+      expect(Buffer.from(head).equals(object)).toBe(true);
+      expect(body.readableEnded).toBe(true);
+    },
+  );
 });
 
 describe("contentDisposition", () => {

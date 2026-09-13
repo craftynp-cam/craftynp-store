@@ -598,6 +598,23 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   bytes or a URL to them. It is rate-limited like every other anonymous store
   route that spends anything. Do not "fix" this by adding a session check that
   the flow cannot satisfy.
+- **The inspect route's second read stops at `ARTWORK_FALLBACK_READ_BYTES`
+  (4 MiB), and a raster whose frame marker lies past it is `unreadable`.** The
+  first read takes `ARTWORK_HEADER_BYTES`; only a raster it could not measure
+  is read again. That is a trade-off, not a guarantee: an ICC profile can span
+  many APP2 segments and Extended XMP many APP1, so nothing in the format bounds
+  how far in the start-of-frame sits. Most exports put it a few hundred KiB in,
+  and a file whose frame lies past 4 MiB is rejected on purpose, because the
+  route is anonymous and shares its process with checkout — an uncapped re-read
+  would let any caller make Medusa buffer a whole 25 MB upload per request.
+  **`readArtworkHead` enforces the cap itself**, whatever byte count it is
+  asked for: it clamps the `Range` it sends, and it reads the body as a stream
+  and destroys it as soon as it runs past the clamped length in that `Range`,
+  keeping only that length, so a bucket that ignores `Range` and answers 200
+  still cannot make it hold more than one extra chunk. A response that ends
+  exactly at that length — every ordinary 64 KiB head read — is read to its end
+  instead: destroying a body cuts its keep-alive socket, and every inspect
+  would pay a fresh handshake to R2.
 - **The resolution decision is enforced in both places, and `prepare-cart` is
   the server half.** The pixel count is measured here from the stored bytes and
   cannot be forged by the browser; the comparison against the product's
