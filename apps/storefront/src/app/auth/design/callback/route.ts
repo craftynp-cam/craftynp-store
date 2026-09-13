@@ -11,7 +11,7 @@ import {
   signDesignSession,
 } from "@/lib/design-session";
 import { createAuthFlowSdk } from "@/lib/medusa";
-import { sanitizeDesignReturnTo } from "@/lib/routes";
+import { sanitizeDesignReturnTo, siteUrl } from "@/lib/routes";
 
 function denied(message: string, status = 403) {
   const response = new NextResponse(message, { status });
@@ -67,7 +67,9 @@ export async function GET(request: NextRequest) {
   const expiresAt =
     Math.floor(Date.now() / 1000) + DESIGN_SESSION_MAX_AGE_SECONDS;
 
-  const response = NextResponse.redirect(new URL(returnTo, request.url));
+  const response = NextResponse.redirect(
+    new URL(returnTo, siteUrl(request.url)),
+  );
   response.cookies.set(
     DESIGN_COOKIE_NAME,
     signDesignSession(email, secret, expiresAt),
