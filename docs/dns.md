@@ -192,6 +192,19 @@ repo.
 `STORE_CORS` and `AUTH_CORS` on both Medusa services are `https://thecraftynp.org`
 and nothing else, since there are no preview origins to admit.
 
+`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` on both Medusa services is the value
+`${{GOOGLE_ADMIN_CALLBACK_URL}},https://thecraftynp.org/auth/design/callback`:
+a reference to the service's own admin callback, then the design gate's, so the
+admin URL is never typed twice. `AUTH0_ALLOWED_CALLBACK_URLS` is deliberately
+unset, because the storefront sends `AUTH0_CALLBACK_URL` itself and the
+configured callback is always accepted.
+
+`PRICE_QUOTE_SECRET`, the `ARTWORK_STORAGE_*` credentials,
+`ARTWORK_RETENTION_DAYS`, `ARTWORK_RETENTION_FALLBACK_DAYS`,
+`ARTWORK_UPLOAD_URL_TTL_SECONDS` and every `RATE_LIMIT_*` ceiling are set on
+both Medusa services too. The worker needs the artwork ones as much as the
+server does: the promotion and purge jobs run only there.
+
 ### `storefront`
 
 | Setting         | Value                                                      |
@@ -244,11 +257,11 @@ Google, not in our code.
 
 **As of CNP-81 the gate's code is on `dev` but not yet on `main`**, so
 `/design/*` on production is public until the next promotion, exactly as it was
-on Vercel. The storefront's variables are in place for when it lands, but
-**`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` must be set on `medusa-server` and
-`medusa-worker`, listing `https://thecraftynp.org/auth/design/callback`, before
-that promotion.** Unlisted, Google returns the design sign-in to the admin login
-page, whose widget redeems the code as an admin sign-in.
+on Vercel. Everything it needs is already configured for when it lands: the
+storefront's variables, and `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` on both Medusa
+services listing `https://thecraftynp.org/auth/design/callback` (CNP-92).
+**Keep that entry.** Unlisted, Google returns the design sign-in to the admin
+login page, whose widget redeems the code as an admin sign-in.
 
 **Backups are scheduled on the Postgres volume, daily and monthly**, from the
 service's Backups tab. Railway fixes the retention per schedule: daily is kept 6
