@@ -1,12 +1,13 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
-import { MAX_ARTWORK_BYTES, artworkMimeTypeSchema } from "@craftynp/types";
+import { artworkMimeTypeSchema } from "@craftynp/types";
 import type { ArtworkInspectResponse } from "@craftynp/types";
 
 import { ARTWORK_MODULE } from "../../../../../../modules/artwork";
 import type ArtworkModuleService from "../../../../../../modules/artwork/service";
 import {
+  ARTWORK_FALLBACK_READ_BYTES,
   ARTWORK_HEADER_BYTES,
   inspectArtworkBytes,
 } from "../../../../../../lib/artwork-inspection";
@@ -85,12 +86,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       inspection.reason === "unreadable" &&
       head.length < asset.size_bytes
     ) {
-      const whole = await readArtworkHead(
+      const deeper = await readArtworkHead(
         asset.staging_key,
-        Math.min(asset.size_bytes, MAX_ARTWORK_BYTES),
+        Math.min(asset.size_bytes, ARTWORK_FALLBACK_READ_BYTES),
         options,
       );
-      inspection = inspectArtworkBytes(whole, declaredMimeType.data);
+      inspection = inspectArtworkBytes(deeper, declaredMimeType.data);
     }
   } catch (error) {
     const reason = describeError(error);

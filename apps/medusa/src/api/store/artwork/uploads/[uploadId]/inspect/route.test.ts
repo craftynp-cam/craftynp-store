@@ -26,6 +26,10 @@ const PNG_7X3 = Buffer.from(
   "base64",
 );
 
+const JPEG_WITHOUT_FRAME = new Uint8Array(
+  Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(64, 0)]),
+);
+
 const STORAGE_OPTIONS = {
   endpoint: "https://example.test",
   region: "auto",
@@ -132,11 +136,8 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
   it("re-reads the whole object when the head stopped short of the size", async () => {
     // A JPEG's colour profile can push its frame marker past the head we read.
     // Rejecting a good file is the worst way for this gate to fail.
-    const deepHeader = new Uint8Array(
-      Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(64, 0)]),
-    );
     readHead
-      .mockResolvedValueOnce(deepHeader)
+      .mockResolvedValueOnce(JPEG_WITHOUT_FRAME)
       .mockResolvedValueOnce(new Uint8Array(PNG_7X3));
 
     const { req, res, status, json, recordDimensions } = harness(
@@ -153,6 +154,20 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
       reason: "mismatched_type",
     });
     expect(recordDimensions).not.toHaveBeenCalled();
+  });
+
+  it("re-reads no more than 4 MiB of a 25 MB upload, and a frame marker past that is unreadable", async () => {
+    readHead.mockResolvedValue(JPEG_WITHOUT_FRAME);
+    const { req, res, status, json } = harness(
+      asset({ mime_type: "image/jpeg", size_bytes: 25 * 1024 * 1024 }),
+    );
+
+    await POST(req, res);
+
+    expect(readHead).toHaveBeenCalledTimes(2);
+    expect(readHead.mock.calls[1]?.[1]).toBeLessThanOrEqual(4 * 1024 * 1024);
+    expect(status).toHaveBeenCalledWith(422);
+    expect(json.mock.calls[0]?.[0]).toMatchObject({ reason: "unreadable" });
   });
 
   it("does not re-read when the head already held the whole object", async () => {

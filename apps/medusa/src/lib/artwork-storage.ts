@@ -1,3 +1,4 @@
+import type { Readable } from "node:stream";
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
@@ -7,6 +8,8 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+import { ARTWORK_FALLBACK_READ_BYTES } from "./artwork-inspection";
 
 export const STAGING_PREFIX = "staging";
 export const ARTWORK_PREFIX = "artwork";
@@ -223,17 +226,36 @@ export async function readArtworkHead(
   byteCount: number,
   options: ArtworkStorageOptions = readArtworkStorageOptions(),
 ): Promise<Uint8Array> {
+  const limit = Math.min(byteCount, ARTWORK_FALLBACK_READ_BYTES);
   const result = await s3(options).send(
     new GetObjectCommand({
       Bucket: options.bucket,
       Key: key,
-      Range: `bytes=0-${byteCount - 1}`,
+      Range: `bytes=0-${limit - 1}`,
     }),
   );
 
   if (!result.Body) return new Uint8Array();
 
-  return result.Body.transformToByteArray();
+  return readAtMost(result.Body as Readable, limit);
+}
+
+async function readAtMost(body: Readable, limit: number): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  let length = 0;
+
+  for await (const chunk of body) {
+    const bytes = (chunk as Buffer).subarray(0, limit - length);
+    chunks.push(bytes);
+    length += bytes.length;
+
+    if (length >= limit) {
+      body.destroy();
+      break;
+    }
+  }
+
+  return Buffer.concat(chunks, length);
 }
 
 export async function copyArtwork(
