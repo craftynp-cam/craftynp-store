@@ -122,12 +122,16 @@ On the `http_ratelimit` phase of the `.com` zone.
 
 ```
 (http.host eq "api.thecraftynp.com") and
-((http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates"})
- or (starts_with(http.request.uri.path, "/store/checkout/")))
+((http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates" "/store/price-quote"})
+ or (starts_with(http.request.uri.path, "/store/checkout/"))
+ or (starts_with(http.request.uri.path, "/store/artwork/")))
 ```
 
 10 requests per 10 seconds, block for 10 seconds, characteristics `ip.src` and
-`cf.colo.id`.
+`cf.colo.id`. `/store/price-quote` and `/store/artwork/*` joined the rule in
+CNP-89. It was checked by sending POSTs to `/store/price-quote` one after
+another: the eleventh inside ten seconds got Cloudflare's `429`
+(`error code: 1015`) instead of the app's own reply.
 
 **This is not quite what the README describes, and the difference is the Free
 plan, not a choice.** It asks for 60 requests per minute blocking for one
@@ -138,9 +142,14 @@ minute. On this plan:
 - the only permitted mitigation timeout is **10 seconds**, not 60;
 - `cf.colo.id` is a **required** characteristic, so counting is per-datacenter
   rather than global. A single client normally reaches one datacenter, but the
-  ceiling is not the global one the README implies.
+  ceiling is not the global one the README implies;
+- only **one** rate-limiting rule is permitted, so every path above shares one
+  counter per client. A shopper's price quotes, artwork uploads and checkout
+  calls all count against the same 10 per 10 s. Price quotes are debounced in
+  the storefront, so an ordinary session stays well inside it, and the app's
+  per-route `RATE_LIMIT_*` ceilings stay the finer-grained second line.
 
-Upgrading the plan is what closes those three gaps.
+Upgrading the plan is what closes those four gaps.
 
 ### Origin secret
 
@@ -182,6 +191,19 @@ repo.
 
 `STORE_CORS` and `AUTH_CORS` on both Medusa services are `https://thecraftynp.org`
 and nothing else, since there are no preview origins to admit.
+
+`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` on both Medusa services is the value
+`${{GOOGLE_ADMIN_CALLBACK_URL}},https://thecraftynp.org/auth/design/callback`:
+a reference to the service's own admin callback, then the design gate's, so the
+admin URL is never typed twice. `AUTH0_ALLOWED_CALLBACK_URLS` is deliberately
+unset, because the storefront sends `AUTH0_CALLBACK_URL` itself and the
+configured callback is always accepted.
+
+`PRICE_QUOTE_SECRET`, the `ARTWORK_STORAGE_*` credentials,
+`ARTWORK_RETENTION_DAYS`, `ARTWORK_RETENTION_FALLBACK_DAYS`,
+`ARTWORK_UPLOAD_URL_TTL_SECONDS` and every `RATE_LIMIT_*` ceiling are set on
+both Medusa services too. The worker needs the artwork ones as much as the
+server does: the promotion and purge jobs run only there.
 
 ### `storefront`
 
@@ -235,11 +257,11 @@ Google, not in our code.
 
 **As of CNP-81 the gate's code is on `dev` but not yet on `main`**, so
 `/design/*` on production is public until the next promotion, exactly as it was
-on Vercel. The storefront's variables are in place for when it lands, but
-**`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` must be set on `medusa-server` and
-`medusa-worker`, listing `https://thecraftynp.org/auth/design/callback`, before
-that promotion.** Unlisted, Google returns the design sign-in to the admin login
-page, whose widget redeems the code as an admin sign-in.
+on Vercel. Everything it needs is already configured for when it lands: the
+storefront's variables, and `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` on both Medusa
+services listing `https://thecraftynp.org/auth/design/callback` (CNP-92).
+**Keep that entry.** Unlisted, Google returns the design sign-in to the admin
+login page, whose widget redeems the code as an admin sign-in.
 
 **Backups are scheduled on the Postgres volume, daily and monthly**, from the
 service's Backups tab. Railway fixes the retention per schedule: daily is kept 6
@@ -375,12 +397,16 @@ is longer than the rule, it retries objects that no longer exist.
 
 Needed because the browser PUTs straight to R2 against a presigned URL.
 
-| Field   | Value                                                                             |
-| ------- | --------------------------------------------------------------------------------- |
-| Origins | `https://thecraftynp.org`, `https://www.thecraftynp.org`, `http://localhost:8000` |
-| Methods | `PUT`, `GET`, `HEAD`                                                              |
-| Headers | `content-type`                                                                    |
-| Max age | 3600                                                                              |
+| Field   | Value                                                    |
+| ------- | -------------------------------------------------------- |
+| Origins | `https://thecraftynp.org`, `https://www.thecraftynp.org` |
+| Methods | `PUT`, `GET`, `HEAD`                                     |
+| Headers | `content-type`                                           |
+| Max age | 3600                                                     |
+
+`http://localhost:8000` was removed in CNP-92. Local development uploads to the
+MinIO container, never to this bucket, so production has no reason to admit a
+localhost origin.
 
 ### R2 credentials
 
