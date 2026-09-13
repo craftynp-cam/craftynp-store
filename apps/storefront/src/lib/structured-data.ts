@@ -1,5 +1,6 @@
 import type { Availability } from "./variant";
 import type { ProductDetail } from "./product";
+import { absoluteUrl, siteOrigin } from "./routes";
 
 const availabilityToSchema: Record<Availability, string> = {
   in_stock: "https://schema.org/InStock",
@@ -9,6 +10,7 @@ const availabilityToSchema: Record<Availability, string> = {
 
 export function toProductJsonLd(
   product: ProductDetail,
+  origin: string = siteOrigin(),
 ): Record<string, unknown> {
   const offers = product.variants
     .filter((variant) => variant.price !== "")
@@ -18,7 +20,7 @@ export function toProductJsonLd(
       price: variant.calculatedAmount.toFixed(2),
       priceCurrency: variant.currencyCode.toUpperCase(),
       availability: availabilityToSchema[variant.availability],
-      url: product.href,
+      url: absoluteUrl(product.href, origin),
     }));
 
   return {
