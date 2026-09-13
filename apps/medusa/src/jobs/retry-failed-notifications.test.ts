@@ -423,6 +423,7 @@ describe("retryFailedNotifications", () => {
     });
 
     await retryFailedNotifications(harness.container);
+    await retryFailedNotifications(harness.container);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(harness.onlyRow()).toMatchObject({
@@ -430,5 +431,7 @@ describe("retryFailedNotifications", () => {
       external_id: "re_1",
     });
     expect(harness.onlyRow().provider_data?.replay_content).toBeNull();
+    expect(linesContaining(harness.logger.info, "[email:retry")).toEqual([]);
+    expect(linesContaining(harness.logger.warn, "[email:retry")).toEqual([]);
   });
 });
