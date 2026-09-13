@@ -227,8 +227,11 @@ environment variables on `storefront` drive it — `DESIGN_SESSION_SECRET`,
 
 **The Google Cloud OAuth Web client needs two authorized redirect URIs**, not
 one: the admin's `GOOGLE_ADMIN_CALLBACK_URL` and the storefront's
-`https://thecraftynp.org/auth/design/callback`. The provider takes the callback
-URL per request, so an unregistered URI fails at Google, not in our code.
+`https://thecraftynp.org/auth/design/callback`. The provider takes the
+storefront's callback URL from the request only when Medusa's
+`GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` lists it exactly; an unlisted URL falls
+back to `GOOGLE_ADMIN_CALLBACK_URL`, and a listed but unregistered one fails at
+Google, not in our code.
 
 **As of CNP-81 the gate's code is on `dev` but not yet on `main`**, so
 `/design/*` on production is public until the next promotion, exactly as it was

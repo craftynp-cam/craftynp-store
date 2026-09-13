@@ -5,6 +5,7 @@ import {
   Modules,
 } from "@medusajs/framework/utils";
 
+import { parseCallbackUrlList } from "./src/lib/callback-url";
 import { SHIPSTATION_MODULE } from "./src/modules/shipstation";
 
 loadEnv(process.env.NODE_ENV || "development", process.cwd());
@@ -271,6 +272,9 @@ module.exports = defineConfig({
               clientId: process.env.GOOGLE_ADMIN_CLIENT_ID,
               clientSecret: process.env.GOOGLE_ADMIN_CLIENT_SECRET,
               callbackUrl: process.env.GOOGLE_ADMIN_CALLBACK_URL,
+              allowedCallbackUrls: parseCallbackUrlList(
+                process.env.GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS,
+              ),
               allowedDomain: process.env.GOOGLE_ADMIN_ALLOWED_DOMAIN,
             },
           },
