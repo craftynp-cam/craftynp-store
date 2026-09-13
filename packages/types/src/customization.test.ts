@@ -151,6 +151,16 @@ describe("artworkReferenceSchema", () => {
     const empty = { ...validArtwork, sizeBytes: 0 };
     expect(artworkReferenceSchema.safeParse(empty).success).toBe(false);
   });
+
+  it.each([
+    ["a storage key past 128 characters", { storageKey: "k".repeat(129) }],
+    ["a file name past 255 characters", { fileName: "f".repeat(256) }],
+  ])("rejects %s", (_label, overrides) => {
+    expect(
+      artworkReferenceSchema.safeParse({ ...validArtwork, ...overrides })
+        .success,
+    ).toBe(false);
+  });
 });
 
 describe("effectiveDpi", () => {

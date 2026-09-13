@@ -23,6 +23,10 @@ import { describeError } from "../../../../lib/describe-error";
 import { toAmount } from "../../../../lib/money";
 import { priceSignature, verifyPriceQuote } from "../../../../lib/price-quote";
 import { resolveLinePrice } from "../../../../lib/resolve-line-price";
+import { artworkFromLedger } from "../../../../lib/artwork-ledger";
+import { ARTWORK_MODULE } from "../../../../modules/artwork";
+import type ArtworkModuleService from "../../../../modules/artwork/service";
+import type { ArtworkAssetRow } from "../../../../modules/artwork/service";
 import { pricedVariantQuery } from "../../price-quote/route";
 import {
   VARIANT_CUSTOMIZATION_FIELDS,
@@ -241,8 +245,8 @@ export async function POST(
   }
 
   // The last point before money, and the only server path a configured line
-  // reaches. The pixels were measured at inspect; the comparison against the
-  // product's threshold happens here.
+  // reaches. The artwork's facts come from the ledger inspect wrote, never the
+  // request; the comparison against the product's threshold happens here.
   const validated = new Map<number, LineItemCustomization>();
   let variants: VariantWithCustomization[];
 
@@ -268,6 +272,38 @@ export async function POST(
 
   const byId = new Map(variants.map((variant) => [variant.id, variant]));
 
+  const storageKeys = [
+    ...new Set(
+      items.flatMap((item) =>
+        item.customization?.artwork
+          ? [item.customization.artwork.storageKey]
+          : [],
+      ),
+    ),
+  ];
+  const ledger = new Map<string, ArtworkAssetRow>();
+
+  if (storageKeys.length > 0) {
+    try {
+      const artwork = req.scope.resolve<ArtworkModuleService>(ARTWORK_MODULE);
+
+      for (const row of await artwork.listByStagingKeys(storageKeys)) {
+        ledger.set(row.staging_key, row);
+      }
+    } catch (error) {
+      logger.error(
+        `[checkout:unavailable] reason=artwork_lookup_failed error=${describeError(error)}`,
+      );
+      return res.status(502).json({
+        error: "checkout_unavailable",
+        reason: "misconfigured",
+        message: "checkout_unavailable:misconfigured",
+      });
+    }
+  }
+
+  const now = new Date();
+
   for (const [index, item] of items.entries()) {
     const variant = byId.get(item.variantId);
 
@@ -281,11 +317,31 @@ export async function POST(
       });
     }
 
+    let requested = item.customization;
+
+    if (requested?.artwork) {
+      const resolved = artworkFromLedger(
+        requested.artwork,
+        ledger.get(requested.artwork.storageKey),
+        now,
+      );
+
+      if (!resolved.ok) {
+        return res.status(400).json({
+          error: "invalid_customization",
+          reason: resolved.reason,
+          message: `invalid_customization:${resolved.reason}`,
+        });
+      }
+
+      requested = { ...requested, artwork: resolved.artwork };
+    }
+
     let customization: LineItemCustomization;
 
     try {
       customization = validateCustomization(
-        item.customization ?? {},
+        requested ?? {},
         customizationRulesForVariant(variant),
       );
     } catch (error) {

@@ -68,8 +68,8 @@ export const customTextSchema = z.object({
 export type CustomText = z.infer<typeof customTextSchema>;
 
 export const artworkReferenceSchema = z.object({
-  storageKey: z.string().min(1),
-  fileName: z.string().min(1),
+  storageKey: z.string().min(1).max(128),
+  fileName: z.string().min(1).max(255),
   mimeType: artworkMimeTypeSchema,
   sizeBytes: z.number().int().positive(),
   widthPx: z.number().int().positive().nullable(),

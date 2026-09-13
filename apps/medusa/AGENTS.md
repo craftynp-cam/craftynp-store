@@ -639,13 +639,31 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   instead: destroying a body cuts its keep-alive socket, and every inspect
   would pay a fresh handshake to R2.
 - **The resolution decision is enforced in both places, and `prepare-cart` is
-  the server half.** The pixel count is measured here from the stored bytes and
-  cannot be forged by the browser; the comparison against the product's
-  threshold runs in the storefront for the shopper and again in `prepare-cart`
-  for the order, which is the last point before money and the only server path
-  a configured line reaches. `customizationRulesForVariant`
-  (`src/lib/customization-rules.ts`) resolves the bounds, text limit, minimum
-  DPI and ordered size that `validateCustomization` needs.
+  the server half.** The pixel count is measured here from the stored bytes;
+  the comparison against the product's threshold runs in the storefront for
+  the shopper and again in `prepare-cart` for the order, which is the last
+  point before money and the only server path a configured line reaches.
+  `customizationRulesForVariant` (`src/lib/customization-rules.ts`) resolves
+  the bounds, text limit, minimum DPI and ordered size that
+  `validateCustomization` needs.
+  **`prepare-cart` takes the artwork's facts from the upload ledger, never from
+  the request.** The request only names which upload it means. The route
+  collects the unique storage keys and, only when there are some, resolves them
+  in one `listByStagingKeys` call; `artworkFromLedger`
+  (`src/lib/artwork-ledger.ts`) then keeps the request's `storageKey` and takes
+  the file name, MIME type, size and pixels from the row, so a file claimed as
+  an SVG or at 99,999 pixels is held to what inspect actually measured. A key
+  with no row, or a row that is purged, already claimed (`order_id` or
+  `promoted_at` set), of a type the store refuses, or uploaded more than
+  `STAGING_WINDOW_DAYS` ago (its staging object is gone) is
+  `artwork_not_found`; a row never stamped `inspected_at`, or a raster row
+  without pixels, is `artwork_not_inspected`. Both answer
+  `400 invalid_customization` with that `reason` and the message
+  `invalid_customization:<reason>`, and a lookup that throws answers
+  `502 checkout_unavailable:misconfigured`. The same upload on two lines of one
+  request is legal. `artworkReferenceSchema` caps `storageKey` at 128
+  characters and `fileName` at 255, which bounds what a request can put into
+  that query.
   **The preset case is why the variant query asks for its option values.** The
   payload names a variant, not the option values under it, so a preset size's
   inches are reachable only through `variant.options[].metadata`. It asks for

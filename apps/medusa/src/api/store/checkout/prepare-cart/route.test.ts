@@ -8,6 +8,7 @@ import {
 } from "../../../../lib/shipping-quote";
 import { signTaxQuote, taxSignature } from "../../../../lib/tax-quote";
 import { priceSignature, signPriceQuote } from "../../../../lib/price-quote";
+import type { ArtworkAssetRow } from "../../../../modules/artwork/service";
 
 const mockCreateCartRun = jest.fn();
 const mockUpdateCartRun = jest.fn();
@@ -64,6 +65,28 @@ const CONFIGURATOR_METADATA = {
 };
 
 const DIMENSIONS = { widthInches: 8, heightInches: 10 };
+
+function ledgerRow(overrides: Partial<ArtworkAssetRow> = {}): ArtworkAssetRow {
+  return {
+    id: "artasset_01",
+    upload_id: "up_1",
+    staging_key: "staging/up_1.png",
+    storage_key: null,
+    order_id: null,
+    line_item_id: null,
+    file_name: "logo.png",
+    mime_type: "image/png",
+    size_bytes: 51_200,
+    uploaded_at: new Date(),
+    promoted_at: null,
+    purged_at: null,
+    purge_reason: null,
+    width_px: 3000,
+    height_px: 3000,
+    inspected_at: new Date(),
+    ...overrides,
+  };
+}
 
 // 1.15 * 0.055 * 80, with no tier in play since the mock prices every quantity
 // the same.
@@ -212,8 +235,13 @@ function buildHarness(options: {
   after?: CartRow;
   productMetadata?: Record<string, unknown>;
   optionValues?: OptionValueRow[];
+  ledger?: ArtworkAssetRow[];
 }): Harness {
   let mutated = false;
+  const ledger = options.ledger ?? [ledgerRow()];
+  const listByStagingKeys = jest.fn(async (keys: string[]) =>
+    ledger.filter((row) => keys.includes(row.staging_key)),
+  );
   const markMutated = async (result: unknown) => {
     mutated = true;
     return result;
@@ -275,7 +303,9 @@ function buildHarness(options: {
         resolve: (key: string) =>
           key === ContainerRegistrationKeys.QUERY
             ? { graph }
-            : { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
+            : key === "artwork"
+              ? { listByStagingKeys }
+              : { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
       },
     } as unknown as MedusaRequest<CheckoutPrepareRequest>,
     res: { json, status } as unknown as MedusaResponse,
@@ -796,11 +826,18 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     ] as CheckoutPrepareRequest["items"];
   }
 
-  it("stores the validated customization on the line item", async () => {
+  it("stores the validated customization, with the artwork facts the ledger recorded", async () => {
     const { req, res } = buildHarness({
       body: buildBody({
         items: customizedItems({
-          artwork: ARTWORK,
+          artwork: {
+            ...ARTWORK,
+            fileName: "forged.svg",
+            mimeType: "image/svg+xml",
+            sizeBytes: 1,
+            widthPx: null,
+            heightPx: null,
+          },
           customText: { value: "  Ellie  " },
           orderNotes: "Matte finish",
         }),
@@ -818,6 +855,59 @@ describe("POST /store/checkout/prepare-cart customization", () => {
       customText: { value: "Ellie" },
       orderNotes: "Matte finish",
     });
+  });
+
+  it("refuses an artwork key the upload ledger has no row for", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: customizedItems({
+          artwork: { ...ARTWORK, storageKey: "staging/made-up.png" },
+        }),
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_customization",
+      reason: "artwork_not_found",
+      message: "invalid_customization:artwork_not_found",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("holds a file claimed as SVG to the pixels the ledger measured on its PNG", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: customizedItems({
+          artwork: {
+            ...ARTWORK,
+            mimeType: "image/svg+xml",
+            widthPx: null,
+            heightPx: null,
+          },
+        }),
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+      ledger: [ledgerRow({ width_px: 300, height_px: 300 })],
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "invalid_customization",
+        message: expect.stringContaining("300 DPI"),
+      }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 
   it("refuses a Custom-variant line that names no size, before any cart exists", async () => {
@@ -849,12 +939,13 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     const { req, res, status, json } = buildHarness({
       body: buildBody({
         items: customizedItems({
-          artwork: { ...ARTWORK, widthPx: 300, heightPx: 300 },
+          artwork: { ...ARTWORK, widthPx: 99_999, heightPx: 99_999 },
         }),
       }),
       before: null,
       productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
+      ledger: [ledgerRow({ width_px: 300, height_px: 300 })],
     });
 
     await POST(req, res);
@@ -877,6 +968,7 @@ describe("POST /store/checkout/prepare-cart customization", () => {
         }),
       }),
       before: null,
+      ledger: [ledgerRow({ width_px: 300, height_px: 300 })],
       productMetadata: CONFIGURATOR_METADATA,
       optionValues: [
         {
