@@ -5,6 +5,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 
 import { ProcessPanel } from "./process-panel";
+import type { ProcessPanelContent } from "./process-panel";
 import { ProductDetails } from "./product-details";
 import { ProductGallery } from "./product-gallery";
 import { ProductPurchase } from "./product-purchase";
@@ -23,8 +24,7 @@ import { findVariant } from "@/lib/variant";
 
 type ProductDetailViewProps = {
   product: ProductDetail;
-  turnaroundNote: string;
-  shippingWindowNote: string;
+  processContent: ProcessPanelContent;
 };
 
 function defaultSelection(product: ProductDetail): Record<string, string> {
@@ -51,8 +51,7 @@ function defaultSelection(product: ProductDetail): Record<string, string> {
 
 export function ProductDetailView({
   product,
-  turnaroundNote,
-  shippingWindowNote,
+  processContent,
 }: ProductDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -79,8 +78,7 @@ export function ProductDetailView({
     <ProductConfigureView
       key={editLineId ?? "new"}
       product={product}
-      turnaroundNote={turnaroundNote}
-      shippingWindowNote={shippingWindowNote}
+      processContent={processContent}
       configuration={configuration}
       editLineId={editLineId ?? undefined}
       onEditSettled={settleEdit}
@@ -96,8 +94,7 @@ type ProductConfigureViewProps = ProductDetailViewProps & {
 
 function ProductConfigureView({
   product,
-  turnaroundNote,
-  shippingWindowNote,
+  processContent,
   configuration,
   editLineId,
   onEditSettled,
@@ -162,8 +159,7 @@ function ProductConfigureView({
         <ProductDetails description={product.description} />
         <ProcessPanel
           customization={product.customization}
-          turnaroundNote={turnaroundNote}
-          shippingWindowNote={shippingWindowNote}
+          content={processContent}
         />
       </div>
     </div>
