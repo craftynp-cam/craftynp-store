@@ -142,7 +142,10 @@ tax provider), `notification-resend`, `auth-auth0`, and
 - **`src/admin` typechecks separately.** It is the only `.tsx` here and needs
   DOM lib types the Node-only backend doesn't carry, so `tsconfig.json` excludes
   it and `typecheck` runs a second `tsc -p src/admin --noEmit`. Put a file that
-  needs DOM types under `src/admin`, and nothing else there.
+  needs DOM types under `src/admin`, and nothing else there. Its React 18 component
+  libraries find `@types/react` only through the `packageExtensions` peers in
+  `pnpm-workspace.yaml`; a new admin dependency whose JSX fails with TS2786 on
+  some installs and not others belongs in that list.
 - **Admin extensions use `@medusajs/ui`, `@medusajs/admin-sdk`, and
   `@tanstack/react-query`.** Never import storefront components — they are
   HeroUI on React 19 and will not run in the React 18 admin bundle.
