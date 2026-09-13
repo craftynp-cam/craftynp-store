@@ -29,6 +29,7 @@ const ASSET: ArtworkClaimRow["asset"] = {
   width_px: 3000,
   height_px: 3000,
   inspected_at: daysAgo(50),
+  inspected_etag: '"etag-1"',
 };
 
 function filed(order: string, line: string): ArtworkClaimRow {

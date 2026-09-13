@@ -38,6 +38,7 @@ function claim(overrides: Partial<ArtworkClaimRow> = {}): ArtworkClaimRow {
       width_px: 3000,
       height_px: 3000,
       inspected_at: FILED,
+      inspected_etag: '"etag-1"',
     },
     ...overrides,
   };

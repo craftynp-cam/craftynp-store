@@ -59,6 +59,7 @@ function claims(uploadedDaysAgo: number, withFiledSibling: boolean) {
     width_px: 3000,
     height_px: 3000,
     inspected_at: daysAgo(uploadedDaysAgo),
+    inspected_etag: '"etag-1"',
   };
 
   const pending: ArtworkClaimRow = {

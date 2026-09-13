@@ -16,6 +16,7 @@ export type ArtworkAssetRow = {
   width_px: number | null;
   height_px: number | null;
   inspected_at: Date | null;
+  inspected_etag: string | null;
   claimed: boolean;
 };
 
@@ -49,6 +50,7 @@ export type RecordInspectionInput = {
   widthPx: number | null;
   heightPx: number | null;
   inspectedAt: Date;
+  etag: string;
 };
 
 type Raw = Record<string, unknown>;
@@ -119,13 +121,18 @@ class ArtworkModuleService extends MedusaService({
   async recordInspection(
     id: string,
     inspection: RecordInspectionInput,
-  ): Promise<void> {
-    await this.updateArtworkAssets({
-      id,
-      width_px: inspection.widthPx,
-      height_px: inspection.heightPx,
-      inspected_at: inspection.inspectedAt,
+  ): Promise<boolean> {
+    const recorded = await this.updateArtworkAssets({
+      selector: { id, inspected_etag: null },
+      data: {
+        width_px: inspection.widthPx,
+        height_px: inspection.heightPx,
+        inspected_at: inspection.inspectedAt,
+        inspected_etag: inspection.etag,
+      },
     });
+
+    return recorded.length > 0;
   }
 
   async markPurged(id: string, reason: string): Promise<void> {

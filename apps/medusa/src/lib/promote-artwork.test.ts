@@ -34,6 +34,7 @@ const ASSET: ArtworkClaimRow["asset"] = {
   width_px: 3000,
   height_px: 3000,
   inspected_at: new Date(Date.UTC(2026, 8, 10)),
+  inspected_etag: '"etag-1"',
 };
 
 const FILED = new Date(Date.UTC(2026, 8, 11));

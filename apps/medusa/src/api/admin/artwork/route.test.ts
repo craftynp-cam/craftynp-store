@@ -19,6 +19,7 @@ const ASSET: ArtworkClaimRow["asset"] = {
   width_px: 3000,
   height_px: 3000,
   inspected_at: new Date(Date.UTC(2026, 8, 10, 12)),
+  inspected_etag: '"etag-1"',
 };
 
 describe("GET /admin/artwork", () => {

@@ -80,6 +80,7 @@ function ledgerRow(overrides: Partial<ArtworkAssetRow> = {}): ArtworkAssetRow {
     width_px: 3000,
     height_px: 3000,
     inspected_at: new Date(),
+    inspected_etag: '"etag-1"',
     claimed: false,
     ...overrides,
   };

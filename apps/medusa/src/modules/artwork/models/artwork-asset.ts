@@ -16,6 +16,7 @@ const ArtworkAsset = model
     width_px: model.number().nullable(),
     height_px: model.number().nullable(),
     inspected_at: model.dateTime().nullable(),
+    inspected_etag: model.text().nullable(),
     claims: model.hasMany(() => ArtworkClaim, {
       mappedBy: "asset",
     }),
