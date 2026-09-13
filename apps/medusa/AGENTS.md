@@ -636,9 +636,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   parser here. `.ai` is accepted as either a PDF or a PostScript header.
   The measurement is written to `artwork_asset`'s existing `width_px` /
   `height_px` columns before the response, so the resolution the shopper was
-  gated on is the one an order can be checked against later. `dpi` is not
-  stored: it is a function of the pixel width and the ordered size, and a
-  stored copy could disagree with both.
+  gated on is the one an order can be checked against later. There is no `dpi`
+  column (CNP-98 dropped one nothing ever wrote): DPI is a function of the
+  pixels and the ordered size, and a stored copy could disagree with both.
   **The same write stamps `inspected_at`, and only a success stamps it** — a
   422 or a 502 leaves the column null. The pixels cannot say whether the bytes
   were ever read: a vector file is recorded with null pixels, and so is an

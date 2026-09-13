@@ -325,8 +325,8 @@ guard that validates them).
 - **`ProductPurchase` owns the configurator draft**, alongside its quantity. The
   draft is deliberately
   storefront-shaped strings, not a `LineItemCustomization` — the shopper's width
-  is `"8"` while they are still typing, and an `ArtworkReference` here has no
-  `dpi` yet, so it cannot become one. Add-to-cart maps it through
+  is `"8"` while they are still typing, so it cannot become one. Add-to-cart
+  maps it through
   `lineItemCustomization`, which narrows the storefront `ArtworkReference` to
   the six fields `artworkReferenceSchema` declares and drops the `uploadId` and
   `kind` the wire has no use for. The result rides the cart line as

@@ -17,7 +17,6 @@ const ArtworkAsset = model
     purge_reason: model.text().nullable(),
     width_px: model.number().nullable(),
     height_px: model.number().nullable(),
-    dpi: model.number().nullable(),
     inspected_at: model.dateTime().nullable(),
   })
   .indexes([{ on: ["order_id"] }, { on: ["staging_key"] }]);

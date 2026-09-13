@@ -244,22 +244,6 @@
           "enumItems": [],
           "mappedType": "integer"
         },
-        "dpi": {
-          "name": "dpi",
-          "type": "integer",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "integer"
-        },
         "inspected_at": {
           "name": "inspected_at",
           "type": "timestamptz",
