@@ -79,7 +79,8 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   or transitively. It throws at module-eval when the env vars are unset, which
   fails every suite that imports the `@/components` barrel. Keep pure logic in
   medusa-free modules (`saved-address.ts`, `shipping-rates.ts`, `tax-quote.ts`,
-  `payment.ts`, `upstream-error.ts`). `import type` is fine.
+  `payment.ts`, `price-quote.ts`, `checkout-refusal.ts`, `upstream-error.ts`).
+  `import type` is fine.
 - **Medusa fetch helpers degrade for a failed _query_ and throw for a failed
   _backend_.** The split is `isBackendFailure()` in `src/lib/medusa-error.ts`: a
   rejection that is not a `FetchError` (DNS, refused, TLS, timeout), or one
@@ -298,10 +299,13 @@ the product query cannot answer this, is in
 - **The cart line carries the quote token, and its size only as
   `customization.dimensions`.** There is no top-level copy to disagree with
   it: `prepare-cart` prices and makes the size the customization records
-  (CNP-85). `setCartLineQuantity` **drops the token** when the drawer changes a
-  quantity: the quote was issued for the old quantity and a tier makes that a
-  different unit price, so `prepare-cart` asks for a fresh one rather than
-  charging a stale tier.
+  (CNP-85). **Every write that changes a quoted quantity drops the token** —
+  `setCartLineQuantity`, and the merges in both `addCartLine` and
+  `updateCartLine` — because the quote was issued for the old quantity and a
+  tier makes that a different unit price. Checkout then re-quotes the line
+  before it prepares (see **Checkout**) rather than charging a stale tier.
+  `addCartLine`'s merge kept a token signed for the smaller quantity until
+  CNP-93, so adding the same custom size twice was refused `line_mismatch`.
 - **`taxQuoteKey` and `paymentPrepareKey` include each line's
   `customization.dimensions`**, or a resized line reuses the cached tax, or the
   PaymentIntent, minted for the size it used to be.
@@ -403,7 +407,9 @@ gate, the price quote and the artwork upload.
 - **A `?edit=` naming a line that is gone, or a variant the product no longer
   sells, falls back silently to add-to-cart.** A notice cannot be rendered
   without either flashing during hydration or mismatching it, and checkout
-  already declines to special-case the empty server snapshot.
+  already declines to special-case the empty server snapshot. Checkout's
+  refused-line links land here too, which is why a line refused as no longer
+  available tells the shopper to remove it rather than edit it.
 - **Save and Cancel move focus to `#main-content` before opening the
   drawer.** The keyed remount removes the button that had focus, so the drawer
   would otherwise return focus to `<body>` when it closes. Only an edit does
@@ -752,6 +758,46 @@ customization }` and nothing more.** The cart line's `details` and
   builds the order line's rows and flag itself, from the product and the
   validated customization, and never reads a request's (see
   [apps/medusa/AGENTS.md](../medusa/AGENTS.md)).
+- **Checkout re-quotes a stale area-priced line before it prepares.** A quote
+  token lives 30 minutes and the cart in `localStorage` has no expiry, so
+  `usePaymentSession` checks each line with `needsFreshPriceQuote`
+  (`src/lib/price-quote.ts`). It reads the token's `exp` without the secret,
+  and treats a missing or unreadable token, or one within
+  `PRICE_QUOTE_REFRESH_MARGIN_MS` (two minutes) of expiring, as stale. Stale
+  lines are re-quoted one at a time through `/checkout/price-quote` and written
+  back with `setCartLineQuote`, which refuses if the line's quantity or size
+  moved while the quote was in flight. `/checkout/prepare` is posted only once
+  every re-quote has succeeded, with items built from that refreshed snapshot.
+  **A failed re-quote is the ordinary retryable error, never a line refusal**:
+  a rate limit or a flaky query is not something the shopper can edit. The
+  browser can neither verify a signature nor trust its own clock, so a prepare
+  that still answers `invalid_price_quote` `expired`, `malformed`,
+  `bad_signature` or `line_mismatch` gets **one** forced re-quote of those
+  lines and one retry, never a loop.
+- **Keep the token and `unitPrice` out of `paymentPrepareKey` and
+  `taxQuoteKey`.** The write-back re-renders every cart reader, so if either
+  key read them, storing a fresh quote would re-trigger the very prepare it
+  was fetched for.
+- **A refused line is named, not retried.** `/checkout/prepare` passes
+  Medusa's line refusals through as `400 { error, reason, line, lines }`, and
+  `lineProblems` (`src/lib/checkout-refusal.ts`) maps each `line` — an index
+  into the request — back to the cart line **in the snapshot that was sent**,
+  not the live cart. The payment step lists each refused item by its title plus
+  its Size or file name, since every custom size of a product shares one
+  title, with its message and an "Edit this item" link to `?edit=<lineId>`,
+  and **shows no Try again**: resending an unchanged cart cannot succeed. The
+  summary's `CartCard` for that line gets the same message and edit link, even
+  when the line is not customizable — a product the owner has since given a
+  required input is exactly that line. The payment step carries the message
+  itself because the summary sits below the Pay button on a phone.
+- **The shopper copy is a `satisfies` map over every refusal reason**, so a
+  reason added to `CHECKOUT_LINE_REFUSAL_REASONS` in `@craftynp/types` with no
+  words here is a type error, and it carries no test of its own. Expired or
+  uninspected artwork says to open the item and press **Replace**, because the
+  edit page re-seeds the same dead file reference and a plain Save would be
+  refused again. A variant or price the product no longer has says to
+  **remove** the item, for the `?edit=` fallback reason under Editing a cart
+  line.
 - **Tax is quoted only after a shipping rate has settled**, because shipping
   itself is taxed, and it re-runs when the shopper picks a different rate. Do
   not fire the tax and shipping-rate calls in parallel.
@@ -772,7 +818,13 @@ customization }` and nothing more.** The cart line's `details` and
   reason via `describeUpstreamError`** (`src/lib/upstream-error.ts`) alongside
   their own error code. `sdk.client.fetch` discards every field but the status
   and `message`, so without it a rejected quote, a misconfigured region, and an
-  unreachable Medusa are indistinguishable in the browser.
+  unreachable Medusa are indistinguishable in the browser. `/checkout/prepare`
+  goes one step further through `prepareFailureResponse`: an upstream 400 whose
+  `message` parses as line refusals (`parseCheckoutLineRefusals` in
+  `@craftynp/types`) becomes `400 { error, reason, line, lines }`, and
+  everything else stays `502 checkout_unavailable`. That includes a message with
+  no line, which is what a Medusa deployed before CNP-93 sends, so the two apps
+  can deploy in either order.
 - **Keep `<Elements>` keyed on `` `${clientSecret}:${mode}` ``.** Stripe reads
   `options.clientSecret` only on first mount, so an address edit needs a full
   remount against the freshly minted secret.
