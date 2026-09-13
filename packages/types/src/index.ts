@@ -69,6 +69,7 @@ export {
   resolveProductCustomization,
   unmeasuredOptionValues,
   validateCategoryArtwork,
+  validateCustomSizeOption,
   validateProductCustomization,
 } from "./product-customization.js";
 export { SITE_NAME, SITE_TAGLINE } from "./site.js";
@@ -195,6 +196,7 @@ export type {
   CustomizationInputMode,
   ProductCustomization,
   ProductCustomizationProblem,
+  ProductOwnOptionLike,
 } from "./product-customization.js";
 export type {
   SiteContent,
