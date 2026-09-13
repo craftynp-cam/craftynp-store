@@ -85,7 +85,8 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   rejection that is not a `FetchError` (DNS, refused, TLS, timeout), or one
   carrying 401/403 (wrong publishable key), 404 on a core store route, or any
   5xx, is a misconfigured or down backend and is rethrown as
-  `MedusaUnavailableError` so `app/error.tsx` renders a visible error. Anything
+  `MedusaUnavailableError`, which each page catches to render
+  `<StoreUnavailable />` (and `app/sitemap.ts` lets through as a 500). Anything
   else — a rejected filter, a 422 — still degrades to an empty or default value.
   New fetchers follow this split.
   Degrading on everything, which is what this used to say, meant a wrong
@@ -924,6 +925,107 @@ tabs are not built yet — CNP-60 covers them.
   `setState`.** The parent (`addresses-view.tsx`) keys it on the target
   address's id; calling `setState` synchronously inside an effect trips this
   repo's `react-hooks/set-state-in-effect` lint rule.
+
+## Metadata, sitemap and security headers
+
+### Canonical links and social previews
+
+- **`alternates.canonical` and `openGraph.url` are set per page, never in
+  `layout.tsx`.** Every page that does not override a layout value inherits it,
+  so a canonical there would point `/checkout`, `/account` and every 404 at the
+  home page. The home, `/products`, `/about`, category and product pages spread
+  in `pageMetadata(path, image?)` from `src/lib/page-metadata.ts`.
+- **A page's `openGraph` replaces the layout's wholesale** — Next merges
+  metadata one key deep — so `pageMetadata` re-supplies `siteName` and `type`.
+  **Neither it nor the layout sets an og title or description, on purpose.**
+  Next copies each page's own resolved title and description into its og and
+  twitter tags only when `openGraph` has none, so the layout's old
+  `openGraph.title` is what made every product preview read "The Crafty NP"
+  with the tagline. Twitter tags come the same way, and the card is
+  `summary_large_image` only when the page has an image.
+- The home page sets no title, so the layout's default stays un-templated
+  rather than "The Crafty NP — The Crafty NP".
+- **A product's preview image is its first image; a category's is its
+  `image_url` metadata**, carried through `fetchCatalogSidebar`, which is why
+  that query asks for `description,metadata`. A category with no description
+  gets a generated one. No image leaves a `summary` card, not a borrowed one.
+- **`NEXT_PUBLIC_SITE_URL` is the origin of all of it.** `metadataBase`, the
+  JSON-LD offer URLs, the sitemap and robots.txt's Sitemap line go through
+  `siteOrigin()` / `absoluteUrl()` in `src/lib/routes.ts`, which treat a blank
+  or non-absolute value as unset and fall back to `http://localhost:8000`. That
+  fallback is for development and tests only. **`next.config.ts` fails a
+  production build** when the value is blank or not an absolute http(s) URL,
+  because a missing Docker ARG builds green (the Dockerfile sets the ENV to
+  `""`) and would canonicalise the whole site to localhost. It checks
+  `PHASE_PRODUCTION_BUILD`, not `NODE_ENV`, so `next start`, `next dev` and
+  Jest — which loads the config through `next/jest` — never trip it. CI's
+  `.env.example` value passes.
+- The sitemap takes a product's URL from the list query's first category and the
+  canonical from the handle query's; neither orders categories, so a product in
+  several categories could in principle get two different URLs.
+
+### Sitemap
+
+- **`app/sitemap.ts` is `force-dynamic`, and must stay that way.** Metadata
+  routes are prerendered at build, and CI builds with no backend, so a
+  prerendered sitemap throws `MedusaUnavailableError` and fails the build. A
+  `revalidate` export still prerenders.
+- **It lets `MedusaUnavailableError` through as a 500.** A crawler retries a
+  500, whereas a 200 missing the catalogue advertises a shrunken site.
+- Composition is the pure `toSitemapEntries` in `src/lib/sitemap.ts`: the static
+  pages, the top-level categories `fetchNavCategories` returns (the only
+  `/{category}` pages that resolve), and each product's `card.href`. It drops a
+  product with no category (`//handle`) and anything under `DISALLOWED_PATHS`,
+  which `robots.ts` shares, **matched as a prefix** because that is how
+  crawlers read `Disallow`: a category called `accounts` is disallowed too. It
+  inherits the fetchers' limit of 100 with no pagination.
+
+### Security headers
+
+- **They live in `next.config.ts` `headers()`, not a `proxy.ts`.** There is
+  deliberately no middleware (see Routing), and nonces would need one and make
+  every route dynamic — hence `'unsafe-inline'`. The headers are compiled into
+  the build, so every host they read must be a build-time variable, and a
+  change needs a rebuild.
+- **That is why the upload host is `NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN`.**
+  `turbo.json` passes only `NEXT_PUBLIC_*` into the build task, and turbo's
+  strict env mode strips anything else inside the Docker build, while CI stays
+  green because Next reads `.env.local` itself. It is read only in
+  `next.config.ts`, so nothing is inlined into a bundle.
+- **The CSP ships as `Content-Security-Policy-Report-Only`**, with no report
+  endpoint: there is no preview environment to watch it on, and enforcing it is
+  its own follow-up. **`X-Frame-Options: DENY` is therefore the only clickjacking
+  protection** — `frame-ancestors 'none'` enforces nothing while the policy only
+  reports. Do not drop it.
+- What each source is for:
+  - `script-src 'unsafe-inline'` — Next's inline flight scripts,
+    `themeInitScript` (see Design tokens), and the inline snippet Cloudflare's
+    Bot Fight Mode injects (see [docs/dns.md](../../docs/dns.md)).
+    `'unsafe-eval'` and `ws:` are development-only, for React's debugging and
+    HMR.
+  - `https://js.stripe.com https://*.js.stripe.com` as script and frame,
+    `https://hooks.stripe.com` as frame, and `https://api.stripe.com` as
+    connect — the Payment Element.
+  - `style-src 'unsafe-inline'` — inline style attributes: the layout's
+    `--announcement-height`, React Aria's visually-hidden styles, `next/image`
+    fill.
+  - `img-src 'self' blob: data:` — every catalogue image is same-origin
+    `/_next/image`, so **the media host is absent on purpose**. `blob:` is the
+    artwork preview, the one `unoptimized` image.
+  - `connect-src` — the backend origin for the artwork presign and inspect
+    calls, which go straight to Medusa, and the artwork upload origin for the
+    presigned PUT.
+  - No `form-action` yet. The sign-out form's redirect to Auth0 would need
+    `AUTH0_DOMAIN` in the build; add both when the policy is enforced.
+- **A new browser call to another host needs a CSP change in the same pull
+  request**, and so does a Cloudflare feature that injects one (Rocket Loader,
+  Web Analytics, Zaraz).
+- **HSTS is sent from production builds only**, and Cloudflare's edge HSTS is
+  off (see [docs/dns.md](../../docs/dns.md)). HSTS pins a hostname, not a port,
+  so sent from a local HTTPS run it could pin `localhost` for Medusa and MinIO.
+- **`Permissions-Policy` must never restrict `payment`.** Apple Pay and Google
+  Pay run inside Stripe's Payment Element, and `payment=()` drops them without
+  an error. It turns off camera, microphone and geolocation only.
 
 ## Testing
 
