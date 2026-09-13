@@ -13,7 +13,6 @@ import {
   characterCountHint,
   customTextProblem,
   configurationFromCartLine,
-  customizationDetails,
   lineItemCustomization,
   normalizeOrderNotes,
   missingInputLabels,
@@ -126,63 +125,6 @@ describe("missingInputLabels", () => {
       "your artwork",
       "a width and height",
     ]);
-  });
-});
-
-describe("customizationDetails", () => {
-  it("carries the text, size and notes the shopper filled in", () => {
-    expect(
-      customizationDetails(
-        ALL_REQUIRED,
-        draft({
-          artwork: ARTWORK,
-          customText: "  Ellie  ",
-          widthInches: "8",
-          heightInches: "10",
-          orderNotes: "  Matte finish  ",
-        }),
-      ),
-    ).toEqual([
-      { label: "Artwork", value: "flowers.png" },
-      { label: "Custom text", value: "Ellie" },
-      { label: "Size", value: "8\u2033 \u00d7 10\u2033" },
-      { label: "Order notes", value: "Matte finish" },
-    ]);
-  });
-
-  it("names the artwork file the shopper attached", () => {
-    expect(
-      customizationDetails(ALL_REQUIRED, draft({ artwork: ARTWORK })),
-    ).toEqual([{ label: "Artwork", value: "flowers.png" }]);
-  });
-
-  it("skips an input the shopper left empty", () => {
-    expect(
-      customizationDetails(ALL_REQUIRED, draft({ customText: "Ellie" })),
-    ).toEqual([{ label: "Custom text", value: "Ellie" }]);
-  });
-
-  it("skips an input the product never declared", () => {
-    const notesOnly = resolveProductCustomization({
-      customizable: "true",
-      customization_notes: "optional",
-    });
-
-    expect(
-      customizationDetails(
-        notesOnly,
-        draft({ customText: "Ellie", orderNotes: "Matte finish" }),
-      ),
-    ).toEqual([{ label: "Order notes", value: "Matte finish" }]);
-  });
-
-  it("carries nothing for a ready-made product", () => {
-    expect(
-      customizationDetails(
-        resolveProductCustomization(null),
-        draft({ customText: "Ellie" }),
-      ),
-    ).toEqual([]);
   });
 });
 
@@ -423,10 +365,10 @@ describe("the custom size toggle", () => {
   it("holds back the size until the shopper asks to enter their own", () => {
     const filled = draft({ widthInches: "8", heightInches: "10" });
 
-    expect(customizationDetails(OPTIONAL_SIZE, filled)).toEqual([]);
+    expect(lineItemCustomization(OPTIONAL_SIZE, filled)).toBeUndefined();
     expect(
-      customizationDetails(OPTIONAL_SIZE, { ...filled, useCustomSize: true }),
-    ).toEqual([{ label: "Size", value: "8\u2033 \u00d7 10\u2033" }]);
+      lineItemCustomization(OPTIONAL_SIZE, { ...filled, useCustomSize: true }),
+    ).toEqual({ dimensions: { widthInches: 8, heightInches: 10 } });
   });
 
   it("insists on the dimensions once the shopper opts in, though the product calls the size optional", () => {
@@ -692,25 +634,6 @@ describe("normalizeOrderNotes", () => {
   it("still trims the ends", () => {
     expect(normalizeOrderNotes("\n\n  Matte finish  \n\n")).toBe(
       "Matte finish",
-    );
-  });
-});
-
-describe("customizationDetails order notes", () => {
-  it("carries a multi-line note onto the cart line intact", () => {
-    const [notes] = customizationDetails(
-      ALL_REQUIRED,
-      draft({
-        artwork: ARTWORK,
-        customText: "Ellie",
-        widthInches: "8",
-        heightInches: "10",
-        orderNotes: "Match the sage green.\r\n\r\nNeeded before the 14th.",
-      }),
-    ).filter((detail) => detail.label === "Order notes");
-
-    expect(notes?.value).toBe(
-      "Match the sage green.\n\nNeeded before the 14th.",
     );
   });
 });
