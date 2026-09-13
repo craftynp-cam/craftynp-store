@@ -12,8 +12,8 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   never runs. Every handler this app owns lives outside it — `src/app/auth/*`
   and `src/app/checkout/*`. The rewrites return `[]` in production on purpose:
   the admin is served by Medusa on its own domain there, and proxying it through
-  Vercel would bill every admin request as a function invocation and undo the
-  zone split (see [README.md](../../README.md)). Keep the `/api` rule above
+  the storefront would run every admin request through its container and undo
+  the zone split (see [README.md](../../README.md)). Keep the `/api` rule above
   regardless — it still applies in development, which is where a stray route
   handler would be written.
 - **Leave `images.dangerouslyAllowLocalIP: true` in `next.config.ts`.** It is
@@ -101,7 +101,7 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   `resolveSiteContent`.** The store route's payload is unvalidated network data,
   not a `SiteContent`: a Medusa deployed before a new `SITE_CONTENT_FIELDS`
   entry existed answers without that key, and since the fetch runs in the root
-  layout, one `undefined` read 500s every page. Vercel and Railway deploy
+  layout, one `undefined` read 500s every page. The storefront and Medusa deploy
   independently, so that skew is a normal state, not an edge case. Resolving
   fills any missing key from its registry default and drops keys the registry
   does not declare.
@@ -622,7 +622,7 @@ in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
   stays `0`: a 25 MB upload on a slow connection must not be killed by us, and
   the presigned URL's own expiry is the real bound.
 - **The presign call goes straight from the browser to Medusa**, not through a
-  route handler here. A proxy would put every shopper behind one Vercel IP and
+  route handler here. A proxy would put every shopper behind the storefront's egress IP and
   defeat the route's per-IP rate limit, and a top-level `src/app/artwork`
   segment would permanently shadow that Medusa category handle. It reads
   `NEXT_PUBLIC_*` inside the function body rather than importing `medusa.ts`,
@@ -855,11 +855,11 @@ routes, different audience. Do not merge the two.
   production only", so `next dev` serves these pages with no sign-in round trip.
   Set it to `on` to exercise the real flow locally, which also needs a localhost
   redirect URI on the Google OAuth client.
-- **It is `off` on Vercel Preview and must stay that way.** A preview builds
-  with `NODE_ENV=production`, so the gate would switch itself on, and a per-PR
-  preview's `*.vercel.app` hostname can never be a registered Google redirect
-  URI — the flow cannot complete there whatever the secret says. Vercel SSO
-  already restricts previews to the team. See [docs/dns.md](../../docs/dns.md).
+- **`DESIGN_GATE` is unset in production**, so the gate follows `NODE_ENV` and
+  is on. Production is the only deployed environment (CNP-81). Any new one
+  needs its callback URL registered on the Google OAuth client before the flow
+  can complete there — an unregistered URI fails at Google, not in our code.
+  See [docs/dns.md](../../docs/dns.md).
 - These pages read cookies and so are no longer prerendered. They are internal;
   that was never load-bearing.
 

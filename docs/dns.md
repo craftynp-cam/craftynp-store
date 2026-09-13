@@ -1,7 +1,8 @@
 # DNS and infrastructure
 
-A record of what is configured in Cloudflare, Railway and Vercel, as of the
-CNP-16/17/18/73 provisioning, plus the artwork bucket added in CNP-20.
+A record of what is configured in Cloudflare and Railway, as of the
+CNP-16/17/18/73 provisioning, plus the artwork bucket added in CNP-20 and the
+storefront's move from Vercel to Railway in CNP-81.
 
 **This is a snapshot, not a source of truth.** The systems below are the
 authority; nothing here is applied by any code in this repo. It is written down
@@ -18,31 +19,33 @@ here.
 
 ## What serves what
 
-| Hostname                 | Serves                        | Behind    |
-| ------------------------ | ----------------------------- | --------- |
-| `thecraftynp.org`        | storefront                    | Vercel    |
-| `www.thecraftynp.org`    | 308 redirect to the apex      | Vercel    |
-| `dev.thecraftynp.org`    | storefront, `dev` branch, SSO | Vercel    |
-| `api.thecraftynp.com`    | Medusa API and `/app` admin   | Railway   |
-| `media.thecraftynp.com`  | uploaded imagery              | R2 bucket |
-| `thecraftynp.com`, `www` | 301 redirect to `.org`        | —         |
+| Hostname                 | Serves                      | Behind    |
+| ------------------------ | --------------------------- | --------- |
+| `thecraftynp.org`        | storefront                  | Railway   |
+| `www.thecraftynp.org`    | 308 redirect to the apex    | —         |
+| `api.thecraftynp.com`    | Medusa API and `/app` admin | Railway   |
+| `media.thecraftynp.com`  | uploaded imagery            | R2 bucket |
+| `thecraftynp.com`, `www` | 301 redirect to `.org`      | —         |
+
+There are no preview or staging hostnames. `dev.thecraftynp.org` was deleted in
+CNP-81 along with Vercel preview deployments; see [Vercel](#vercel).
 
 ## thecraftynp.org
 
 Zone `8a3677ddd6ac55ed3aeec8b8cca67d5d`.
 
-| Type  | Name                | Content                | Proxy | Purpose                                |
-| ----- | ------------------- | ---------------------- | ----- | -------------------------------------- |
-| A     | `@`                 | `76.76.21.21`          | on    | Vercel apex                            |
-| CNAME | `www`               | `cname.vercel-dns.com` | on    | Vercel; redirects to the apex          |
-| CNAME | `dev`               | `cname.vercel-dns.com` | on    | Vercel, pinned to the `dev` branch     |
-| MX    | `@`                 | Google Workspace (×5)  | —     | **do not delete** — the client's mail  |
-| MX    | `send`              | `feedback-smtp…ses`    | —     | Resend bounce handling                 |
-| TXT   | `@`                 | SPF, site verification | —     | **do not delete**                      |
-| TXT   | `_dmarc`            | DMARC                  | —     | **do not delete**                      |
-| TXT   | `google._domainkey` | DKIM                   | —     | **do not delete** — Workspace mail     |
-| TXT   | `resend._domainkey` | DKIM                   | —     | **do not delete** — transactional mail |
-| TXT   | `send`              | SPF for Resend         | —     | **do not delete**                      |
+| Type  | Name                | Content                   | Proxy | Purpose                                |
+| ----- | ------------------- | ------------------------- | ----- | -------------------------------------- |
+| CNAME | `@`                 | `goo7hsic.up.railway.app` | on    | Railway `storefront`; flattened        |
+| A     | `www`               | `192.0.2.1`               | on    | **placeholder** — redirect rule host   |
+| TXT   | `_railway-verify`   | `railway-verify=…`        | —     | Railway domain ownership               |
+| MX    | `@`                 | Google Workspace (×5)     | —     | **do not delete** — the client's mail  |
+| MX    | `send`              | `feedback-smtp…ses`       | —     | Resend bounce handling                 |
+| TXT   | `@`                 | SPF, site verification    | —     | **do not delete**                      |
+| TXT   | `_dmarc`            | DMARC                     | —     | **do not delete**                      |
+| TXT   | `google._domainkey` | DKIM                      | —     | **do not delete** — Workspace mail     |
+| TXT   | `resend._domainkey` | DKIM                      | —     | **do not delete** — transactional mail |
+| TXT   | `send`              | SPF for Resend            | —     | **do not delete**                      |
 
 `.org` carries the client's Google Workspace mail as well as Resend's signing
 records. It is not a storefront-only zone.
@@ -98,6 +101,21 @@ It shipped as a `302` and was only flipped to `301` once `.org` genuinely
 served the storefront — a `301` is cached hard, so publishing one at a dead
 target durably teaches browsers and crawlers that `.com` is broken.
 
+### `www` → apex redirect
+
+Dynamic redirect on the `.org` zone, ruleset `55836377348741308f4dac9c42dfccda`.
+
+```
+(http.host eq "www.thecraftynp.org")
+→ concat("https://thecraftynp.org", http.request.uri.path)   308, preserve query string
+```
+
+Vercel issued this redirect until CNP-81, and `308` matches what it sent. The
+`www` record is the same `192.0.2.1` placeholder as on `.com`, there only so the
+rule has a proxied hostname to run on. The rule was created while `www` still
+pointed at Vercel, and the record swapped afterwards, so there was no window
+without a redirect.
+
 ### API rate limiting
 
 On the `http_ratelimit` phase of the `.com` zone.
@@ -149,6 +167,7 @@ Project `craftynp-store`, environment `production`.
 | --------------- | -------------------------------------------- |
 | `medusa-server` | HTTP, admin, runs `db:migrate` at pre-deploy |
 | `medusa-worker` | jobs and subscribers, no admin               |
+| `storefront`    | Next.js storefront, `thecraftynp.org`        |
 | `Postgres`      | private network only                         |
 | `Redis`         | private network only                         |
 
@@ -156,9 +175,64 @@ Postgres and Redis have **no TCP proxy**, so they are unreachable from outside
 the project. Both Medusa services reach them by reference variable
 (`${{Postgres.DATABASE_URL}}`), never a copied literal.
 
-`PORT` is set to `9000` explicitly. Left unset the platform injects `8080`,
-which silently disagrees with the Dockerfile's `EXPOSE` and with every port
-reference in this repo.
+`PORT` is set explicitly on every HTTP service: `9000` on the Medusa services,
+`8000` on the storefront. Left unset the platform injects `8080`, which silently
+disagrees with each Dockerfile's `EXPOSE` and with every port reference in this
+repo.
+
+`STORE_CORS` and `AUTH_CORS` on both Medusa services are `https://thecraftynp.org`
+and nothing else, since there are no preview origins to admit.
+
+### `storefront`
+
+| Setting         | Value                                                      |
+| --------------- | ---------------------------------------------------------- |
+| Source          | `craftynp-cam/craftynp-store`, branch `main`               |
+| Dockerfile path | `apps/storefront/Dockerfile`                               |
+| Healthcheck     | `/`, default 300 s timeout                                 |
+| Restart policy  | `ON_FAILURE`                                               |
+| Watch paths     | `apps/storefront/**`, `packages/types/**`, root manifests  |
+| Domains         | custom `thecraftynp.org` only — no Railway-provided domain |
+
+The watch paths in full are `apps/storefront/**`, `packages/types/**`,
+`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `turbo.json`,
+`tsconfig.base.json` and `.dockerignore`. They are what stops a Medusa-only
+change rebuilding the storefront, which `turbo-ignore` did on Vercel.
+
+**These are service settings, not a `railway.json`.** Railway has deprecated
+Config as Code and does not let a new service adopt it; its replacement,
+Infrastructure as Code, refuses to manage a project while any service still uses
+a config file. `railway.server.json` and `railway.worker.json` stop being read on
+**2026-12-01**, so the project needs moving to Infrastructure as Code before
+then.
+
+- **Every `NEXT_PUBLIC_*` variable is compiled into the build.** Changing one
+  needs a rebuild, not a restart. A variable saved with deploys skipped is not
+  built until the next deployment — and switching the service onto a branch
+  whose head is identical to what is already deployed produces a `SKIPPED`
+  deployment, not a build. `railway redeploy -s storefront` forces one.
+- `DESIGN_ALLOWED_DOMAIN` is the reference `${{medusa-server.GOOGLE_ADMIN_ALLOWED_DOMAIN}}`,
+  so the two cannot drift. `DESIGN_GATE` is unset, so the gate follows
+  `NODE_ENV` and is on.
+- The Railway-provided domain used to verify the service before the cutover was
+  removed afterwards, so the storefront is reachable only through Cloudflare.
+
+#### The `/design/*` gate
+
+The internal design-system pages are gated at the application level by Google
+Workspace sign-in, reusing Medusa's `auth-google-workspace` provider. Three
+environment variables on `storefront` drive it — `DESIGN_SESSION_SECRET`,
+`DESIGN_ALLOWED_DOMAIN` and `DESIGN_GATE` — and are documented in
+[apps/storefront/.env.example](../apps/storefront/.env.example).
+
+**The Google Cloud OAuth Web client needs two authorized redirect URIs**, not
+one: the admin's `GOOGLE_ADMIN_CALLBACK_URL` and the storefront's
+`https://thecraftynp.org/auth/design/callback`. The provider takes the callback
+URL per request, so an unregistered URI fails at Google, not in our code.
+
+**As of CNP-81 the gate's code is on `dev` but not yet on `main`**, so
+`/design/*` on production is public until the next promotion, exactly as it was
+on Vercel. The variables are in place for when it lands.
 
 **Backups are scheduled on the Postgres volume, daily and monthly**, from the
 service's Backups tab. Railway fixes the retention per schedule: daily is kept 6
@@ -206,79 +280,37 @@ An older client refuses to dump a newer server, which is why both run inside a
 all 148 tables matched production's exact row counts, 1,114 rows in total. The
 dump holds customer data: keep it out of the repo and delete it afterwards.
 
-### The custom domain had to be added unproxied first
+### The `api` custom domain had to be added unproxied first
 
 Railway issues its own certificate for `api.thecraftynp.com`, and it cannot
 complete that while Cloudflare is proxying the record. Add the `CNAME`
 **grey-clouded**, wait for the certificate to reach `VALID`, then switch the
 proxy on. Doing it in the other order leaves the certificate stuck validating.
 
-Vercel needed no such dance — its apex `A` record works proxied immediately.
+The storefront's `thecraftynp.org` (CNP-81) needed the `_railway-verify` TXT
+record in place as well: without it Railway answers the domain with a `404`
+even once the `CNAME` resolves. Its certificate reached `VALID` within minutes
+of the records being created.
 
 ## Vercel
 
-Project `craftynp-storefront`.
+The storefront left Vercel in CNP-81, and the project `craftynp-storefront` was
+deleted on 2026-09-13, which also removed its Git connection and its checks on
+pull requests. The repo's `vercel.json`, the Vercel MCP server and its
+permissions went with it.
 
-| Setting           | Value             | Why                                                       |
-| ----------------- | ----------------- | --------------------------------------------------------- |
-| Root directory    | `apps/storefront` | keeps framework detection and output location working     |
-| Production branch | `main`            | defaults to the repo default, which is `dev`              |
-| Node              | **22.x**          | defaults to 24, which fails `engine-strict` on `>=22 <23` |
+**There are no preview deployments, by decision.** They were not rebuilt on
+Railway: Vercel's were reachable only by the team, called the production API
+so checkout could never be exercised on them, and a Railway deploy that fails
+its build or healthcheck leaves the previous deployment serving anyway. A
+per-pull-request preview would also have needed its own protection, since
+Cloudflare Access cannot cover `*.up.railway.app` hostnames.
 
-The install and build commands come from
-[apps/storefront/vercel.json](../apps/storefront/vercel.json) so they are
-reviewable in the repo rather than dashboard state.
-
-Deployment protection is `all_except_custom_domains`, and the exception is
-narrower than it sounds: it exempts **production** custom domains only.
-`thecraftynp.org` and `www` are public; `*.vercel.app` **and
-`dev.thecraftynp.org`** answer `302` to Vercel SSO, because `dev` is a preview
-deployment. That is the right outcome for a staging alias — it is reachable by
-the team and nobody else — but it does mean `dev.thecraftynp.org` cannot be used
-to demo anything to the client. Use `vercel curl` to fetch a protected
-deployment from a script.
-
-Fork protection is on, which matters because the repo is public and
-`STORE_CORS` admits preview origins.
-
-### The `/design/*` gate
-
-The internal design-system pages are gated at the application level by Google
-Workspace sign-in, reusing Medusa's `auth-google-workspace` provider. Three
-environment variables on `craftynp-storefront` drive it —
-`DESIGN_SESSION_SECRET`, `DESIGN_ALLOWED_DOMAIN` and `DESIGN_GATE` — and are
-documented in
-[apps/storefront/.env.example](../apps/storefront/.env.example).
-
-**The Google Cloud OAuth Web client now needs two authorized redirect URIs**,
-not one: the admin's `GOOGLE_ADMIN_CALLBACK_URL` and the storefront's
-`https://thecraftynp.org/auth/design/callback`. The provider takes the callback
-URL per request, so an unregistered URI fails at Google, not in our code.
-
-`DESIGN_GATE` is set to `off` on **Preview**, so this gate is a
-production-only control and previews are protected by Vercel SSO alone. That
-is deliberate: a preview builds with `NODE_ENV=production`, so the gate would
-otherwise switch itself on there, and the two ways that ends are both bad.
-Without a `DESIGN_SESSION_SECRET` in Preview it fails closed and `/design`
-becomes unreachable rather than merely gated. With one, it still cannot work,
-because a per-pull-request preview's hostname is a freshly generated
-`*.vercel.app` name and **every redirect URI has to be registered on the Google
-OAuth client in advance** — which a hostname that does not exist yet cannot be.
-Only the stable `dev.thecraftynp.org` alias could ever be registered.
-
-Turning the gate off there costs nothing, because Vercel SSO already restricts
-every preview to the team. Production is where this gate does the real work,
-since `thecraftynp.org` is exempt from Vercel's protection.
-
-### Never deploy this repo with `vercel` from the command line
-
-`vercel --prod` from the repo root packages the whole working tree — it reached
-**30 GB** before failing — and, worse, silently creates a _second_ project named
-after the directory, links it to the repo, and adds a failing check to every
-pull request. One had to be deleted.
-
-Production deploys come from git. To deploy a specific commit without pushing,
-create the deployment through the API with a `gitSource` body.
+**Copying variables out of Vercel does not work for Sensitive ones.**
+`vercel env pull` writes the literal string `[SENSITIVE]` for any variable marked
+Sensitive, and CNP-81 briefly shipped that as the Stripe publishable key and the
+design session secret. Sensitive values cannot be read back from Vercel at all;
+they have to come from their source.
 
 ## R2
 
@@ -296,7 +328,8 @@ endpoint and no custom domain — which is what makes it non-listable; every rea
 is a short-lived signed URL minted by Medusa.
 
 **Media is on the `.com` zone, not `.org`, on purpose.** Next's image optimizer
-fetches images server-side from Vercel, and Bot Fight Mode — on for `.org` —
+fetches images server-side from the storefront's Railway container, and Bot
+Fight Mode — on for `.org` —
 challenges server-side fetches, which fail silently. `.com` has it off.
 
 The three buckets must never be merged. R2 has no object-level ACLs and Medusa's
@@ -376,5 +409,6 @@ blocks merge" would not be true for an admin. "Require branches to be up to
 date" is deliberately off: it forces a rebase before every merge, which fights
 the merge-commit rule on promotions.
 
-Only `ci` is required. The Vercel checks are not, because they fail for reasons
-unrelated to the code.
+Only `ci` is required. Railway posts a deploy check for each service a pull
+request's base branch deploys; those are not required, because they can fail
+for reasons unrelated to the code.
