@@ -19,6 +19,12 @@ export type VariantWithCustomization = {
     categories?:
       ({ metadata?: Record<string, unknown> | null } | null)[] | null;
     options?: ({ id?: string | null } | null)[] | null;
+    product_options?:
+      | ({
+          product_option?: { title?: string | null } | null;
+          values?: ({ value?: string | null } | null)[] | null;
+        } | null)[]
+      | null;
   } | null;
   options?:
     | ({
@@ -35,6 +41,8 @@ export const VARIANT_CUSTOMIZATION_FIELDS = [
   "product.metadata",
   "product.categories.metadata",
   "product.options.id",
+  "product.product_options.product_option.title",
+  "product.product_options.values.value",
   "options.value",
   "options.option_id",
   "options.metadata",
@@ -71,6 +79,15 @@ function isCustomSizeVariant(
 ): boolean | null {
   if (inputs.dimensions === "off") return null;
   if (size.optionTitle === null || size.optionValue === null) return null;
+
+  const productCarriesIt = (variant.product?.product_options ?? []).some(
+    (productOption) =>
+      productOption?.product_option?.title === size.optionTitle &&
+      (productOption.values ?? []).some(
+        (value) => value?.value === size.optionValue,
+      ),
+  );
+  if (!productCarriesIt) return null;
 
   return (variant.options ?? []).some(
     (option) =>

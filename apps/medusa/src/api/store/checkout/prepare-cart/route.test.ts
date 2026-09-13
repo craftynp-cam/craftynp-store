@@ -280,6 +280,12 @@ function buildHarness(options: {
             product: {
               metadata: options.productMetadata ?? AREA_METADATA,
               categories: [{ metadata: { artwork_min_dpi: "300" } }],
+              product_options: (options.optionValues ?? []).map(
+                (optionValue) => ({
+                  product_option: { title: optionValue.option.title },
+                  values: [{ value: optionValue.value }],
+                }),
+              ),
             },
             options: options.optionValues ?? [],
             calculated_price: {

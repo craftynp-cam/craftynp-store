@@ -79,6 +79,9 @@ tax provider), `notification-resend`, `auth-auth0`, and
   variant may not. Without the first a `Custom` variant sells at its own
   multiplier price; without the second a size is priced against a cheaper
   preset's base, since `/store/price-quote` quotes dimensions on any variant.
+  A product whose own options do not carry the named value counts as naming
+  none, as it does for the storefront's `resolveCustomSizeOption`, so the
+  dimensions mode alone decides rather than every variant refusing a size.
   Only a line that sent a customization has one stored — an empty one would
   change `customizationSignature` and supersede a cart the shopper could reuse.
 - **The custom size carries two more keys again, and they are money:**
@@ -695,7 +698,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   payload names a variant, not the option values under it, so a preset size's
   inches are reachable only through `variant.options[].metadata`. It asks for
   `options.option.title` as well, which is how the variant carrying the named
-  Custom value is recognised; on that variant the preset measurement is
+  Custom value is recognised, and `product.product_options` — the product's
+  own option values — to confirm the product carries that value at all. Not
+  `product.options.values`: a variant query does not narrow those to the
+  product, so an option shared across products lists every product's values.
+  On the Custom variant the preset measurement is
   skipped, so a custom size answers DPI from `customization.dimensions` alone
   and a measurement left on the Custom value cannot stand in for it.
 - **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,

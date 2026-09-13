@@ -23,10 +23,23 @@ type OptionRow = {
   option?: { title?: string | null } | null;
 };
 
+type ProductOptionRow = {
+  product_option?: { title?: string | null } | null;
+  values?: { value?: string | null }[] | null;
+};
+
+const PRODUCT_OPTIONS: ProductOptionRow[] = [
+  {
+    product_option: { title: "Size" },
+    values: [{ value: "Medium" }, { value: "Custom" }],
+  },
+];
+
 function variant(
   overrides: {
     metadata?: Record<string, unknown>;
     categories?: ({ metadata?: Record<string, unknown> | null } | null)[];
+    productOptions?: ProductOptionRow[];
     options?: (OptionRow | null)[];
   } = {},
 ) {
@@ -35,6 +48,7 @@ function variant(
     product: {
       metadata: overrides.metadata ?? PRODUCT_METADATA,
       categories: overrides.categories ?? [],
+      product_options: overrides.productOptions ?? PRODUCT_OPTIONS,
     },
     options: overrides.options ?? [],
   };
@@ -61,20 +75,33 @@ describe("customizationRulesForVariant", () => {
     [
       "true on the named Custom value",
       PRODUCT_METADATA,
+      PRODUCT_OPTIONS,
       [{ value: "Custom", option: { title: "Size" } }],
       true,
     ],
     [
       "false on a preset of the named option",
       PRODUCT_METADATA,
+      PRODUCT_OPTIONS,
       [{ value: "Medium", option: { title: "Size" } }],
       false,
     ],
     [
       "false when the Custom value sits on another option",
       PRODUCT_METADATA,
+      PRODUCT_OPTIONS,
       [{ value: "Custom", option: { title: "Finish" } }],
       false,
+    ],
+    [
+      "null when the named option is absent from the product",
+      PRODUCT_METADATA,
+      [
+        { product_option: { title: "Size" }, values: [{ value: "Medium" }] },
+        { product_option: { title: "Finish" }, values: [{ value: "Custom" }] },
+      ],
+      [{ value: "Medium", option: { title: "Size" } }],
+      null,
     ],
     [
       "null when the product names no Custom option",
@@ -83,24 +110,52 @@ describe("customizationRulesForVariant", () => {
         customization_size_option: "",
         customization_size_option_value: "",
       },
+      PRODUCT_OPTIONS,
       [{ value: "Custom", option: { title: "Size" } }],
       null,
     ],
     [
       "null when the custom size is off",
       { ...PRODUCT_METADATA, customization_size: "off" },
+      PRODUCT_OPTIONS,
       [{ value: "Custom", option: { title: "Size" } }],
       null,
     ],
-  ] as [string, Record<string, unknown>, OptionRow[], boolean | null][])(
+  ] as [
+    string,
+    Record<string, unknown>,
+    ProductOptionRow[],
+    OptionRow[],
+    boolean | null,
+  ][])(
     "reports the Custom variant as %s",
-    (_label, metadata, options, expected) => {
+    (_label, metadata, productOptions, options, expected) => {
       expect(
-        customizationRulesForVariant(variant({ metadata, options }))
-          .customSizeVariant,
+        customizationRulesForVariant(
+          variant({ metadata, productOptions, options }),
+        ).customSizeVariant,
       ).toBe(expected);
     },
   );
+
+  it("accepts a size on a preset variant of a product that lacks its named Custom option", () => {
+    const rules = customizationRulesForVariant(
+      variant({
+        metadata: { ...PRODUCT_METADATA, customization_artwork: "off" },
+        productOptions: [
+          { product_option: { title: "Size" }, values: [{ value: "Medium" }] },
+        ],
+        options: [{ value: "Medium", option: { title: "Size" } }],
+      }),
+    );
+
+    expect(
+      validateCustomization(
+        { dimensions: { widthInches: 8, heightInches: 10 } },
+        rules,
+      ).dimensions,
+    ).toEqual({ widthInches: 8, heightInches: 10 });
+  });
 
   it("measures artwork against the typed size on a Custom variant, not a stray preset measurement", () => {
     const rules = customizationRulesForVariant(
