@@ -284,6 +284,21 @@ export async function deleteArtwork(
   );
 }
 
+export function isMissingObject(error: unknown): boolean {
+  if (error == null || typeof error !== "object") return false;
+
+  const { name, $metadata } = error as {
+    name?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+
+  return (
+    name === "NotFound" ||
+    name === "NoSuchKey" ||
+    $metadata?.httpStatusCode === 404
+  );
+}
+
 export function __resetForTests(): void {
   client = null;
   clientOptions = null;

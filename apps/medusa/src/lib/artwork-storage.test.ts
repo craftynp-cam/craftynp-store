@@ -13,6 +13,7 @@ import {
   artworkObjectKey,
   clampExpiry,
   contentDisposition,
+  isMissingObject,
   readArtworkHead,
   readArtworkStorageOptions,
   readUploadUrlTtlSeconds,
@@ -212,4 +213,28 @@ describe("contentDisposition", () => {
       "filename*=UTF-8''Kid%27s%20drawing.png",
     );
   });
+});
+
+describe("isMissingObject", () => {
+  const s3Error = (name: string, httpStatusCode: number) =>
+    Object.assign(new Error(name), { name, $metadata: { httpStatusCode } });
+
+  it.each([
+    ["a HEAD of a missing key", s3Error("NotFound", 404)],
+    ["a copy from a missing key", s3Error("NoSuchKey", 404)],
+  ])("reads %s as missing", (_label, error) => {
+    expect(isMissingObject(error)).toBe(true);
+  });
+
+  it.each([
+    ["a storage outage", s3Error("InternalError", 500)],
+    ["refused credentials", s3Error("AccessDenied", 403)],
+    ["a dropped connection", new Error("socket hang up")],
+    ["a non-error rejection", "timeout"],
+  ])(
+    "does not read %s as missing, so a transient failure never abandons a paid line",
+    (_label, error) => {
+      expect(isMissingObject(error)).toBe(false);
+    },
+  );
 });
