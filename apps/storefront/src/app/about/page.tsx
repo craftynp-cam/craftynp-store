@@ -8,12 +8,14 @@ import {
 } from "@/components";
 import { toAboutClosing, toAboutHero, toAboutStory } from "@/lib/about-content";
 import { MedusaUnavailableError } from "@/lib/medusa-error";
+import { pageMetadata } from "@/lib/page-metadata";
 import { SITE_NAME } from "@/lib/site";
 import { fetchSiteContent } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "About",
   description: `Meet the maker behind ${SITE_NAME} and how every order is made by hand.`,
+  ...pageMetadata("/about"),
 };
 
 export const dynamic = "force-dynamic";

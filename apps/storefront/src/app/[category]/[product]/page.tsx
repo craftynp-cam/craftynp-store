@@ -8,6 +8,7 @@ import {
   StoreUnavailable,
 } from "@/components";
 import { MedusaUnavailableError } from "@/lib/medusa-error";
+import { pageMetadata } from "@/lib/page-metadata";
 import { fetchProductByHandle } from "@/lib/product";
 import { fetchRegion } from "@/lib/region";
 import { fetchSiteContent } from "@/lib/site-content";
@@ -36,6 +37,7 @@ export async function generateMetadata({
   return {
     title: product.title,
     description: product.description || undefined,
+    ...pageMetadata(product.href, product.images[0]),
   };
 }
 
