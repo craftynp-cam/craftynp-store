@@ -223,6 +223,7 @@ type Harness = {
   json: jest.Mock;
   status: jest.Mock;
   listByStagingKeys: jest.Mock;
+  graph: jest.Mock;
 };
 
 type OptionValueRow = {
@@ -245,6 +246,7 @@ function buildHarness(options: {
   productMetadata?: Record<string, unknown>;
   optionValues?: OptionValueRow[];
   ledger?: ArtworkAssetRow[] | Error;
+  pricingError?: Error;
 }): Harness {
   let mutated = false;
   const ledger = options.ledger ?? [ledgerRow()];
@@ -267,47 +269,54 @@ function buildHarness(options: {
     markMutated({ result: {} }),
   );
 
-  const graph = jest.fn(async ({ entity }: { entity: string }) => {
-    if (entity === "region") {
-      return {
-        data: [
-          { id: "reg_01", currency_code: "usd", countries: [{ iso_2: "us" }] },
-        ],
-      };
-    }
-    if (entity === "shipping_option") {
-      return { data: [{ id: "so_01" }] };
-    }
-    if (entity === "variant") {
-      return {
-        data: [
-          {
-            id: "variant_01",
-            product: {
-              metadata: options.productMetadata ?? AREA_METADATA,
-              categories: [{ metadata: { artwork_min_dpi: "300" } }],
-              product_options: (options.optionValues ?? []).map(
-                (optionValue) => ({
-                  product_option: { title: optionValue.option.title },
-                  values: [{ value: optionValue.value }],
-                }),
-              ),
-            },
-            options: options.optionValues ?? [],
-            calculated_price: {
-              calculated_amount: 1.15,
-              original_amount: 1.15,
+  const graph = jest.fn(
+    async ({ entity, context }: { entity: string; context?: unknown }) => {
+      if (entity === "region") {
+        return {
+          data: [
+            {
+              id: "reg_01",
               currency_code: "usd",
+              countries: [{ iso_2: "us" }],
             },
-          },
-        ],
-      };
-    }
-    if (!mutated) {
-      return { data: options.before ? [options.before] : [] };
-    }
-    return { data: [options.after ?? cartRow()] };
-  });
+          ],
+        };
+      }
+      if (entity === "shipping_option") {
+        return { data: [{ id: "so_01" }] };
+      }
+      if (entity === "variant") {
+        if (context && options.pricingError) throw options.pricingError;
+        return {
+          data: [
+            {
+              id: "variant_01",
+              product: {
+                metadata: options.productMetadata ?? AREA_METADATA,
+                categories: [{ metadata: { artwork_min_dpi: "300" } }],
+                product_options: (options.optionValues ?? []).map(
+                  (optionValue) => ({
+                    product_option: { title: optionValue.option.title },
+                    values: [{ value: optionValue.value }],
+                  }),
+                ),
+              },
+              options: options.optionValues ?? [],
+              calculated_price: {
+                calculated_amount: 1.15,
+                original_amount: 1.15,
+                currency_code: "usd",
+              },
+            },
+          ],
+        };
+      }
+      if (!mutated) {
+        return { data: options.before ? [options.before] : [] };
+      }
+      return { data: [options.after ?? cartRow()] };
+    },
+  );
 
   const json = jest.fn();
   const status = jest.fn(() => ({ json }));
@@ -328,6 +337,7 @@ function buildHarness(options: {
     json,
     status,
     listByStagingKeys,
+    graph,
   };
 }
 
@@ -460,7 +470,11 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     expect(json).toHaveBeenCalledWith({
       error: "invalid_price_quote",
       reason: "line_mismatch",
-      message: "invalid_price_quote:line_mismatch",
+      line: 0,
+      lines: [
+        { error: "invalid_price_quote", reason: "line_mismatch", line: 0 },
+      ],
+      message: "invalid_price_quote:line_mismatch@0",
     });
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
@@ -487,9 +501,65 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     expect(json).toHaveBeenCalledWith({
       error: "invalid_price_quote",
       reason: "missing",
-      message: "invalid_price_quote:missing",
+      line: 0,
+      lines: [{ error: "invalid_price_quote", reason: "missing", line: 0 }],
+      message: "invalid_price_quote:missing@0",
     });
     expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("names the line whose quote has expired, past a line that needs none", async () => {
+    const expired = signPriceQuote(
+      {
+        amt: AREA_UNIT_PRICE,
+        cur: "usd",
+        ps: priceSignature({
+          variantId: "variant_01",
+          quantity: 2,
+          widthInches: DIMENSIONS.widthInches,
+          heightInches: DIMENSIONS.heightInches,
+        }),
+        exp: Date.now() - 1,
+      },
+      PRICE_SECRET,
+    );
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          { variantId: "variant_01", quantity: 2 },
+          { ...areaItems[0]!, priceQuoteToken: expired },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "invalid_price_quote",
+        reason: "expired",
+        line: 1,
+        message: "invalid_price_quote:expired@1",
+      }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("answers 502 when pricing throws and no line was refused", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({ items: areaItems }),
+      before: null,
+      pricingError: new Error("connection refused"),
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(502);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "pricing_failed" }),
+    );
   });
 
   it("refuses dimensions outside the product's own bounds", async () => {
@@ -962,9 +1032,124 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     expect(json).toHaveBeenCalledWith({
       error: "invalid_customization",
       reason: "artwork_not_found",
-      message: "invalid_customization:artwork_not_found",
+      line: 0,
+      lines: [
+        {
+          error: "invalid_customization",
+          reason: "artwork_not_found",
+          line: 0,
+        },
+      ],
+      message: "invalid_customization:artwork_not_found@0",
     });
     expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("names the second line when only it is refused", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          ...customizedItems({ artwork: ARTWORK }),
+          ...customizedItems({
+            artwork: { ...ARTWORK, storageKey: "staging/made-up.png" },
+          }),
+        ],
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_customization",
+      reason: "artwork_not_found",
+      line: 1,
+      lines: [
+        {
+          error: "invalid_customization",
+          reason: "artwork_not_found",
+          line: 1,
+        },
+      ],
+      message: "invalid_customization:artwork_not_found@1",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("lists every refused line in one answer, before reading or writing any cart", async () => {
+    const { req, res, status, json, graph } = buildHarness({
+      body: buildBody({
+        cartId: CART_ID,
+        items: [
+          ...customizedItems({
+            artwork: { ...ARTWORK, storageKey: "staging/made-up.png" },
+          }),
+          ...customizedItems({ dimensions: DIMENSIONS }),
+        ],
+      }),
+      before: cartRow(),
+      productMetadata: { ...AREA_METADATA, customization_artwork: "optional" },
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_customization",
+      reason: "artwork_not_found",
+      line: 0,
+      lines: [
+        {
+          error: "invalid_customization",
+          reason: "artwork_not_found",
+          line: 0,
+        },
+        { error: "invalid_price_quote", reason: "missing", line: 1 },
+      ],
+      message:
+        "invalid_customization:artwork_not_found@0,invalid_price_quote:missing@1",
+    });
+    expect(graph).not.toHaveBeenCalledWith(
+      expect.objectContaining({ entity: "cart" }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+    expect(mockUpdateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("still answers the refused line when a later line's pricing throws", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          ...customizedItems({
+            artwork: { ...ARTWORK, storageKey: "staging/made-up.png" },
+          }),
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            priceQuoteToken: priceQuoteToken(),
+            customization: { dimensions: DIMENSIONS },
+          },
+        ],
+      }),
+      before: null,
+      productMetadata: { ...AREA_METADATA, customization_artwork: "optional" },
+      pricingError: new Error("connection refused"),
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "invalid_customization",
+        reason: "artwork_not_found",
+        line: 0,
+        message: "invalid_customization:artwork_not_found@0",
+      }),
+    );
   });
 
   it("holds a file claimed as SVG to the pixels the ledger measured on its PNG", async () => {
@@ -1017,7 +1202,16 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     expect(json).toHaveBeenCalledWith({
       error: "invalid_customization",
       reason: "missing_required",
-      message: "invalid_customization:missing_required:dimensions",
+      line: 0,
+      lines: [
+        {
+          error: "invalid_customization",
+          reason: "missing_required",
+          input: "dimensions",
+          line: 0,
+        },
+      ],
+      message: "invalid_customization:missing_required:dimensions@0",
     });
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
