@@ -1,7 +1,9 @@
+import type { CustomizationInputKey } from "@craftynp/types";
 import { MedusaError } from "@medusajs/framework/utils";
 import {
   CustomizationRejection,
   validateCustomization,
+  type CustomizationRejectionReason,
   type CustomizationRules,
 } from "./validate-customization.js";
 
@@ -112,21 +114,22 @@ describe("validateCustomization", () => {
         "missing_required",
         "orderNotes",
       ],
-    ] as [string, unknown, CustomizationRules, string, string][])(
-      "refuses %s",
-      (_label, payload, rules, reason, input) => {
-        const thrown = captureThrown(() =>
-          validateCustomization(payload, rules),
-        );
+    ] satisfies [
+      string,
+      unknown,
+      CustomizationRules,
+      CustomizationRejectionReason,
+      CustomizationInputKey,
+    ][])("refuses %s", (_label, payload, rules, reason, input) => {
+      const thrown = captureThrown(() => validateCustomization(payload, rules));
 
-        expect(thrown).toBeInstanceOf(CustomizationRejection);
-        expect(thrown).toMatchObject({
-          reason,
-          input,
-          message: `invalid_customization:${reason}:${input}`,
-        });
-      },
-    );
+      expect(thrown).toBeInstanceOf(CustomizationRejection);
+      expect(thrown).toMatchObject({
+        reason,
+        input,
+        message: `invalid_customization:${reason}:${input}`,
+      });
+    });
   });
 
   it("throws when custom text is empty", () => {

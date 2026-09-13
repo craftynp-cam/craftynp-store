@@ -121,7 +121,7 @@ describe("customizationRulesForVariant", () => {
       [{ value: "Custom", option: { title: "Size" } }],
       null,
     ],
-  ] as [
+  ] satisfies [
     string,
     Record<string, unknown>,
     ProductOptionRow[],
