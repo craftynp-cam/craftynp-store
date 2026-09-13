@@ -294,11 +294,10 @@ of the records being created.
 
 ## Vercel
 
-The storefront left Vercel in CNP-81. The project `craftynp-storefront` serves
-none of our hostnames and is being disconnected and deleted; until it is, its
-checks still appear on pull requests, and it must not be deployed with the
-`vercel` CLI, which packages the whole working tree and silently creates a
-second project.
+The storefront left Vercel in CNP-81, and the project `craftynp-storefront` was
+deleted on 2026-09-13, which also removed its Git connection and its checks on
+pull requests. The repo's `vercel.json`, the Vercel MCP server and its
+permissions went with it.
 
 **There are no preview deployments, by decision.** They were not rebuilt on
 Railway: Vercel's were reachable only by the team, called the production API
@@ -411,6 +410,5 @@ date" is deliberately off: it forces a rebase before every merge, which fights
 the merge-commit rule on promotions.
 
 Only `ci` is required. Railway posts a deploy check for each service a pull
-request's base branch deploys, and the Vercel checks remain until that project
-is deleted; neither is required, because both can fail for reasons unrelated to
-the code.
+request's base branch deploys; those are not required, because they can fail
+for reasons unrelated to the code.
