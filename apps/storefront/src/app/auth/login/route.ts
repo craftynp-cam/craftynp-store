@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { RETURN_TO_COOKIE_NAME, returnToCookieOptions } from "@/lib/auth";
 import { createAuthFlowSdk } from "@/lib/medusa";
-import { sanitizeReturnTo, signInHref } from "@/lib/routes";
+import { sanitizeReturnTo, signInHref, siteUrl } from "@/lib/routes";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -10,9 +10,7 @@ export async function GET(request: NextRequest) {
   const connection = searchParams.get("connection") ?? undefined;
   const screenHint = searchParams.get("screen_hint") ?? undefined;
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin;
-  const callbackUrl = `${siteUrl}/auth/callback`;
+  const callbackUrl = `${siteUrl(request.url)}/auth/callback`;
 
   const authSdk = createAuthFlowSdk();
 
@@ -26,14 +24,14 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Could not start the Auth0 sign-in flow", error);
     return NextResponse.redirect(
-      new URL(signInHref({ error: "auth_failed" }), request.url),
+      new URL(signInHref({ error: "auth_failed" }), siteUrl(request.url)),
     );
   }
 
   if (typeof result !== "object" || !("location" in result)) {
     console.error("Auth0 login did not return a redirect location");
     return NextResponse.redirect(
-      new URL(signInHref({ error: "auth_failed" }), request.url),
+      new URL(signInHref({ error: "auth_failed" }), siteUrl(request.url)),
     );
   }
 
