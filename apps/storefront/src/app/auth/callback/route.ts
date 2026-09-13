@@ -9,7 +9,7 @@ import {
   sessionCookieOptions,
 } from "@/lib/auth";
 import { createAuthFlowSdk, sdk } from "@/lib/medusa";
-import { sanitizeReturnTo, signInHref } from "@/lib/routes";
+import { sanitizeReturnTo, signInHref, siteUrl } from "@/lib/routes";
 
 function tokenMaxAge(token: string): number | undefined {
   const decoded = decodeJwtPayload(token);
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
   function failure(error: string) {
     const response = NextResponse.redirect(
-      new URL(signInHref({ error }), request.url),
+      new URL(signInHref({ error }), siteUrl(request.url)),
     );
     response.cookies.delete(RETURN_TO_COOKIE_NAME);
     return response;
@@ -104,7 +104,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.redirect(new URL(returnTo, request.url));
+  const response = NextResponse.redirect(
+    new URL(returnTo, siteUrl(request.url)),
+  );
   response.cookies.set(
     AUTH_COOKIE_NAME,
     token,
