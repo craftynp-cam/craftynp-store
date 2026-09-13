@@ -21,7 +21,8 @@
     "db:migrate": "pnpm --filter apps-medusa run db:migrate",
     "reset-auth0-account": "pnpm --filter apps-medusa run reset-auth0-account",
     "list-carriers": "pnpm --filter apps-medusa run list-carriers",
-    "register-webhook": "pnpm --filter apps-medusa run register-webhook"
+    "register-webhook": "pnpm --filter apps-medusa run register-webhook",
+    "purge-artwork": "pnpm --filter apps-medusa run purge-artwork"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

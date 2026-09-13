@@ -64,6 +64,7 @@ describe("paymentPrepareKey", () => {
       lines: [
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,
@@ -72,6 +73,7 @@ describe("paymentPrepareKey", () => {
         },
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,
@@ -82,8 +84,54 @@ describe("paymentPrepareKey", () => {
     });
 
     expect(paymentPrepareKey(draft, cart)).toBe(
-      "tax.token|jamie@example.com|Jamie:Rivera:555-123-4567:123 Maple Street:|same|a:1,b:2",
+      "tax.token|jamie@example.com|Jamie:Rivera:555-123-4567:123 Maple Street:|same|a:1:x,b:2:x",
     );
+  });
+
+  it("changes when a line's custom size changes, so the size is re-prepared", () => {
+    // Every custom size shares one variant, so two sizes of the same variant
+    // and quantity are the same id:quantity. Without the dimensions the key
+    // never moves and the shopper pays the PaymentIntent minted for the old
+    // size.
+    const draft = makeDraft();
+    const line = {
+      id: "a",
+      lineId: "line-a",
+      href: "/a",
+      title: "A",
+      unitPrice: 1,
+      currencyCode: "usd",
+      quantity: 1,
+    };
+
+    const eightByTen = paymentPrepareKey(
+      draft,
+      makeCart({
+        lines: [
+          {
+            ...line,
+            customization: {
+              dimensions: { widthInches: 8, heightInches: 10 },
+            },
+          },
+        ],
+      }),
+    );
+    const twelveBySixteen = paymentPrepareKey(
+      draft,
+      makeCart({
+        lines: [
+          {
+            ...line,
+            customization: {
+              dimensions: { widthInches: 12, heightInches: 16 },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(eightByTen).not.toBe(twelveBySixteen);
   });
 
   it("changes when the tax quote token changes", () => {
@@ -138,6 +186,7 @@ describe("paymentPrepareKey", () => {
       lines: [
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,
@@ -146,6 +195,7 @@ describe("paymentPrepareKey", () => {
         },
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,

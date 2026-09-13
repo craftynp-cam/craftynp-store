@@ -1,11 +1,15 @@
 import "@testing-library/jest-dom";
 
+import { toHaveNoViolations } from "jest-axe";
+
 import {
   ReadableStream,
   TransformStream,
   WritableStream,
 } from "node:stream/web";
 import { TextDecoder, TextEncoder } from "node:util";
+
+expect.extend(toHaveNoViolations);
 
 // jsdom does not implement the WHATWG Streams or the text encoding globals that
 // @medusajs/js-sdk pulls in through fetch-event-stream. Node ships both, so

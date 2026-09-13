@@ -4,6 +4,7 @@ export type GoogleWorkspaceProviderOptions = {
   clientId: string;
   clientSecret: string;
   callbackUrl: string;
+  allowedCallbackUrls?: string[];
   allowedDomain: string;
 };
 

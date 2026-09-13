@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 
 import {
   cartLineCount,
+  cartLineKey,
   cartSubtotal,
   readCart,
   readServerCart,
@@ -18,7 +19,7 @@ import {
   subscribeToCartDrawer,
 } from "@/lib/cart-drawer";
 import { formatMoney } from "@/lib/money";
-import { checkoutHref } from "@/lib/routes";
+import { checkoutHref, productEditHref } from "@/lib/routes";
 
 import { CartCard } from "../cards";
 import { Drawer, DrawerCloseButton, DrawerPanel, DrawerTitle } from "../ui";
@@ -77,10 +78,12 @@ export function CartDrawer() {
                 <ul className="space-y-4">
                   {cart.lines.map((line) => (
                     <CartCard
-                      key={line.id}
+                      key={cartLineKey(line)}
                       line={line}
                       onQuantityChange={setCartLineQuantity}
                       onRemove={removeCartLine}
+                      editHref={productEditHref(line.href, line.lineId)}
+                      onEdit={close}
                     />
                   ))}
                 </ul>

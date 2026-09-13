@@ -51,7 +51,7 @@ export const fetchCatalogProducts = cache(
         region_id: regionId,
         order: medusaOrder(sort),
         limit: CATALOG_LIMIT,
-        fields: "*variants.calculated_price,*categories",
+        fields: "*variants.calculated_price,*categories,+metadata",
       });
 
       return sortCatalogProducts(products, sort);

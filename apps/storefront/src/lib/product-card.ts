@@ -1,3 +1,5 @@
+import { resolveProductCustomization } from "@craftynp/types";
+
 import type { ProductCardData } from "@/components";
 
 import { formatMoney } from "./money";
@@ -7,6 +9,7 @@ export type ProductCardSourceProduct = {
   handle: string | null;
   title: string;
   thumbnail?: string | null;
+  metadata?: Record<string, unknown> | null;
   categories?: readonly { name: string; handle: string }[] | null;
   variants?:
     | readonly {
@@ -87,6 +90,7 @@ export function toProductCardProps(
         ? formatMoney(cheapest.original_amount, cheapest.currency_code)
         : undefined,
     isFromPrice,
-    isCustomizable: false,
+    isCustomizable: resolveProductCustomization(product.metadata)
+      .isCustomizable,
   };
 }

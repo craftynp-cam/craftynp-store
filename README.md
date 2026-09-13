@@ -11,14 +11,14 @@ products, discounts, and orders from the Medusa admin.
 ## Status
 
 Deployed. The storefront is live at
-[thecraftynp.org](https://thecraftynp.org) on Vercel, and Medusa with its admin
-at `api.thecraftynp.com` on Railway. A clone still reaches a working dev
+[thecraftynp.org](https://thecraftynp.org), and Medusa with its admin at
+`api.thecraftynp.com`, both on Railway. A clone still reaches a working dev
 environment — the storefront server-renders products fetched live from Medusa,
 checkout takes a real Stripe payment and places a Medusa order.
 
-The store has no products yet; the client adds those from the admin. Customer
-artwork upload is a later story (CNP-20). See [docs/dns.md](docs/dns.md) for the
-deployed configuration.
+The store has no products yet; the client adds those from the admin. Artwork
+storage and its retention window landed in CNP-20; the upload UI is CNP-39. See
+[docs/dns.md](docs/dns.md) for the deployed configuration.
 
 ## Stack
 
@@ -33,7 +33,7 @@ deployed configuration.
 | Monorepo       | pnpm workspaces + Turborepo                                |
 | Formatting     | Prettier (root), ESLint flat config (extended per app)     |
 
-**Deployed on:** Vercel (storefront), Railway (Medusa, Postgres, Redis),
+**Deployed on:** Railway (storefront, Medusa, Postgres, Redis),
 Cloudflare (DNS, TLS, rate limiting) and Cloudflare R2 (imagery and shipping
 labels), with Stripe for payments and tax, ShipStation for shipping, Resend for
 email, and Auth0 for customer accounts. [docs/dns.md](docs/dns.md) records the
@@ -374,9 +374,11 @@ rather than producing a half-configured store.
 1. Provision Postgres and Redis, and point `DATABASE_URL` and `REDIS_URL` at
    them.
 2. Fill `apps/medusa/.env` **completely** from `apps/medusa/.env.example`, with
-   this environment's own `JWT_SECRET`, `COOKIE_SECRET`, `SHIPPING_QUOTE_SECRET`
-   and `ORDER_ACCESS_SECRET`, its Auth0 and Google Workspace OAuth clients, its
-   Stripe and ShipStation keys, and the real `SHIP_FROM_*` address.
+   this environment's own `JWT_SECRET`, `COOKIE_SECRET`, `MFA_ENCRYPTION_KEY`,
+   `SHIPPING_QUOTE_SECRET`, `TAX_QUOTE_SECRET`, `PRICE_QUOTE_SECRET` and
+   `ORDER_ACCESS_SECRET` (each its own random value), its Auth0 and Google
+   Workspace OAuth clients, its Stripe and ShipStation keys, its three R2
+   buckets' credentials, and the real `SHIP_FROM_*` address.
 3. `pnpm install && pnpm run build`.
 4. `pnpm run db:migrate`. Watch for `seed-defaults` running before
    `seed-us-region`; if it does not, the region seed fails on the missing
@@ -486,27 +488,29 @@ All are run from the repo root.
 
 Production is live. The mapping:
 
-| Branch | Environment | Target                                 |
-| ------ | ----------- | -------------------------------------- |
-| `main` | Production  | Vercel (storefront) + Railway (Medusa) |
-| `dev`  | Preview     | Vercel preview deployments             |
+| Branch | Environment | Target                                |
+| ------ | ----------- | ------------------------------------- |
+| `main` | Production  | Railway (storefront and both Medusa)  |
+| `dev`  | —           | not deployed; integration branch only |
 
-Production is the only environment provisioned. Preview deployments have no
-Medusa of their own and call the production API, which is why `dev` has the
-stable `dev.thecraftynp.org` alias: Auth0 rejects a callback URL it has not been
-told about, so a per-deploy preview hostname could never complete sign-in.
+Production is the only environment, and there are no preview deployments
+(CNP-81). They were dropped on the move off Vercel rather than rebuilt: they
+were reachable only by the team, called the production API so checkout could
+not be exercised there, and a Railway deploy that fails its build or healthcheck
+leaves the previous deployment serving anyway.
 
 **[docs/dns.md](docs/dns.md) records what is actually configured** — every DNS
-record, the Cloudflare rules, and the Railway, Vercel, R2 and GitHub settings,
+record, the Cloudflare rules, and the Railway, R2 and GitHub settings,
 along with the handful of places reality had to diverge from the plan below.
 
 ### Before the first public deploy
 
-Four store routes take no session at all, and two of them spend money on every
-call — `/store/tax-quote` bills a Stripe Tax calculation, and
-`/store/shipping-rates` burns the ShipStation rate limit, which returns
-`502 shipping_unavailable` and blocks checkout for real customers once
-exhausted. The app carries per-IP limits on all four (see
+Seven store routes take no session and carry the app's own per-IP limit. Two
+of them spend money on every call — `/store/tax-quote` bills a Stripe Tax
+calculation, and `/store/shipping-rates` burns the ShipStation rate limit,
+which returns `502 shipping_unavailable` and blocks checkout for real customers
+once exhausted — and the two artwork routes write to and read from R2. The app
+carries per-IP limits on all seven (see
 `RATE_LIMIT_*` in `apps/medusa/.env.example`), but those are a second line of
 defence, shared across processes wherever `REDIS_URL` is set and per-process
 where it is not.
@@ -566,8 +570,9 @@ orange-clouded zone hits the Bot Fight Mode problem above.
    ceilings so Cloudflare sheds volume and the app limit only catches leakage:
 
    ```
-   (http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates"})
+   (http.request.uri.path in {"/store/tax-quote" "/store/shipping-rates" "/store/price-quote"})
    or (starts_with(http.request.uri.path, "/store/checkout/"))
+   or (starts_with(http.request.uri.path, "/store/artwork/"))
    ```
 
    Characteristic IP, 60 requests per minute, Block for 1 minute.
@@ -609,35 +614,36 @@ plan would not express what this section asked for.
 `_acme-challenge` records for businessidentity.llc. It is not a redirect-only
 zone and must not be deleted or have its nameservers moved.
 
-**Vercel's default build command cannot build the storefront** (CNP-17). A plain
-`next build` **fails**, because the storefront resolves `@craftynp/types` from
-its built `dist/` and that build has not run. The build must come from the repo
-root through Turborepo so `^build` ordering applies — the same trap as the
-`pnpm --filter` ban above.
+**A plain `next build` cannot build the storefront** (CNP-17). It **fails**,
+because the storefront resolves `@craftynp/types` from its built `dist/` and
+that build has not run. The build must come from the repo root through Turborepo
+so `^build` ordering applies — the same trap as the `pnpm --filter` ban above.
+`apps/storefront/Dockerfile` takes the repo root as its build context for exactly
+that reason, the same shape as Medusa's.
 
-It is the **command** that has to change, not the root directory. That stays
-`apps/storefront`, so Vercel's Next.js framework detection, output location and
-image handling all keep working; `apps/storefront/vercel.json` overrides the
-install and build commands to `cd ../..` and go through turbo, and adds
-`turbo-ignore` so a Medusa-only change does not rebuild the storefront. Do not
-"fix" this by moving the root directory to the repo root.
+**Every `NEXT_PUBLIC_*` variable must be declared as an `ARG` in that
+Dockerfile.** Next inlines them at build time, and Railway passes a service
+variable into a Docker build only when an `ARG` names it. A missing one still
+builds green and ships `undefined` — and `next.config.ts` reads the backend and
+media URLs at build time to allow image hosts, so missing those 400s every
+product image from the optimizer.
 
 **The admin is not proxied through the storefront in production.** The `/api`
 and `/app` rewrites in `next.config.ts` are development-only: they exist so the
 local admin is same-origin on `:8000`, and nothing in `src/` calls either path.
 In production the admin is served by Medusa at `api.thecraftynp.com/app`, which
-keeps it on the API's own zone, off Vercel's function billing, and — because
+keeps it on the API's own zone, off the storefront's container, and — because
 `admin.backendUrl` is left unset so the bundle calls relative URLs — same-origin,
 which is what makes `ADMIN_CORS=https://api.thecraftynp.com` the whole answer.
 
 **The storefront and API are now cross-origin** (CNP-17), because they sit on
 different domains by design. Production values:
 
-| Variable                                               | Value                                                      |
-| ------------------------------------------------------ | ---------------------------------------------------------- |
-| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com`                              |
-| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`                                  |
-| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`, plus the Vercel preview domains |
+| Variable                                               | Value                         |
+| ------------------------------------------------------ | ----------------------------- |
+| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com` |
+| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`     |
+| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`     |
 
 `ADMIN_CORS` is `https://api.thecraftynp.com` — the origin the admin is actually
 served from, and nothing else. With the `/app` rewrite dev-only and
@@ -649,7 +655,9 @@ hand the storefront origin admin-API access for no reason.
 `AUTH0_CALLBACK_URL` and
 `GOOGLE_ADMIN_CALLBACK_URL` need production values **and** matching entries in
 the Auth0 and Google Cloud dashboards — the Google one must match exactly or
-admin sign-in breaks, with no useful error.
+admin sign-in breaks, with no useful error. The Google client also lists the
+storefront's `https://thecraftynp.org/auth/design/callback`, and Medusa accepts
+that second callback only because `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` names it.
 
 **Both webhooks must be re-pointed and re-registered** (CNP-16): a new Stripe
 endpoint, which mints a new `STRIPE_WEBHOOK_SECRET`, and
@@ -669,12 +677,13 @@ or ioredis resolves IPv4 only and fails at boot with `ENOTFOUND`.
 `seed-us-region.ts` throws on a missing `SHIP_FROM_*` or
 `SHIPPING_OPTION_DEFAULT_*` rather than half-configuring the store.
 
-**There are two R2 buckets, and they must stay two** (CNP-16). Site-content and
-product imagery goes to a **public** bucket through Medusa's file module
-(`FILE_STORAGE_*`); label PDFs go to a **private** one through
-`label-storage.ts`. A deployed container's filesystem is ephemeral, so
+**There are three R2 buckets, and they must stay three** (CNP-16, CNP-20).
+Site-content and product imagery goes to a **public** bucket through Medusa's
+file module (`FILE_STORAGE_*`); label PDFs go to a **private** one through
+`label-storage.ts`; customer artwork goes to a third **private** one through
+`artwork-storage.ts`. A deployed container's filesystem is ephemeral, so
 `file-local` would silently destroy every uploaded image on the next deploy —
-and R2 has no object-level ACLs, so one bucket cannot be both. See
+and R2 has no object-level ACLs, so one bucket cannot be all three. See
 [apps/medusa/AGENTS.md](apps/medusa/AGENTS.md).
 
 **The origin lock-down in step 2 is a shared-secret header.** Railway exposes a

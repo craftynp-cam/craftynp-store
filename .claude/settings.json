@@ -3,6 +3,20 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/cloud-session-start.sh",
+            "timeout": 900
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(git status*)",
@@ -162,28 +176,7 @@
       "mcp__railway__private_network_status",
       "mcp__railway__search_templates",
       "mcp__railway__service_metrics",
-      "mcp__railway__whoami",
-      "mcp__vercel__check_domain_availability_and_price",
-      "mcp__vercel__get_agent_run",
-      "mcp__vercel__get_agent_run_trace",
-      "mcp__vercel__get_deployment",
-      "mcp__vercel__get_deployment_build_logs",
-      "mcp__vercel__get_domain_order",
-      "mcp__vercel__get_project",
-      "mcp__vercel__get_project_deployment_protection",
-      "mcp__vercel__get_purchase_quote",
-      "mcp__vercel__get_runtime_errors",
-      "mcp__vercel__get_runtime_logs",
-      "mcp__vercel__get_toolbar_thread",
-      "mcp__vercel__get_web_analytics",
-      "mcp__vercel__list_agent_run_projects",
-      "mcp__vercel__list_agent_runs",
-      "mcp__vercel__list_deployments",
-      "mcp__vercel__list_projects",
-      "mcp__vercel__list_teams",
-      "mcp__vercel__list_toolbar_threads",
-      "mcp__vercel__search_vercel_documentation",
-      "mcp__vercel__web_fetch_vercel_url"
+      "mcp__railway__whoami"
     ],
     "ask": [
       "mcp__atlassian-mcp-server__addCommentToJiraIssue",
@@ -274,15 +267,7 @@
       "mcp__railway__set_variables",
       "mcp__railway__update_domain",
       "mcp__railway__update_service",
-      "mcp__railway__update_volume",
-      "mcp__vercel__add_toolbar_reaction",
-      "mcp__vercel__change_toolbar_thread_resolve_status",
-      "mcp__vercel__deploy_to_vercel",
-      "mcp__vercel__edit_toolbar_message",
-      "mcp__vercel__get_access_to_vercel_url",
-      "mcp__vercel__import-claude-design-from-url",
-      "mcp__vercel__reply_to_toolbar_thread",
-      "mcp__vercel__update_project_deployment_protection"
+      "mcp__railway__update_volume"
     ],
     "deny": [
       "Bash(git push --force*)",
@@ -327,11 +312,7 @@
       "mcp__railway__remove_bucket",
       "mcp__railway__remove_service",
       "mcp__railway__remove_tcp_proxy",
-      "mcp__railway__remove_volume",
-      "mcp__vercel__buy_addon",
-      "mcp__vercel__buy_credits",
-      "mcp__vercel__buy_domain",
-      "mcp__vercel__buy_pro"
+      "mcp__railway__remove_volume"
     ]
   },
   "extraKnownMarketplaces": {

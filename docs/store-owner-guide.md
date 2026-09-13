@@ -364,14 +364,16 @@ Everything on this page follows the same rules:
   line.**
 - Closing band: heading, one line of body copy, and the button label.
 
-**Order confirmation** — two lines shown on the thank-you page _and inside the
-confirmation email_.
+**Turnaround and shipping** — two lines shown in the "How your order is made"
+panel on every product page, on the thank-you page, and _inside the confirmation
+email_.
 
 - _Production turnaround_ — how long you take to make an order.
 - _Shipping window_ — how long delivery takes once it's gone.
 
 Keep these honest and current. They set the expectation that decides whether a
-customer emails you asking where their order is.
+customer emails you asking where their order is — and on the product page they
+are read before anyone has paid.
 
 **Get in touch** — your phone number and email address, shown in the footer at
 the bottom of every page.

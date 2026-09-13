@@ -20,7 +20,10 @@ export function isDestinationReadyForTax(
 
 export function taxQuoteKey(draft: CheckoutDraft, cart: Cart): string {
   const items = [...cart.lines]
-    .map((line) => `${line.id}:${line.quantity}`)
+    .map(
+      (line) =>
+        `${line.id}:${line.quantity}:${line.customization?.dimensions?.widthInches ?? ""}x${line.customization?.dimensions?.heightInches ?? ""}`,
+    )
     .sort()
     .join(",");
 

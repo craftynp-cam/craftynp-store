@@ -8,13 +8,38 @@ import {
   createPaymentSessionsWorkflow,
   updateCartWorkflow,
 } from "@medusajs/medusa/core-flows";
-import type { CheckoutAddress, CheckoutPrepareRequest } from "@craftynp/types";
+import { lineItemDetails } from "@craftynp/types";
+import type {
+  CheckoutAddress,
+  CheckoutLineItemDetail,
+  CheckoutPrepareRequest,
+  LineItemCustomization,
+} from "@craftynp/types";
 
 import {
   cartSignature,
   verifyShippingQuote,
 } from "../../../../lib/shipping-quote";
 import { taxSignature, verifyTaxQuote } from "../../../../lib/tax-quote";
+import { describeError } from "../../../../lib/describe-error";
+import { toAmount } from "../../../../lib/money";
+import { priceSignature, verifyPriceQuote } from "../../../../lib/price-quote";
+import { resolveLinePrice } from "../../../../lib/resolve-line-price";
+import { artworkFromLedger } from "../../../../lib/artwork-ledger";
+import { ARTWORK_MODULE } from "../../../../modules/artwork";
+import type ArtworkModuleService from "../../../../modules/artwork/service";
+import type { ArtworkAssetRow } from "../../../../modules/artwork/service";
+import { pricedVariantQuery } from "../../price-quote/route";
+import {
+  VARIANT_CUSTOMIZATION_FIELDS,
+  customizationRulesForVariant,
+  orderLineFactsForVariant,
+  type VariantWithCustomization,
+} from "../../../../lib/customization-rules";
+import {
+  CustomizationRejection,
+  validateCustomization,
+} from "../../../../lib/validate-customization";
 
 const STRIPE_PAYMENT_PROVIDER_ID = "pp_stripe_stripe";
 const LIVE_SHIPPING_OPTION_NAME = "Live USPS Rate";
@@ -50,6 +75,63 @@ function toCartAddress(address: CheckoutAddress) {
     postal_code: address.postalCode,
     country_code: address.countryCode.toLowerCase(),
   };
+}
+
+type CartItemRow = {
+  variant_id?: string | null;
+  quantity?: unknown;
+  unit_price?: unknown;
+  is_custom_price?: boolean | null;
+  metadata?: {
+    dimensions?: { widthInches?: number; heightInches?: number } | null;
+    customization?: LineItemCustomization | null;
+  } | null;
+};
+
+type CartWithItems = {
+  id: string;
+  completed_at?: string | Date | null;
+  items?: CartItemRow[] | null;
+};
+
+// updateCartWorkflow cannot change line items, so anything that alters what
+// gets made has to force a fresh cart rather than be silently kept from the
+// cart the shopper started with.
+function customizationSignature(
+  customization: LineItemCustomization | null | undefined,
+): string {
+  if (!customization) return "";
+
+  return [
+    customization.artwork?.storageKey ?? "",
+    customization.customText?.value ?? "",
+    customization.orderNotes ?? "",
+  ].join("~");
+}
+
+function lineSignature(input: {
+  variantId: string;
+  quantity: number;
+  widthInches: number | null;
+  heightInches: number | null;
+  // Only an area-priced line carries one. Medusa prices every other line
+  // itself and refreshes it, so comparing those would report a change the
+  // shopper never made.
+  unitPrice: number | null;
+  customization: string;
+}): string {
+  return [
+    input.variantId,
+    input.quantity,
+    input.widthInches ?? "",
+    input.heightInches ?? "",
+    input.unitPrice ?? "",
+    input.customization,
+  ].join(":");
+}
+
+function itemsSignature(lines: readonly string[]): string {
+  return [...lines].sort().join(",");
 }
 
 type PaymentSessionWithData = {
@@ -165,23 +247,265 @@ export async function POST(
     });
   }
 
+  // The last point before money, and the only server path a configured line
+  // reaches. The artwork's facts come from the ledger inspect wrote, never the
+  // request; the comparison against the product's threshold happens here.
+  const validated = new Map<number, LineItemCustomization>();
+  const orderLines = new Map<
+    number,
+    { isCustomizable: boolean; details: CheckoutLineItemDetail[] }
+  >();
+  let variants: VariantWithCustomization[];
+
+  try {
+    const { data } = await query.graph({
+      entity: "variant",
+      fields: VARIANT_CUSTOMIZATION_FIELDS,
+      filters: {
+        id: [...new Set(items.map((item) => item.variantId))],
+      },
+    });
+    variants = data as VariantWithCustomization[];
+  } catch (error) {
+    logger.error(
+      `[checkout:unavailable] reason=customization_lookup_failed error=${describeError(error)}`,
+    );
+    return res.status(502).json({
+      error: "checkout_unavailable",
+      reason: "misconfigured",
+      message: "checkout_unavailable:misconfigured",
+    });
+  }
+
+  const byId = new Map(variants.map((variant) => [variant.id, variant]));
+
+  const storageKeys = [
+    ...new Set(
+      items.flatMap((item) =>
+        item.customization?.artwork
+          ? [item.customization.artwork.storageKey]
+          : [],
+      ),
+    ),
+  ];
+  const ledger = new Map<string, ArtworkAssetRow>();
+
+  if (storageKeys.length > 0) {
+    try {
+      const artwork = req.scope.resolve<ArtworkModuleService>(ARTWORK_MODULE);
+
+      for (const row of await artwork.listByStagingKeys(storageKeys)) {
+        ledger.set(row.staging_key, row);
+      }
+    } catch (error) {
+      logger.error(
+        `[checkout:unavailable] reason=artwork_lookup_failed error=${describeError(error)}`,
+      );
+      return res.status(502).json({
+        error: "checkout_unavailable",
+        reason: "misconfigured",
+        message: "checkout_unavailable:misconfigured",
+      });
+    }
+  }
+
+  const now = new Date();
+
+  for (const [index, item] of items.entries()) {
+    const variant = byId.get(item.variantId);
+
+    // A customization we cannot resolve rules for is one we cannot check, and
+    // storing an unchecked one is the hole this closes.
+    if (!variant) {
+      return res.status(400).json({
+        error: "invalid_customization",
+        reason: "unknown_variant",
+        message: `invalid_customization:unknown_variant:${item.variantId}`,
+      });
+    }
+
+    let requested = item.customization;
+
+    if (requested?.artwork) {
+      const resolved = artworkFromLedger(
+        requested.artwork,
+        ledger.get(requested.artwork.storageKey),
+        now,
+      );
+
+      if (!resolved.ok) {
+        return res.status(400).json({
+          error: "invalid_customization",
+          reason: resolved.reason,
+          message: `invalid_customization:${resolved.reason}`,
+        });
+      }
+
+      requested = { ...requested, artwork: resolved.artwork };
+    }
+
+    let customization: LineItemCustomization;
+
+    try {
+      customization = validateCustomization(
+        requested ?? {},
+        customizationRulesForVariant(variant),
+      );
+    } catch (error) {
+      if (error instanceof CustomizationRejection) {
+        return res.status(400).json({
+          error: "invalid_customization",
+          reason: error.reason,
+          message: error.message,
+        });
+      }
+
+      return res.status(400).json({
+        error: "invalid_customization",
+        reason: "rejected",
+        message: describeError(error),
+      });
+    }
+
+    if (item.customization != null) validated.set(index, customization);
+
+    const facts = orderLineFactsForVariant(variant);
+    orderLines.set(index, {
+      isCustomizable: facts.isCustomizable,
+      details: lineItemDetails({
+        options: facts.options,
+        customization: validated.get(index),
+        sizeOptionTitle: facts.sizeOptionTitle,
+      }),
+    });
+  }
+
+  // An area-priced line cannot be left to Medusa: the amount depends on the
+  // size the line's customization records, which no price set knows about. The
+  // token proves which line the shopper was quoted for; the amount is re-derived
+  // here rather than read off the request, so a tampered quote buys nothing.
+  const unitPrices = new Map<number, number>();
+
+  for (const [index, item] of items.entries()) {
+    const dimensions = validated.get(index)?.dimensions;
+    if (dimensions == null) continue;
+
+    if (item.priceQuoteToken == null) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: "missing",
+        message: "invalid_price_quote:missing",
+      });
+    }
+
+    const expected = priceSignature({
+      variantId: item.variantId,
+      quantity: item.quantity,
+      widthInches: dimensions.widthInches,
+      heightInches: dimensions.heightInches,
+    });
+    const quoteResult = verifyPriceQuote(
+      item.priceQuoteToken,
+      process.env.PRICE_QUOTE_SECRET as string,
+      { priceSignature: expected },
+    );
+
+    if (!quoteResult.valid) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: quoteResult.reason,
+        message: `invalid_price_quote:${quoteResult.reason}`,
+      });
+    }
+
+    let priced: Awaited<ReturnType<typeof resolveLinePrice>>;
+
+    try {
+      priced = await resolveLinePrice(pricedVariantQuery(query, region), {
+        variantId: item.variantId,
+        quantity: item.quantity,
+        dimensions,
+      });
+    } catch (error) {
+      logger.error(
+        `[checkout:unavailable] reason=pricing_failed variant=${item.variantId} error=${describeError(error)}`,
+      );
+      return res.status(502).json({
+        error: "checkout_unavailable",
+        reason: "pricing_failed",
+        message: "checkout_unavailable:pricing_failed",
+      });
+    }
+
+    if (!priced.ok) {
+      return res.status(400).json({
+        error: "invalid_price_quote",
+        reason: priced.reason,
+        message: `invalid_price_quote:${priced.reason}`,
+      });
+    }
+
+    unitPrices.set(index, priced.price.unitAmount);
+  }
+
+  const requestedItems = itemsSignature(
+    items.map((item, index) =>
+      lineSignature({
+        variantId: item.variantId,
+        quantity: item.quantity,
+        widthInches: validated.get(index)?.dimensions?.widthInches ?? null,
+        heightInches: validated.get(index)?.dimensions?.heightInches ?? null,
+        unitPrice: unitPrices.get(index) ?? null,
+        customization: customizationSignature(validated.get(index)),
+      }),
+    ),
+  );
+
   let reusableCartId: string | null = null;
 
   if (cartId) {
     const { data: existingCarts } = await query.graph({
       entity: "cart",
-      fields: ["id", "completed_at"],
+      fields: ["id", "completed_at", "items.*"],
       filters: { id: cartId },
     });
-    const existingCart = existingCarts[0] as
-      { id: string; completed_at?: string | Date | null } | undefined;
+    const existingCart = existingCarts[0] as CartWithItems | undefined;
 
-    if (existingCart && !existingCart.completed_at) {
+    // Reuse is only for an address edit, which is what keeps the shopper's
+    // PaymentIntent alive across one. updateCartWorkflow cannot change line
+    // items, so a cart whose lines no longer match the request would be
+    // prepared — and charged — at the configuration it was created with.
+    const storedItems = existingCart
+      ? itemsSignature(
+          (existingCart.items ?? []).map((item) =>
+            lineSignature({
+              variantId: item.variant_id ?? "",
+              quantity: toAmount(item.quantity),
+              widthInches: item.metadata?.dimensions?.widthInches ?? null,
+              heightInches: item.metadata?.dimensions?.heightInches ?? null,
+              unitPrice: item.is_custom_price
+                ? toAmount(item.unit_price)
+                : null,
+              customization: customizationSignature(
+                item.metadata?.customization,
+              ),
+            }),
+          ),
+        )
+      : null;
+
+    const reason = !existingCart
+      ? "not_found"
+      : existingCart.completed_at
+        ? "completed"
+        : storedItems !== requestedItems
+          ? "items_changed"
+          : null;
+
+    if (reason === null && existingCart) {
       reusableCartId = existingCart.id;
     } else {
-      logger.warn(
-        `[checkout:cart-superseded] reason=${existingCart ? "completed" : "not_found"} cart=${cartId}`,
-      );
+      logger.warn(`[checkout:cart-superseded] reason=${reason} cart=${cartId}`);
     }
   }
 
@@ -206,14 +530,28 @@ export async function POST(
         email,
         shipping_address: toCartAddress(shippingAddress),
         billing_address: toCartAddress(billingAddress),
-        items: items.map((item) => ({
-          variant_id: item.variantId,
-          quantity: item.quantity,
-          metadata: {
-            isCustomizable: item.isCustomizable ?? false,
-            details: item.details ?? [],
-          },
-        })),
+        items: items.map((item, index) => {
+          const customization = validated.get(index);
+
+          return {
+            variant_id: item.variantId,
+            quantity: item.quantity,
+            // Set only for an area-priced line. Medusa marks such a line
+            // is_custom_price and stops re-pricing it, which is wanted here and
+            // wrong everywhere else — an ordinary line must keep picking up its
+            // quantity break on every cart refresh.
+            ...(unitPrices.has(index)
+              ? { unit_price: unitPrices.get(index) }
+              : {}),
+            metadata: {
+              ...orderLines.get(index),
+              ...(customization?.dimensions
+                ? { dimensions: customization.dimensions }
+                : {}),
+              ...(customization ? { customization } : {}),
+            },
+          };
+        }),
       },
     });
 

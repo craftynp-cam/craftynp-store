@@ -41,4 +41,19 @@ describe("Textarea", () => {
     );
     expect(screen.getByText("Too long.")).toBeInTheDocument();
   });
+
+  it("announces its error as an alert when it appears", () => {
+    const { rerender } = render(<Textarea label="Personalisation" />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    rerender(
+      <Textarea label="Personalisation" isInvalid errorMessage="Too long." />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Too long.");
+    expect(
+      screen.getByLabelText("Personalisation"),
+    ).toHaveAccessibleDescription("Too long.");
+  });
 });

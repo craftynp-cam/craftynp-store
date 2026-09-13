@@ -36,7 +36,9 @@ export function OrderLineRow({ line, currencyCode }: OrderLineRowProps) {
             {line.details.map((detail) => (
               <div key={detail.label} className="flex gap-2">
                 <dt className="font-medium">{detail.label}:</dt>
-                <dd className="min-w-0 break-words">{detail.value}</dd>
+                <dd className="min-w-0 break-words whitespace-pre-line">
+                  {detail.value}
+                </dd>
               </div>
             ))}
           </dl>

@@ -4,17 +4,20 @@ import { Skeleton } from "@heroui/react/skeleton";
 import Image from "next/image";
 import Link from "next/link";
 
-import type { CartLine } from "@/lib/cart";
+import { cartLineKey, type CartLine } from "@/lib/cart";
 import { formatMoney } from "@/lib/money";
 
-import { X } from "../icons";
+import { PencilSimple, X } from "../icons";
 import { Badge, QuantityStepper } from "../ui";
+import { CartLineDetailValue } from "./cart-line-detail-value";
 
 export type CartCardData = {
   isLoading?: false;
   line: CartLine;
   onQuantityChange: (id: string, quantity: number) => void;
   onRemove: (id: string) => void;
+  editHref?: string;
+  onEdit?: () => void;
 };
 
 export type CartCardProps = { isLoading: true } | CartCardData;
@@ -40,9 +43,8 @@ export function CartCard(props: CartCardProps) {
     );
   }
 
-  const { line, onQuantityChange, onRemove } = props;
+  const { line, onQuantityChange, onRemove, editHref, onEdit } = props;
   const {
-    id,
     href,
     title,
     imageUrl,
@@ -80,14 +82,26 @@ export function CartCard(props: CartCardProps) {
                 {title}
               </Link>
             </h3>
-            <button
-              type="button"
-              aria-label={`Remove ${title} from cart`}
-              onClick={() => onRemove(id)}
-              className="shrink-0 rounded-md p-1 text-foreground-muted transition-colors hover:bg-surface-soft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <X aria-hidden="true" size={18} />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              {editHref && isCustomizable ? (
+                <Link
+                  href={editHref}
+                  aria-label={`Edit ${title}`}
+                  onClick={onEdit}
+                  className="rounded-md p-1 text-foreground-muted transition-colors hover:bg-surface-soft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <PencilSimple aria-hidden="true" size={18} />
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                aria-label={`Remove ${title} from cart`}
+                onClick={() => onRemove(cartLineKey(line))}
+                className="shrink-0 rounded-md p-1 text-foreground-muted transition-colors hover:bg-surface-soft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <X aria-hidden="true" size={18} />
+              </button>
+            </div>
           </div>
 
           {isCustomizable ? (
@@ -117,9 +131,7 @@ export function CartCard(props: CartCardProps) {
               <dt className="shrink-0 text-foreground-muted">
                 {detail.label}:
               </dt>
-              <dd className="min-w-0 truncate" title={detail.value}>
-                {detail.value}
-              </dd>
+              <CartLineDetailValue label={detail.label} value={detail.value} />
             </div>
           ))}
         </dl>
@@ -128,7 +140,8 @@ export function CartCard(props: CartCardProps) {
       <div className="mt-3 flex items-center justify-between gap-4">
         <QuantityStepper
           value={quantity}
-          onChange={(next) => onQuantityChange(id, next)}
+          onChange={(next) => onQuantityChange(cartLineKey(line), next)}
+          min={line.minOrderQuantity}
           label={`Quantity for ${title}`}
         />
         <p className="font-display text-lg">

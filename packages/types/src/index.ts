@@ -1,10 +1,76 @@
+export { areaUnitPrice } from "./area-price.js";
 export {
-  MIN_ARTWORK_DPI,
+  ARTWORK_ACCEPT,
+  ARTWORK_ACCEPTED_LABEL,
+  ARTWORK_EXTENSIONS,
+  ARTWORK_KINDS,
+  ARTWORK_MIME_TYPES,
+  MAX_ARTWORK_BYTES,
+  VECTOR_ARTWORK_MIME_TYPES,
+  artworkDownloadResponseSchema,
+  artworkOrderAssetSchema,
+  artworkOrderListResponseSchema,
+  artworkExtension,
+  artworkInspectResponseSchema,
+  artworkKindSchema,
+  artworkMimeTypeSchema,
+  artworkUploadRequestSchema,
+  artworkUploadResponseSchema,
+  isArtworkMimeType,
+  isVectorArtwork,
+  resolveArtworkMimeType,
+} from "./artwork.js";
+export {
+  CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+  CUSTOM_TEXT_LENGTH_CEILING,
+  ORDER_NOTES_MAX_LENGTH,
+  SINGLE_LINE_MESSAGE,
   artworkReferenceSchema,
+  artworkResolutionDemands,
+  checkArtworkResolution,
+  checkCustomDimensions,
+  checkSingleLine,
+  checkTextLength,
   customDimensionsSchema,
   customTextSchema,
+  effectiveDpi,
   lineItemCustomizationSchema,
+  requiredPixels,
+  textLength,
 } from "./customization.js";
+export { lineItemDetails } from "./line-item-details.js";
+export {
+  ARTWORK_MIN_DPI_METADATA_KEY,
+  CUSTOMIZABLE_METADATA_KEY,
+  CUSTOMIZATION_INPUTS,
+  CUSTOMIZATION_INPUT_MODES,
+  CUSTOM_SIZE_FALLBACK_BOUNDS,
+  CUSTOM_SIZE_FLOOR_METADATA_KEY,
+  CUSTOM_SIZE_MAX_METADATA_KEY,
+  CUSTOM_SIZE_MIN_METADATA_KEY,
+  CUSTOM_SIZE_OPTION_METADATA_KEY,
+  CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY,
+  CUSTOM_SIZE_RATE_METADATA_KEY,
+  CUSTOM_TEXT_MAX_LENGTH_METADATA_KEY,
+  DEFAULT_ARTWORK_MIN_DPI,
+  DEFAULT_MIN_ORDER_QUANTITY,
+  MIN_ORDER_QUANTITY_METADATA_KEY,
+  OPTION_VALUE_HEIGHT_INCHES_KEYS,
+  OPTION_VALUE_WIDTH_INCHES_KEYS,
+  READY_MADE_PRODUCT,
+  activeCustomizationInputs,
+  customizationInputModeSchema,
+  customizationMetadataPatch,
+  readOptionValueHeightInches,
+  readOptionValueWidthInches,
+  requiredCustomizationInputs,
+  resolveArtworkMinDpi,
+  resolveMinOrderQuantity,
+  resolveProductCustomization,
+  unmeasuredOptionValues,
+  validateCategoryArtwork,
+  validateProductCustomization,
+} from "./product-customization.js";
 export { SITE_NAME, SITE_TAGLINE } from "./site.js";
 export {
   SITE_CONTENT_FIELDS,
@@ -22,7 +88,15 @@ export {
   shippingRateSchema,
   shippingRatesResponseSchema,
 } from "./shipping-rates.js";
-export { taxQuoteRequestSchema, taxQuoteResponseSchema } from "./tax.js";
+export {
+  taxQuoteItemSchema,
+  taxQuoteRequestSchema,
+  taxQuoteResponseSchema,
+} from "./tax.js";
+export {
+  priceQuoteRequestSchema,
+  priceQuoteResponseSchema,
+} from "./price-quote.js";
 export {
   checkoutAddressSchema,
   checkoutCompleteRequestSchema,
@@ -85,11 +159,43 @@ export {
 } from "./fulfilment.js";
 
 export type {
+  ArtworkDownloadResponse,
+  ArtworkOrderAsset,
+  ArtworkOrderListResponse,
+  ArtworkInspectResponse,
+  ArtworkKind,
+  ArtworkMimeType,
+  ArtworkUploadRequest,
+  ArtworkUploadResponse,
+} from "./artwork.js";
+export type {
   ArtworkReference,
+  ArtworkAxis,
+  ArtworkResolutionCheck,
+  ArtworkResolutionContext,
+  ArtworkResolutionDemand,
+  ArtworkResolutionInput,
+  CustomDimensionErrors,
+  CustomDimensionField,
   CustomDimensions,
+  CustomSizeBounds,
   CustomText,
   LineItemCustomization,
+  OrderedSizeInches,
 } from "./customization.js";
+export type { LineItemOption } from "./line-item-details.js";
+export type {
+  CustomSizeConfig,
+  CustomTextConfig,
+  OptionLike,
+  OptionValueLike,
+  UnmeasuredOptions,
+  CustomizationInput,
+  CustomizationInputKey,
+  CustomizationInputMode,
+  ProductCustomization,
+  ProductCustomizationProblem,
+} from "./product-customization.js";
 export type {
   SiteContent,
   SiteContentEntry,
@@ -106,7 +212,9 @@ export type {
   ShippingRateRequest,
   ShippingRatesResponse,
 } from "./shipping-rates.js";
-export type { TaxQuoteRequest, TaxQuoteResponse } from "./tax.js";
+export type { AreaPriceInput } from "./area-price.js";
+export type { PriceQuoteRequest, PriceQuoteResponse } from "./price-quote.js";
+export type { TaxQuoteItem, TaxQuoteRequest, TaxQuoteResponse } from "./tax.js";
 export type {
   CheckoutAddress,
   CheckoutCompleteRequest,

@@ -6,6 +6,7 @@ import type { CartLine } from "@/lib/cart";
 function makeLine(overrides: Partial<CartLine> = {}): CartLine {
   return {
     id: "sticker",
+    lineId: "line-sticker",
     href: "/products/sticker",
     title: "Custom Die-Cut Stickers",
     unitPrice: 0.75,
@@ -16,6 +17,20 @@ function makeLine(overrides: Partial<CartLine> = {}): CartLine {
 }
 
 describe("CartCard", () => {
+  it("will not let a line be decremented below its own minimum", () => {
+    render(
+      <CartCard
+        line={makeLine({ quantity: 50, minOrderQuantity: 50 })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Decrease quantity" }),
+    ).toBeDisabled();
+  });
+
   it("shows the ready-to-ship badge for a non-customizable line", () => {
     render(
       <CartCard
@@ -54,16 +69,12 @@ describe("CartCard", () => {
     expect(screen.queryByRole("term")).not.toBeInTheDocument();
   });
 
-  it("renders customization details as key/value pairs, truncated with the full value in title", () => {
-    const longValue = "a".repeat(200);
+  it("renders customization details as key/value pairs", () => {
     render(
       <CartCard
         line={makeLine({
           isCustomizable: true,
-          details: [
-            { label: "Size", value: '3" · matte' },
-            { label: "File", value: longValue },
-          ],
+          details: [{ label: "Size", value: '3" \u00b7 matte' }],
         })}
         onQuantityChange={jest.fn()}
         onRemove={jest.fn()}
@@ -71,10 +82,110 @@ describe("CartCard", () => {
     );
 
     expect(screen.getByText("Size:")).toBeInTheDocument();
-    expect(screen.getByText('3" · matte')).toBeInTheDocument();
-    const truncated = screen.getByText(longValue);
-    expect(truncated).toHaveClass("truncate");
-    expect(truncated).toHaveAttribute("title", longValue);
+    expect(screen.getByText('3" \u00b7 matte')).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /show full/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no disclosure for a short single-line detail", () => {
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "Order notes", value: "Gift wrap it" }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /show full order notes/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reveals a multi-line detail in full behind a labelled disclosure", () => {
+    const note = "Match the sage green.\n\nNeeded before the 14th.";
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "Order notes", value: note }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    // The default normalizer collapses whitespace, which would pass whether or
+    // not the line breaks survived — the one thing this test is for.
+    const verbatim = { normalizer: (value: string) => value };
+
+    const toggle = screen.getByRole("button", {
+      name: "Show full order notes",
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    const valueId = toggle.getAttribute("aria-controls");
+    expect(valueId).not.toBeNull();
+    expect(document.getElementById(valueId!)).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    const expanded = screen.getByRole("button", { name: "Show less" });
+    expect(expanded).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(note, verbatim)).toBeInTheDocument();
+  });
+
+  it("spends both clamped lines on text, not on a blank line", () => {
+    const note = "Line one of the note.\n\nLine two after a blank line.";
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "Order notes", value: note }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    const verbatim = { normalizer: (value: string) => value };
+    const toggle = screen.getByRole("button", {
+      name: "Show full order notes",
+    });
+
+    // Collapsed, the blank line is closed up so the clamp shows two lines of
+    // the note rather than one and an ellipsis on its own.
+    expect(
+      screen.getByText(
+        "Line one of the note.\nLine two after a blank line.",
+        verbatim,
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByText(note, verbatim)).toBeInTheDocument();
+  });
+
+  it("offers the disclosure for a long single-line detail too", () => {
+    const longValue = "a".repeat(200);
+    render(
+      <CartCard
+        line={makeLine({
+          isCustomizable: true,
+          details: [{ label: "File", value: longValue }],
+        })}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Show full file" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the line total as unit price times quantity", () => {
@@ -151,5 +262,52 @@ describe("CartCard", () => {
 
       expect(container.firstChild).toHaveAttribute("aria-hidden", "true");
     });
+  });
+
+  it("offers the edit link only on a line there is something to configure", () => {
+    const { rerender } = render(
+      <CartCard
+        line={makeLine({ isCustomizable: true })}
+        editHref="/products/sticker?edit=line-sticker"
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
+    ).toHaveAttribute("href", "/products/sticker?edit=line-sticker");
+
+    rerender(
+      <CartCard
+        line={makeLine({ isCustomizable: false })}
+        editHref="/products/sticker?edit=line-sticker"
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("tells its host the edit link was followed, so the drawer can close behind it", () => {
+    const onEdit = jest.fn();
+    render(
+      <CartCard
+        line={makeLine({ isCustomizable: true })}
+        editHref="/products/sticker?edit=line-sticker"
+        onEdit={onEdit}
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
+    );
+
+    expect(onEdit).toHaveBeenCalled();
   });
 });

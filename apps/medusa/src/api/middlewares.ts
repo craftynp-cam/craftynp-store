@@ -4,23 +4,31 @@ import { originGuard } from "../lib/origin-guard";
 import { adminSsoMiddlewares } from "./admin-sso/link/middlewares";
 import { fulfilmentMiddlewares } from "./admin/fulfilment/middlewares";
 import { orderStatusMiddlewares } from "./admin/orders/middlewares";
+import { productValidationMiddlewares } from "./admin/products/middlewares";
 import { siteContentMiddlewares } from "./admin/site-content/middlewares";
 import { shipstationTrackMiddlewares } from "./hooks/shipstation/track/middlewares";
+import { artworkUploadMiddlewares } from "./store/artwork/uploads/middlewares";
+import { categoryValidationMiddlewares } from "./admin/product-categories/middlewares";
 import { checkoutMiddlewares } from "./store/checkout/middlewares";
 import { orderConfirmationMiddlewares } from "./store/order-confirmation/middlewares";
 import { shippingRatesMiddlewares } from "./store/shipping-rates/middlewares";
+import { priceQuoteMiddlewares } from "./store/price-quote/middlewares";
 import { taxQuoteMiddlewares } from "./store/tax-quote/middlewares";
 
 export default defineMiddlewares({
   routes: [
     { matcher: "/*", middlewares: [originGuard()] },
     ...siteContentMiddlewares,
+    ...productValidationMiddlewares,
     ...orderStatusMiddlewares,
     ...fulfilmentMiddlewares,
     ...adminSsoMiddlewares,
     ...shipstationTrackMiddlewares,
     ...shippingRatesMiddlewares,
+    ...priceQuoteMiddlewares,
     ...taxQuoteMiddlewares,
+    ...artworkUploadMiddlewares,
+    ...categoryValidationMiddlewares,
     ...checkoutMiddlewares,
     ...orderConfirmationMiddlewares,
   ],

@@ -11,7 +11,11 @@ type TaxQuotePayload = {
     city: string;
     state: string;
   };
-  items: { variantId: string; quantity: number }[];
+  items: {
+    variantId: string;
+    quantity: number;
+    dimensions?: { widthInches: number; heightInches: number };
+  }[];
   shippingQuoteToken: string;
 };
 

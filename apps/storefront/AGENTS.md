@@ -12,8 +12,8 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   never runs. Every handler this app owns lives outside it — `src/app/auth/*`
   and `src/app/checkout/*`. The rewrites return `[]` in production on purpose:
   the admin is served by Medusa on its own domain there, and proxying it through
-  Vercel would bill every admin request as a function invocation and undo the
-  zone split (see [README.md](../../README.md)). Keep the `/api` rule above
+  the storefront would run every admin request through its container and undo
+  the zone split (see [README.md](../../README.md)). Keep the `/api` rule above
   regardless — it still applies in development, which is where a stray route
   handler would be written.
 - **Leave `images.dangerouslyAllowLocalIP: true` in `next.config.ts`.** It is
@@ -35,6 +35,11 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   top-level route claims one more.
 - Every page's `<main>` must carry `id="main-content"` and `tabIndex={-1}` —
   that is what the navbar's skip link targets.
+- **The announcement bar sits inside the navbar's `<header>`**, which is the
+  sticky wrapper rather than the bar's sibling. Outside it the bar is content
+  in no landmark at all, and axe reports `region` on every page (CNP-83).
+  jest-axe disables `region` and cannot see a whole document anyway, so
+  `navbar.test.tsx` guards it with a banner-scoped query instead.
 
 ## Components
 
@@ -51,12 +56,18 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   (`"../ui"`). `src/components/index.ts` re-exports every subdirectory barrel
   except `icons`; export a new component from its own directory's `index.ts` in
   the same change or it is unreachable.
-- **`ProductDetailView` owns the product page's selected-option state**, and is
-  why the gallery and the purchase panel are wrapped rather than rendered
+- **`ProductConfigureView` owns the product page's selected-option state**, and
+  is why the gallery and the purchase panel are wrapped rather than rendered
   side by side from the page. The selected variant's `thumbnail` drives the
-  gallery's main image, so the state has to sit above both. `ProductPurchase`
-  is controlled — it takes `selected` and `onOptionChange` and keeps only its
-  own quantity.
+  gallery's main image, so the state has to sit above both. The exported
+  `ProductDetailView` around it does nothing but resolve the edit seed and
+  remount it on a `key` — see the Editing a cart line section for why that
+  split exists. `ProductPurchase` is controlled — it takes `selected` and
+  `onOptionChange` and keeps only the state nothing above it needs: the
+  quantity and the customization draft. The
+  quantity **starts at `ProductDetail.minOrderQuantity`** and is clamped to it
+  by derivation on every render, never synced in an effect — the same reason
+  `defaultSelection` seeds the custom size rather than an effect doing it.
 - **Import icons only through `src/components/icons`** — the sole place
   `@phosphor-icons/react` is imported, and from its `/dist/ssr` subpath so
   glyphs render in server components too. Every glyph is decorative:
@@ -90,7 +101,7 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   `resolveSiteContent`.** The store route's payload is unvalidated network data,
   not a `SiteContent`: a Medusa deployed before a new `SITE_CONTENT_FIELDS`
   entry existed answers without that key, and since the fetch runs in the root
-  layout, one `undefined` read 500s every page. Vercel and Railway deploy
+  layout, one `undefined` read 500s every page. The storefront and Medusa deploy
   independently, so that skew is a normal state, not an edge case. Resolving
   fills any missing key from its registry default and drops keys the registry
   does not declare.
@@ -103,6 +114,15 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   is shared across concurrent server requests and would leak one customer's
   token into another's render. For an already-signed-in customer, pass an
   `Authorization` header on that one call to the singleton instead.
+- **A cart line has two identities and they answer different questions.**
+  `cartLineKey(line)` in `cart.ts` is derived from the configuration and
+  answers "is this the same thing?" — it is what `addCartLine` merges on, and
+  what `setCartLineQuantity` and `removeCartLine` address a line by.
+  `line.lineId` is minted once per line and answers "which line?" An edit
+  changes the configuration and so changes the key, which is exactly why
+  `updateCartLine` and the `?edit=` URL address a line by `lineId` instead.
+  `parseCart` mints one for any line stored before `lineId` existed, so a cart
+  written by an earlier session stays editable.
 - **Stores read through `useSyncExternalStore`** — `cart.ts` and
   `checkout-draft.ts` — must cache their snapshot at module scope and return a
   constant, never a fresh literal, as the server snapshot, or they loop or warn
@@ -117,9 +137,544 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   build was in. Since CNP-17 that path is narrower still (only a query-level
   4xx reaches it), so it is even less likely to be exercised by accident.
   Left unmapped, the workspace symlink resolves through the
-  package's `exports` map, which serves types and runtime separately. This is
-  the only value import of `@craftynp/types` in the app; every other one is
-  `import type`, which is why it was the only casualty.
+  package's `exports` map, which serves types and runtime separately. At the
+  time it was the app's only value import of `@craftynp/types`, which is why it
+  was the only casualty. `artwork-upload.ts` was the second — and it is worse
+  placed, because it lands in a **client** bundle, so the same failure mode
+  (`(void 0)(…)` at runtime, a green `tsc`, a green Jest) would reach shoppers
+  directly rather than only a server render. Several client modules
+  value-import the package, so treat any value import of it as able to reach
+  shoppers.
+
+## Product configurator
+
+The product page is `ProductDetailView` → `ProductGallery` + `ProductPurchase` →
+`VariantSelector`, with `ProductDetails` and `ProcessPanel` under the purchase
+column. Option groups are built from whatever options Medusa returns; nothing
+here knows that a product might have a size or a material.
+
+- **Only a single-value option is chosen for the shopper, and it is not drawn.**
+  Anything with a real choice starts unselected, so add-to-cart stays shut until
+  every group has an answer and the "Choose … to continue" hint has something to
+  name. Preselecting the first value of every option, which is what this used to
+  do, made that gate unreachable. A lone value is exempt because an option-less
+  Medusa product still arrives with one synthetic option, and a required
+  radiogroup holding one radio called "Default option value" is not a choice —
+  `VariantSelector` drops any group with fewer than two values, and returns null
+  when that leaves none. The auto-chosen value still reaches the cart line's
+  `details`, so nothing is lost by hiding it.
+- **`optionValueAvailability` reports a status per value, not per group.** A
+  value is `sold_out` when no purchasable variant carries it _at all_, and only
+  `incompatible` when it sells elsewhere but not alongside what is currently
+  chosen. Deriving one reason per group from "has any other group been
+  answered", which is what this used to do, told a shopper to try a different
+  size when no size would have helped.
+- **Until a variant resolves, the panel prices the product from its cheapest
+  _purchasable_ variant** (`From …`), falling back to the cheapest priced one
+  only when every variant is out of stock. Taking the minimum over all priced
+  variants advertises a number no reachable combination can match. A blank where
+  the price goes reads as broken, which is why there is a `From` at all. This is
+  the one price the panel still works out itself, and it needs no round trip —
+  there is no line to quote until a variant resolves.
+- **A value's sub-label comes from the Medusa option value's `metadata`**, under
+  `subLabel` or `sub_label` — Medusa has no native field for it. A blank or
+  non-string entry is ignored, so a half-filled metadata row renders nothing
+  rather than `[object Object]`.
+- **A value's physical size comes from the same place**, under `width_inches`
+  and `height_inches` (or the camelCase spellings). It is what the artwork
+  resolution check measures against on a preset size, and a preset that names
+  neither gets guidance but no gate — so leaving them off a size option quietly
+  disables the only gate protecting that product. The product-customization
+  admin widget names the unmeasured values back at the owner
+  (`unmeasuredOptionValues` in `@craftynp/types`) precisely because nothing on
+  the storefront can. It treats any option with a measured value as a size
+  group, not only the one `customization_size_option` names — that key is
+  written only for a custom size, so a preset-only product's Medium and Large
+  went unnamed (CNP-83) — and names a value missing either axis. **Both axes are checked and the coarsest decides**, so a
+  long banner cannot pass on its width alone.
+- **`RadioButtonGroup` (`src/components/ui`) is the option control**, not
+  `RadioGroup`, which still serves every ordinary form. It renders React Aria
+  radios as buttons, so the selected state is a real `aria-checked` rather than a
+  border colour, and arrow-key operation is the radio group's own. It folds a
+  value's sub-label and, when it is disabled, the reason into the radio's
+  accessible name, because a disabled radio cannot be focused and a `title`
+  would never be announced. Its visible `Required` marker is `aria-hidden` so it
+  stays out of the group's accessible name; `isRequired` → `aria-required` is the
+  programmatic half. **`validationBehavior="aria"` is load-bearing.** React
+  Aria's default is `native`, which puts `required` on every hidden radio, and
+  Chrome then reports an unanswered group as `valueMissing` — invalid — on first
+  load, before the shopper has touched it. `aria` keeps `aria-required` on the
+  group and drops the native attribute; the one add-to-cart gate never read
+  form validity, so nothing else changes.
+- **An unanswered group's value is `null`, never `""`.** React Aria's
+  `useRadio` gives tab stop 0 only to the radio matching a non-null
+  `selectedValue`, so an empty string — which matches nothing — takes every
+  radio out of the tab order. The one gate leaves every real choice unanswered
+  on load, so `?? ""` meant a keyboard shopper could not reach a single option.
+  `variant-selector.test.tsx` tabs into an unanswered group to hold this.
+- **It must paint its own focus ring, and that is not decoration.** HeroUI hangs
+  the radio ring off `.radio__control` — `<Radio.Control>` — which this component
+  deliberately does not render, there being no dot to draw. Without the
+  `has-[[data-focus-visible]]` ring on the button box there is no focus
+  indicator at all, not merely a misplaced one. `data-focus-visible` lands on
+  `Radio.Content`, which is why the ring is matched with `has-` from the outer
+  `Radio` that carries the border.
+- **The add-to-cart block is `fixed` to the bottom of the viewport below `lg`**
+  so it survives a long option panel, and it reports its measured height to
+  `ProductDetailView`, which reserves exactly that much bottom padding through
+  the `--cta-bar-height` custom property. The bar's height is not a constant —
+  the outstanding-choices hint wraps to two lines on a narrow phone — so the
+  hand-tuned `pb-28` it replaced covered the very content it was added to clear.
+  The `7rem` in the fallback is only what applies before the first measurement,
+  and where there is no `ResizeObserver`. It is one element positioned two ways,
+  never a second button: a duplicate would double every add-to-cart query in the
+  tests.
+- **Every descendant of the grid carries a `scroll-margin-bottom` of the same
+  `--cta-bar-height`** below `lg`, so a field reached by Tab scrolls clear
+  of the fixed bar instead of under it. The margin resolves the custom property
+  from the grid, which is why it is set there rather than on `html`. jsdom
+  applies no CSS; check it in a browser.
+- **The gallery column is the sticky half, and it sticks from `lg` up only.**
+  It carries its own `lg:max-h`/`lg:overflow-y-auto` against the viewport, the
+  same shape `CheckoutSummary` uses: a square hero plus a thumbnail row is
+  taller than a short laptop viewport once `--chrome-height` is taken off, and a
+  sticky block taller than the space it sticks in puts its own bottom out of
+  reach. Below `lg` it must stay in flow — the gallery is the first thing on the
+  page there, so sticking it would pin it over the configurator.
+- **Everything on the product page stays inside `ProductDetailView`'s grid**,
+  `ProcessPanel` included. The grid is what reserves `--cta-bar-height` at its
+  foot for the phone CTA bar, so anything rendered after it from the page would
+  sit under that fixed bar with nothing clearing it.
+- **`ProcessPanel` takes its timings from site content, never from a constant.**
+  `order_turnaround_note` and `order_shipping_window_note` are the same two
+  lines the confirmation page and the confirmation email render, so a hard-coded
+  "3–5 business days" here would contradict the owner the day they edit them.
+  The panel supplies the step's meaning itself and treats the note as the
+  timing, so a blanked note leaves an explanation rather than an empty step.
+- **The customization step is built by walking `CUSTOMIZATION_INPUTS`**, through
+  `offeredInputLabels`, for the same reason the gate and the admin widget walk
+  it: a new input added to the registry without a phrase here is a type error
+  rather than a step that quietly fails to mention it. A ready-made product
+  offers nothing, so the step is dropped rather than rendered empty.
+- **`offeredInputLabels` keeps `required` and `optional` apart, and the step
+  gives them a sentence each.** One flat list reads as a list of instructions,
+  and an optional input is not one — a shopper told to "set a custom size" they
+  may leave alone is being described work they do not have to do, on the panel
+  whose whole job is telling them what to expect.
+
+### Pricing
+
+**The panel does no price arithmetic.** `usePriceQuote`
+(`src/components/product/use-price-quote.ts`) posts the resolved variant, the
+quantity and — only for a custom size — the dimensions to
+`/checkout/price-quote`, which proxies Medusa's `/store/price-quote`. What comes
+back is what is shown and what `addCartLine` stores. The backend half, and why
+the product query cannot answer this, is in
+[apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+
+- **It is debounced, abortable and keyed**, modelled on
+  `use-tax-quote.ts`. A quote for a configuration the shopper has already moved
+  on from reads as `loading`, never as this line's answer — the key is compared
+  on render rather than the last response winning.
+- **Only the fetch lives in the effect.** Everything the render needs is still
+  derived, the way `artworkResolutionError` and the clamped quantity are.
+- **The last good price stays on screen while a new one loads**, dimmed and
+  `aria-busy`. Blanking it reads as broken, which is the same reason `From …`
+  exists.
+- **One `role="status"` region speaks the price, and only once the shopper has
+  changed something.** It is always mounted, so its first message is announced
+  rather than arriving with the node. It says `Price: …` when a quote settles
+  and "We could not price this just now." when one fails, and is empty while
+  loading. `hasInteracted` is set in the change handlers, not an effect, so a
+  product whose only variant quotes on load stays silent.
+- **A quote in flight gets no clause in the hint.** It blocks add-to-cart like
+  everything else in the one gate, but a hint that appears and vanishes within a
+  second of every option change is noise, and the dimming already says it. Only
+  a **failed** quote earns a clause, because that one is persistent and
+  actionable.
+- **Nothing is quoted while a custom size is half-typed or out of range.** The
+  backend would only refuse it and the shopper is already being told by the
+  field itself.
+- **The cart line carries the quote token, and its size only as
+  `customization.dimensions`.** There is no top-level copy to disagree with
+  it: `prepare-cart` prices and makes the size the customization records
+  (CNP-85). `setCartLineQuantity` **drops the token** when the drawer changes a
+  quantity: the quote was issued for the old quantity and a tier makes that a
+  different unit price, so `prepare-cart` asks for a fresh one rather than
+  charging a stale tier.
+- **`taxQuoteKey` and `paymentPrepareKey` include each line's
+  `customization.dimensions`**, or a resized line reuses the cached tax, or the
+  PaymentIntent, minted for the size it used to be.
+
+## Product customization
+
+Whether a product is made to order, and which configurator inputs it asks for,
+is declared by the shop owner on the product's metadata in Medusa and read back
+through `resolveProductCustomization` in `@craftynp/types` (see
+[apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the metadata keys and the
+guard that validates them).
+
+- **The declaration arrives on the product payload itself**, which is why
+  `fetchProductByHandle` and `fetchCatalogProducts` both ask for `+metadata`.
+  Drop it and every product silently reads as ready-made — a 200 with no error
+  anywhere, exactly the failure mode CNP-17 was about.
+- **Read it only through `resolveProductCustomization`**, never off `metadata`
+  directly. The owner can type anything into the admin's raw metadata editor or
+  a CSV column, so the resolver treats a value it does not recognise as off
+  rather than rendering an input nobody declared.
+- **`ProductPurchase` owns the configurator draft**, alongside its quantity. The
+  draft is deliberately
+  storefront-shaped strings, not a `LineItemCustomization` — the shopper's width
+  is `"8"` while they are still typing, and an `ArtworkReference` here has no
+  `dpi` yet, so it cannot become one. Add-to-cart maps it through
+  `lineItemCustomization`, which narrows the storefront `ArtworkReference` to
+  the six fields `artworkReferenceSchema` declares and drops the `uploadId` and
+  `kind` the wire has no use for. The result rides the cart line as
+  `customization` and reaches Medusa's line item metadata under the same key —
+  which is what `promote-artwork` reads to move the file out of `staging/`.
+  Every input also gets a `details` row for display, artwork included, and the
+  rows are built _from_ that result by `lineItemDetails` in `@craftynp/types`:
+  the selected options, then Artwork, Custom text, Size and Order notes. The
+  rendered half is derived from the structured half, so the two cannot
+  disagree about what the shopper filled in, and `prepare-cart` builds the
+  order line's rows with the same function.
+- **The artwork resolution check joins the one gate, and it blocks whatever the
+  declared artwork mode is.** `optional` says the shopper need not supply
+  artwork, not that a file too coarse to print is acceptable once they have —
+  the same distinction CNP-41 drew for the custom size. `artworkResolutionError`
+  and `orderedWidthInches` (`src/lib/product-customization.ts`) are derived on
+  every render, so changing the size re-runs the check and re-blocks a file that
+  had passed. **Do not turn that into an effect** — the derivation is what makes
+  it correct, and `react-hooks/set-state-in-effect` is enforced here anyway.
+  The threshold reaches the page as `ProductDetail.artworkMinDpi`, resolved from
+  the product's categories; `fetchProductByHandle` must keep asking for
+  `*categories`, and the failure mode if it stops is silent.
+- **The order minimum is not part of the one gate, and that is not an
+  oversight.** `ProductDetail.minOrderQuantity` rides the same `+metadata` the
+  declaration does and is read only through `resolveMinOrderQuantity` in
+  `@craftynp/types` (see [apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the
+  key). It reaches `QuantityStepper` as `min` and is stated under the control,
+  and it lands on the cart line so the drawer holds the same floor. Because the
+  stepper puts a sub-minimum quantity out of reach, there is no state for
+  `canAddToCart` to refuse and nothing for the hint to name — a clause there
+  would describe something the shopper cannot do.
+- **There is one add-to-cart gate and one hint, not two.** `canAddToCart` is
+  false while an option is outstanding, while the variant is sold out, _or_
+  while a required configurator input is empty; the hint names whatever is
+  outstanding in one sentence — "Choose Size, then add your artwork to
+  continue." A second gate beside it is how a shopper ends up with a disabled
+  button and no explanation, so CNP-37, CNP-38 and CNP-41 extend this one rather
+  than adding their own.
+- **The add-to-cart button is `aria-disabled`, never `disabled`, while the
+  gate is shut.** A disabled button leaves the tab order, so a keyboard or
+  screen-reader shopper never reached it or heard why it was shut. It stays
+  focusable, is described by the hint (or the stock status when sold out), and
+  a press moves focus to the first outstanding control, walked in the same
+  order the hint names them. Keep `aria-disabled:pointer-events-auto` on it:
+  HeroUI's `status-disabled` sets `pointer-events: none` on
+  `[aria-disabled="true"]`, which would swallow a mouse or touch press, and
+  jsdom cannot see that.
+- `ProductConfigurator` renders one input per declared key and nothing else.
+  Adding an input means adding it to `CUSTOMIZATION_INPUTS` in `@craftynp/types`
+  first — the registry is what the admin widget, the backend guard and the gate
+  all walk.
+
+### Editing a cart line
+
+The cart drawer's edit action is a link to the line's own product page at
+`?edit=<lineId>` (`productEditHref` in `src/lib/routes.ts`). There is no edit
+modal, and adding one would mean a second home for the option panel, the one
+gate, the price quote and the artwork upload.
+
+- **`configurationFromCartLine` is the inverse of `lineItemCustomization`, and
+  the two have to stay in step.** Anything the forward mapping writes onto the
+  line is something the inverse has to read back, or an edit silently drops it.
+- **It rebuilds the option selection from the variant, never from the line's
+  `details`.** `line.id` is the variant id and `ProductDetailVariant` carries
+  `optionValueIds`, so the lookup is exact; matching the rendered rows by label
+  would collide with the customization rows on a product whose option is titled
+  `Size`.
+- **The seed cannot exist during SSR** — `readServerCart()` is `EMPTY_CART` —
+  so it arrives only once the store is read on the client. `ProductDetailView`
+  remounts `ProductConfigureView` on its `key` to get those values into the
+  `useState` initializers. Syncing them in an effect is what the derivation
+  rules on this page exist to prevent, and `react-hooks/set-state-in-effect` is
+  enforced anyway. A page opened without `?edit=` never remounts.
+- **A `?edit=` naming a line that is gone, or a variant the product no longer
+  sells, falls back silently to add-to-cart.** A notice cannot be rendered
+  without either flashing during hydration or mismatching it, and checkout
+  already declines to special-case the empty server snapshot.
+- **Save and Cancel move focus to `#main-content` before opening the
+  drawer.** The keyed remount removes the button that had focus, so the drawer
+  would otherwise return focus to `<body>` when it closes. Only an edit does
+  this: `onEditSettled` runs after every add, and a plain add keeps its button,
+  so moving focus there would stop the drawer returning it to Add to cart.
+- **Nothing is written until Save**, which is what makes Cancel safe without
+  any undo machinery. Save re-quotes like every other change, so the line
+  always lands with a fresh token.
+
+### Custom size
+
+The custom size is the one input that reaches back into the variant options.
+Its bounds and the option it drives are product metadata, read through the same
+`resolveProductCustomization` (see [apps/medusa/AGENTS.md](../medusa/AGENTS.md)
+for the keys).
+
+- **Checking the box selects a real `Custom` option value; it does not
+  deselect the size group and leave nothing.** Preset sizes are ordinary Medusa
+  options that variants hang off, so a group with no answer resolves no variant
+  — no variant id, no price, and a dead add-to-cart. The toggle therefore
+  remembers whatever preset the shopper had, selects the value
+  `customization_size_option_value` names, and puts the preset back on
+  unchecking. The resolved variant is what the area formula is applied to — its
+  Medusa price is the base the rate multiplies, not the price charged. There is
+  deliberately no price arithmetic here either way: the amount comes from
+  `/store/price-quote` (see **Pricing** below).
+- **`VariantSelector` is still not told what a size is.** It takes generic
+  `hiddenValueIds` and `disabledOptionIds`; `ProductPurchase` is the only thing
+  that knows one of them is the custom size. Keep it that way — the rule that
+  option groups are whatever Medusa returns is what makes the selector reusable.
+  The custom value is always hidden from the group, so a shopper reaches custom
+  mode only through the checkbox; note a size group needs **three** values for
+  the presets to survive hiding it, since the selector drops any group left with
+  fewer than two.
+- **The checkbox appears only when the mode is `optional`.** `required` means
+  the shopper must give dimensions, so there is no toggle and no preset to fall
+  back to — `usesCustomSize` is what encodes that, and it is what every other
+  read goes through.
+- **A `required` custom size has no checkbox, so `ProductDetailView` selects
+  the `Custom` value in its initial state instead.** Without that the shopper
+  picked a preset, was priced as that preset, and still got a line reading
+  `Size: 8″ × 10″` — a custom size sold at the Medium price. It is seeded in
+  `defaultSelection`, not an effect, for the same reason the single-value
+  options are: `react-hooks/set-state-in-effect`.
+- **Checking the box makes the dimensions required, whatever the declared
+  mode.** `optional` describes whether the shopper is _offered_ a custom size,
+  not whether they may leave it blank once they have asked for one — otherwise
+  add-to-cart happily takes a `Custom` variant with no size on it.
+  `missingRequiredInputs` adds `dimensions` itself when `usesCustomSize` is
+  true, so this still lands in the one gate.
+- **The preset option's own detail row is dropped from the cart line while a
+  custom size is on.** Both are called "Size", so keeping it showed the shopper
+  `Size: Custom` immediately above `Size: 8″ × 10″`. `lineItemDetails` drops the
+  row of the option `customization_size_option` names whenever the
+  customization records dimensions.
+- **Field errors are not a second gate.** `customSizeErrors` feeds both the
+  `isInvalid`/`errorMessage` on each input and the one `canAddToCart` gate, and
+  adds one clause to the one hint. The wording of the range comes from
+  `checkCustomDimensions` in `@craftynp/types`, shared with the backend, so the
+  two cannot drift.
+- **A stored line's `imageUrl` is unvalidated persisted data, and
+  `renderableImageUrl` (`src/lib/cart.ts`) is what makes it safe.** `next/image`
+  throws outright on a host that is not in `next.config.ts`'s
+  `remotePatterns` — and because the cart drawer is mounted in the root layout,
+  that one throw takes down **every page**, not just the cart. A cart written
+  before a media host changed, or by an older catalogue, is enough to do it, so
+  the origin is checked against the backend and media base URLs on read and a
+  stranger is dropped to the placeholder rather than rendered. With neither
+  variable set there is nothing to compare against and the URL is kept.
+- **`cartLineKey` (`src/lib/cart.ts`), not `line.id`, is a cart line's
+  identity.** Every custom size shares one `Custom` variant, so keying on the
+  variant alone merged two different sizes into one line and dropped the
+  second's `details`. `id` stays the variant id because that is what
+  `/checkout/prepare` is sent; the key adds the configuration on top, and the
+  quantity stepper, the remove button and every React `key` use it.
+  **The artwork's storage key is folded in separately, not left to its `details`
+  row.** That row names the file, and two different files are routinely both
+  called `logo.png` — keying on the row alone merged them into one line and
+  produced the wrong artwork for one of the two.
+  **The `Size` row is written from the parsed numbers, not the typed text**, so
+  a width typed as `8.0` and one typed as `8` build the same key and merge
+  into one line. They are the same piece.
+- **A detail value that is long or multi-line is clamped behind a disclosure,
+  and `isExpandableDetail` decides that from the value, not from the box.**
+  Order notes may run to several lines, and `truncate` — which is
+  `white-space: nowrap` — collapsed them to one. `CartLineDetailValue`
+  (`src/components/cards`) clamps to two lines with `whitespace-pre-line` and
+  offers a real `aria-expanded` button, because the `title` tooltip it
+  replaces was reachable by neither keyboard nor touch. Measuring the rendered
+  box would make a note expandable in a browser and not in jsdom, which is the
+  wrong way round for the guarantee. A short single-line value keeps the plain
+  truncation and its `title`. **The collapsed view closes up blank
+  lines** (`collapsedDetail`): a blank line is a rendered line, so a note whose
+  second line was blank spent one of its two clamped lines on nothing and
+  showed the ellipsis on its own. Expanding shows the paragraphs the shopper
+  actually typed — the stored note is never touched.
+
+### Counted text fields
+
+Custom text and order notes are the two fields a shopper types into, and they
+are one component: `CountedTextField`
+(`src/components/product/counted-text-field.tsx`), which
+`ProductConfigurator` renders twice with a different label, required message
+and row count. They differed by an echo panel until CNP-37's AC 1 was
+rewritten to drop it; what was left was the same field twice.
+
+- **Both are a `Textarea`, including the single line of engraving.** An
+  `<input>` clips a long value out of sight at its right-hand edge, and AC 1
+  is that the shopper can read the whole of what they typed. The field grows
+  with its content — `[field-sizing:content]` on the `Textarea` primitive —
+  with a `max-h-64` cap that only bites for a value far past any limit we
+  enforce.
+- **`field-sizing: content` makes the browser ignore `rows`, so the primitive
+  restores that floor itself.** Measured: with it on, `rows={4}` and `rows={2}`
+  both render at 39px, so order notes lost two-thirds of their height and read
+  as a single-line box. The `minHeight` inline style on the `Textarea` is what
+  puts it back — the element's own line heights plus HeroUI's padding and
+  border, because the box is `border-box` and HeroUI sets its own `min-height`
+  on `.textarea` that a utility class would have to fight. Keep `rows` as the
+  prop that drives it; it is also what a browser without `field-sizing` uses
+  natively.
+- **Custom text is one line, and `checkSingleLine` in `@craftynp/types` is what
+  says so.** A textarea means the shopper can press Enter, and what the
+  workshop makes is one line — so `customTextSchema` rejects a line break as
+  well, and the field blocks add-to-cart with "Keep this to one line." rather
+  than stripping the newline behind the shopper's back. **Order notes may run
+  to as many lines as the shopper likes**; they are instructions to the maker,
+  not something made into the piece.
+- **Do not re-add a preview of the value below the field.** It repeats an
+  input the shopper is already looking at, and rendering it in another face
+  promises a typeface the workshop does not cut. It was defended as showing
+  the trimming, which it cannot: trailing whitespace is invisible in both.
+- **Neither input carries a `maxLength`, deliberately.** A hard cap swallows
+  keystrokes with no explanation, which is what CNP-37's AC 4 rules out. The
+  limit is stated before the shopper types (`characterCountHint`), counted
+  while they do, and over-length text is kept and named rather than truncated.
+- **`textLength` in `@craftynp/types` is the one measure, and it counts
+  graphemes.** A thumbs-up carrying a skin tone is four UTF-16 code units and
+  one thing on the piece. `customTextSchema`, `checkTextLength` and the field's
+  counter all go through it, so the number the shopper is shown is the number
+  they are held to. Where `Intl.Segmenter` is missing it falls back to code
+  units, which over-counts — an old browser refuses a beat early rather than
+  sending text the backend rejects.
+- **`checkTextLength` is the one message**, shared the way
+  `checkCustomDimensions` is, so the field and the backend's rejection cannot
+  word the same failure differently.
+- **What is wrong with a field is derived in `ProductPurchase`, not in the
+  field.** `customTextProblem` and `orderNotesProblem` return a
+  `TextFieldProblem` — the message the field shows and the clause the one hint
+  adds — feeding `isInvalid`/`errorMessage` and the one `canAddToCart` gate.
+  The two travel together because the hint has to name what the shopper must
+  actually do: "shorten your custom text" is the wrong instruction for a line
+  break.
+- **The empty-required message is passed in per field, and it waits for a
+  blur.** What the piece needs is not what the maker needs to know, so the two
+  are worded differently. An untouched field is not yet wrong, so `isVisited`
+  gates it; a length error
+  needs no such wait, since text is already there. That is the half the
+  add-to-cart hint cannot do, because the hint names the field from across the
+  page while the field itself stayed silent. **Do not make it show on first
+  render** — that greets every shopper with an error they have not earned, and
+  the hint already names what is outstanding.
+- **A `role="status"` line warns before the limit, not on every keystroke.**
+  The count lives in the field's description, which a screen reader reads on
+  demand but never announces, so `nearLimitAnnouncement` returns one message
+  that does not change while the shopper types — the live region speaks once,
+  at the threshold, and going over is the field error's job to announce. A
+  counter wired straight to `aria-live` reads every letter aloud.
+- **`QuantityStepper` holds a typed draft and commits it on blur or Enter**, for
+  the same reason this field has no `maxLength`: clamping each keystroke swallows
+  input with no explanation. With a minimum of 50, clamping turned the `1` of
+  `100` into `50` and put every number above the minimum out of typing reach. A
+  value already in range still commits as typed, so the ordinary minimum of one
+  is as responsive as it was. Its `role="status"` line speaks the **committed**
+  value and is silent while a draft is open — a live region wired to the field
+  reads every digit aloud, which is `nearLimitAnnouncement`'s rule again.
+- **Order notes carry a `guidance` line and custom text does not.** "Custom
+  text" says what it is; "Order notes" does not say what is worth saying, so
+  the field names placement, colour matching and deadlines before the count.
+  It shares the one `Description` because HeroUI's `TextField` wires exactly
+  one into `aria-describedby` — a second element would drop half of it from
+  the accessible description.
+- **Order notes sit last in the panel, and that is the decision, not the
+  default.** They are the catch-all for anything the options do not cover, so
+  they only read correctly once the shopper has seen artwork, text and size;
+  the guidance says "the options above" and depends on it. CNP-80 put them
+  there without deliberating, CNP-38 kept them there having done so.
+- **Notes are normalised once, in `normalizeOrderNotes`, not at each surface
+  that renders them.** A Windows textarea submits `\r\n` and a Mac one `\n`,
+  and `cartLineKey` builds a line's identity out of the detail value — the
+  same note typed on two machines would otherwise be two cart lines. Runs of
+  blank lines collapse so a stray Enter does not push the rest of the note out
+  of the cart card's clamp.
+
+**Custom text's limit is product configuration; order notes' is one shop-wide
+constant.** Text is made into the piece, so what fits varies by product;
+notes are instructions to the maker and do not. `customization.text.maxLength`
+comes off the product through `resolveProductCustomization`, falling back to
+`CUSTOM_TEXT_FALLBACK_MAX_LENGTH` (120) and capped by
+`CUSTOM_TEXT_LENGTH_CEILING` (1,000), which is what `customTextSchema` stores —
+the same tolerant-read, strict-write split the custom size bounds have (see
+[apps/medusa/AGENTS.md](../medusa/AGENTS.md) for the metadata key and the admin
+field). `ORDER_NOTES_MAX_LENGTH` (500) is a plain constant in
+`@craftynp/types`, used by both the field and `lineItemCustomizationSchema`.
+
+## Artwork upload
+
+`ArtworkUpload` (`src/components/product/artwork-upload.tsx`) is the shopper's
+upload control; `src/lib/artwork-upload.ts` is the transport under it. The
+backend half — the presign route, the two-phase `staging/` key, retention — is
+in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+
+- **The PUT to R2 must carry `Content-Type` and no other request header.** The
+  bucket's CORS policy allows exactly that one, so an added `x-amz-*`,
+  `Authorization`, or hand-set `Content-Length` fails the preflight — and the
+  browser reports that as status 0 with no detail, indistinguishable from being
+  offline. `putArtworkFileWithXhr` therefore makes exactly one
+  `setRequestHeader` call, and a test asserts the _whole_ recorded header list
+  rather than just the presence of that one.
+- **The content type comes from the response's `requiredHeaders`, never from
+  `file.type`**, so what is sent cannot drift from what was signed.
+  `Content-Length` is inside the signature, which is why the same `File` object
+  has to flow from `checkArtworkFile` through to the PUT.
+- **It is `XMLHttpRequest`, not `fetch`, and that is not a style choice.**
+  `fetch` reports no upload progress at all, and the story requires a
+  determinate bar. XHR also supplies the `abort()` behind Cancel. `timeout`
+  stays `0`: a 25 MB upload on a slow connection must not be killed by us, and
+  the presigned URL's own expiry is the real bound.
+- **The presign call goes straight from the browser to Medusa**, not through a
+  route handler here. A proxy would put every shopper behind the storefront's egress IP and
+  defeat the route's per-IP rate limit, and a top-level `src/app/artwork`
+  segment would permanently shadow that Medusa category handle. It reads
+  `NEXT_PUBLIC_*` inside the function body rather than importing `medusa.ts`,
+  which throws at module eval and may not reach a client component.
+- **The component is controlled on the durable reference alone.** Progress,
+  error state and object URLs stay internal, so a progress tick cannot re-render
+  the configurator around it and add-to-cart has exactly one field to thread. The
+  rendered view is derived, `uploading → error → uploaded → idle`.
+- **A replacement runs without clearing `value`, and the preview is adopted on
+  success rather than at upload start.** `onChange` fires only when an upload
+  resolves, so a failed replace leaves the previous artwork attached and still
+  showing its own thumbnail rather than the one that failed.
+- **The upload has three steps, not two: presign, PUT, then inspect.** Only the
+  stored bytes can say what the file really is and how many pixels across it
+  is, so nothing measures it in the browser — a shopper cannot be the source of
+  the number that decides whether their order is printable. The measurements
+  land on the `ArtworkReference` as `kind`, `widthPx` and `heightPx`. The
+  backend half is in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+- **`resolveArtworkMimeType` (`@craftynp/types`), not `file.type`, decides what
+  a file is.** Chrome on macOS reports `.ai` as `application/pdf` and Firefox
+  reports nothing at all, so the extension answers for `.ai`. Everywhere else a
+  type the browser did give and we do not accept is a rejection, or renaming
+  `notes.txt` to `logo.png` would pass the client-side check.
+- **The resolution failure is rendered on the _uploaded_ view, not the error
+  one.** The upload itself succeeded; what failed is that the file cannot be
+  printed at the size ordered. The file stays attached and showing its name,
+  with Replace as the way out — and the message names both the resolution the
+  file has and the one it needs, because "too low" alone tells a shopper
+  nothing about what to export instead.
+- **`guidance` and `errorMessage` are derived by the parent**, which is the only
+  thing that knows the ordered size. The component stays controlled on the
+  durable reference alone.
+- **The drop zone is a `role="group"` named by the field's label**, which
+  renders in every view, so Replace, Remove and Try again are heard as part of
+  "Your artwork". A refused file moves focus to Choose a different file, and
+  the upload error describes both ways out.
+- **The drag counter is not incidental.** Crossing from the zone onto a child
+  fires `dragleave` on the zone before `dragenter` on the child, so a plain
+  boolean flickers off at every internal boundary. `dragDepthRef` is the fix.
+  Drag-over is signalled by the hint text changing, not by colour alone — which
+  is also the only form jsdom can assert, since it applies no CSS.
 
 ## Design tokens
 
@@ -167,6 +722,10 @@ built on React Aria Components.
   HeroUI and the React Aria packages because both React majors are installed. Do
   not "fix" a resulting type error by hoisting or by adding `@types/react` to
   the root `package.json` — see the root AGENTS.md.
+- **`FieldError` drops a `role` prop.** React Aria passes its props through
+  `filterDOMProps`, which keeps no `role`, so `TextInput` and `Textarea`
+  put `role="alert"` on a span inside it. The error is still the input's
+  description; the span is what announces it when it mounts.
 - **`Modal` and `AlertDialog` (`src/components/ui/dialog.tsx`) resolve their own
   `React.ReactNode` against a different `@types/react` copy than the rest of
   the app.** Typing a prop that gets embedded as their children with
@@ -187,6 +746,12 @@ between steps 3 and 4. The backend half is in
 - **Steps 1–3 are a client-side draft only.** No Medusa cart exists until the
   payment step POSTs `/checkout/prepare`, which writes `cartId` and
   `paymentClientSecret` onto the draft.
+- **Each `/checkout/prepare` line is `{ variantId, quantity, priceQuoteToken,
+customization }` and nothing more.** The cart line's `details` and
+  `isCustomizable` serve this app's own cart and stay here: `prepare-cart`
+  builds the order line's rows and flag itself, from the product and the
+  validated customization, and never reads a request's (see
+  [apps/medusa/AGENTS.md](../medusa/AGENTS.md)).
 - **Tax is quoted only after a shipping rate has settled**, because shipping
   itself is taxed, and it re-runs when the shopper picks a different rate. Do
   not fire the tax and shipping-rate calls in parallel.
@@ -270,6 +835,57 @@ exchanges the code for a Medusa JWT and sets the session cookie.
   `error_description` to tell a cancelled sign-in from one blocked by the
   tenant's email-verification Action. The two call for opposite messages.
 
+## Design gate
+
+`/design/tokens`, `/design/primitives` and `/design/components` are internal and
+sit behind Google Workspace sign-in in every deployed environment. This is a
+**second, separate identity from customer auth** — different cookie, different
+routes, different audience. Do not merge the two.
+
+- **It reuses Medusa's `auth-google-workspace` provider**, the one the admin
+  signs in through, because that provider's check — the verified `hd` claim
+  _and_ the email's own domain — is called load-bearing in
+  [apps/medusa/AGENTS.md](../medusa/AGENTS.md) and must not be duplicated here.
+  `/auth/design/login` passes its own `callback_url`, so the admin flow is
+  unaffected. The provider honours it only while Medusa's
+  `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` lists it exactly; unlisted, Google
+  returns to the admin login page instead.
+- **Never gate on the customer session.** Customer sign-up is open to anyone, so
+  an email-domain check over `cnp_customer_token` would be a weak gate over an
+  open door.
+- **The cookie is signed by this app, not by Medusa.** `decodeJwtPayload` does
+  no signature verification — fine for `getCustomer()`, which hands the token to
+  Medusa to verify, and useless for a guard that only inspects a cookie. The
+  callback reads the email out of the Medusa JWT (trustworthy: it arrived on our
+  own server-side call, not from the browser), discards the token, and mints an
+  HMAC-signed `cnp_design_session` with `DESIGN_SESSION_SECRET` — its own
+  secret, never Medusa's `JWT_SECRET`.
+- **`design-session.ts` must stay medusa-free and must not throw at module
+  eval** on a missing secret. CI builds after `cp .env.example .env.local` with
+  `NODE_ENV=production`; a module-eval throw would break the build. It fails
+  closed at request time instead — gate on with no secret denies, never opens.
+- **Each page repeats `requireDesignAccess()` even though `design/layout.tsx`
+  calls it**, for the same reason every page under `/account` repeats its guard.
+- **`primitives/page.tsx` is a server page wrapping the client
+  `PrimitivesView`.** A client component cannot hold an `await` guard, so the
+  gallery moved into `primitives-view.tsx` — the same split as `CheckoutView`
+  and `SignInPanel`. It gained a `metadata` export it could not have before.
+- **`DESIGN_GATE` is three-state**: `on`/`off` win, anything else means "on in
+  production only", so `next dev` serves these pages with no sign-in round trip.
+  Set it to `on` to exercise the real flow locally, which also needs a localhost
+  redirect URI on the Google OAuth client and
+  `http://localhost:8000/auth/design/callback` listed in Medusa's
+  `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS`. `apps/medusa/.env.example` lists it; an
+  older `apps/medusa/.env` may not.
+- **`DESIGN_GATE` is unset in production**, so the gate follows `NODE_ENV` and
+  is on. Production is the only deployed environment (CNP-81). Any new one
+  needs its callback URL registered on the Google OAuth client and listed in
+  Medusa's `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS` before the flow can complete
+  there — an unregistered URI fails at Google, not in our code.
+  See [docs/dns.md](../../docs/dns.md).
+- These pages read cookies and so are no longer prerendered. They are internal;
+  that was never load-bearing.
+
 ## Account
 
 `/account` (Account settings) and `/account/addresses` (Addresses) share
@@ -321,6 +937,13 @@ path out of `test/`; tests that read source off disk reach back two levels into
 `eslint src test` lints both trees to the same standard, so a new top-level
 directory needs adding there and to `eslint.config.mjs`'s `files` glob.
 
+- **`product-detail-view-a11y.test.tsx` is the configurator's keyboard and axe
+  guard.** It drives the whole flow with `@testing-library/user-event`, never
+  `fireEvent`, and scans each configurator state with `jest-axe`
+  (registered in `jest.setup.ts`). jsdom has no CSS, so axe reports nothing on
+  contrast; the token tests own that. Shared product fixtures live in
+  `test/support/product-detail.ts` — `jest.mock` still has to be called in
+  each test file, because it hoists only within the file that calls it.
 - **Do not try to render `src/app/page.tsx`** or any other async server
   component.
 - **The header search and the drawer's mobile search coexist in the DOM**, one

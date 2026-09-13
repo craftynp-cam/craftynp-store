@@ -85,6 +85,7 @@ describe("shippingRateKey", () => {
       lines: [
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,
@@ -93,6 +94,7 @@ describe("shippingRateKey", () => {
         },
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,
@@ -111,6 +113,7 @@ describe("shippingRateKey", () => {
       lines: [
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,
@@ -119,6 +122,7 @@ describe("shippingRateKey", () => {
         },
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,
@@ -131,6 +135,7 @@ describe("shippingRateKey", () => {
       lines: [
         {
           id: "b",
+          lineId: "line-b",
           href: "/b",
           title: "B",
           unitPrice: 1,
@@ -139,6 +144,7 @@ describe("shippingRateKey", () => {
         },
         {
           id: "a",
+          lineId: "line-a",
           href: "/a",
           title: "A",
           unitPrice: 1,

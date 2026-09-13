@@ -5,6 +5,7 @@ import {
   Modules,
 } from "@medusajs/framework/utils";
 
+import { parseCallbackUrlList } from "./src/lib/callback-url";
 import { SHIPSTATION_MODULE } from "./src/modules/shipstation";
 
 loadEnv(process.env.NODE_ENV || "development", process.cwd());
@@ -85,6 +86,14 @@ module.exports = defineConfig({
   modules: [
     ...redisModules,
     { resolve: "./src/modules/site-content" },
+    {
+      // Customer artwork: the upload ledger, and what the purge job reads to
+      // find files whose retention window has closed. The bytes live in their
+      // own private R2 bucket via src/lib/artwork-storage.ts, not the file
+      // module — see AGENTS.md for why that cannot be shared.
+      resolve: "./src/modules/artwork",
+      dependencies: [ContainerRegistrationKeys.LOGGER],
+    },
     {
       resolve: "./src/modules/order-status",
       dependencies: [
@@ -254,6 +263,9 @@ module.exports = defineConfig({
               clientId: process.env.AUTH0_CLIENT_ID,
               clientSecret: process.env.AUTH0_CLIENT_SECRET,
               callbackUrl: process.env.AUTH0_CALLBACK_URL,
+              allowedCallbackUrls: parseCallbackUrlList(
+                process.env.AUTH0_ALLOWED_CALLBACK_URLS,
+              ),
             },
           },
           {
@@ -263,6 +275,9 @@ module.exports = defineConfig({
               clientId: process.env.GOOGLE_ADMIN_CLIENT_ID,
               clientSecret: process.env.GOOGLE_ADMIN_CLIENT_SECRET,
               callbackUrl: process.env.GOOGLE_ADMIN_CALLBACK_URL,
+              allowedCallbackUrls: parseCallbackUrlList(
+                process.env.GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS,
+              ),
               allowedDomain: process.env.GOOGLE_ADMIN_ALLOWED_DOMAIN,
             },
           },

@@ -5,9 +5,10 @@ come from `@craftynp/types`. Repo-wide setup, commands, and conventions are in
 the root [AGENTS.md](../../AGENTS.md).
 
 Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
-`site-content`, `order-status`, `shipstation` and `shipstation-fulfillment`,
-`stripe-tax` (which registers both a module and a tax provider),
-`notification-resend`, `auth-auth0`, and `auth-google-workspace`.
+`site-content`, `artwork`, `order-status`, `shipstation` and
+`shipstation-fulfillment`, `stripe-tax` (which registers both a module and a
+tax provider), `notification-resend`, `auth-auth0`, and
+`auth-google-workspace`.
 
 ## Layout and config
 
@@ -15,6 +16,21 @@ Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
   `@craftynp/types`, not by the `siteContent` module.** Adding a field —
   including an `image` field, whose stored value is just the URL string — is a
   registry change, never a migration.
+- **A category carries two settings of its own, on its `metadata`**: the
+  homepage carousel image below, and `artwork_min_dpi`. Each has its own widget
+  on `product_category.details.side.after` — Medusa stacks both — and both must
+  spread the existing metadata into their update, because Medusa replaces the
+  jsonb column wholesale and an unspread write destroys the other one.
+  **Spreading is not enough on its own: each widget must re-read the category
+  inside its `mutationFn`, immediately before writing.** A copy fetched when
+  the widget mounted is stale the moment its sibling saves, and spreading that
+  copy destroys exactly what the sibling just wrote. Cross-invalidating the
+  other widget's query key keeps the _displayed_ value honest but does not fix
+  the write — invalidation is asynchronous, and the race is what does the
+  damage. This was a live bug the moment a second widget joined the zone, and
+  it is invisible to `tsc`, to Jest (nothing under `src/admin` is testable) and
+  to a single-widget zone; it showed up only on a real save in a real
+  dashboard.
 - **Category imagery is not site content.** The storefront's homepage carousel
   renders one slide per product category and reads each slide's photo from that
   category's own `metadata.image_url` / `metadata.image_alt`, written by the
@@ -23,6 +39,99 @@ Custom modules live in `src/modules` and are registered in `medusa-config.ts`:
   a category list the client edits freely. **The widget must spread the existing
   metadata into its update** — Medusa replaces the jsonb column wholesale, so an
   unspread write silently destroys every other key on the category.
+- **A product's customization declaration lives on `product.metadata`**, in the
+  flat keys the `CUSTOMIZATION_INPUTS` registry in `@craftynp/types` names —
+  `customizable` plus one `customization_*` key per configurator input, every
+  value a string. Flat strings, not a nested object, so a CSV import and the
+  admin's raw metadata editor can both write them. The widget in
+  `src/admin/widgets/product-customization.tsx` (zone
+  `product.details.side.after`) writes them, and **must spread the product's
+  existing metadata into its update** for the same reason the category-image
+  widget must.
+- **The custom size carries four more keys**, written by the same widget and
+  the same patch: `customization_size_min_inches` and
+  `customization_size_max_inches` are the bounds the shopper is held to, and
+  `customization_size_option` / `customization_size_option_value` name the
+  preset option group the storefront's custom-size toggle drives and the value
+  on it that means "custom". The two halves split the way the rest of the
+  declaration does:
+  `resolveProductCustomization` is **tolerant** and falls back to
+  `CUSTOM_SIZE_FALLBACK_BOUNDS` on anything it cannot read, while
+  `validateProductCustomization` is **strict** and refuses to publish a product
+  that asks for a custom size and names no bounds of its own — so the fallback
+  is unreachable on a live product and the constant is not a hidden policy.
+  `validateCustomization` (`src/lib/validate-customization.ts`) takes those
+  bounds as an argument rather than a constant, so the message it throws names
+  the same range the shopper was shown. It takes the artwork resolution floor,
+  the ordered width and the custom text limit the same way, for the same
+  reason. Its one caller is `prepare-cart`, through
+  `customizationRulesForVariant` (`src/lib/customization-rules.ts`).
+  **The input modes are enforced there too, not only by the storefront's
+  gate.** `prepare-cart` validates every line, including one that sent no
+  customization, because a required input is exactly what a line can leave
+  out. A `required` input that is missing, or an `off` one that is present,
+  throws `CustomizationRejection`, answered as `400 invalid_customization`
+  with `reason` `missing_required` or `input_off` and the message
+  `invalid_customization:<reason>:<input>`. Blank order notes count as absent.
+  The size is held to the server's copy of the storefront's `usesCustomSize`:
+  on a product that names its Custom option, a line on the variant carrying
+  that value must send `customization.dimensions` and a line on any other
+  variant may not. Without the first a `Custom` variant sells at its own
+  multiplier price; without the second a size is priced against a cheaper
+  preset's base, since `/store/price-quote` quotes dimensions on any variant.
+  A product whose own options do not carry the named value counts as naming
+  none, as it does for the storefront's `resolveCustomSizeOption`, so the
+  dimensions mode alone decides rather than every variant refusing a size.
+  Options that did not load are not options that lack it: every Medusa
+  product has at least one, so a missing or empty `product_options` means the
+  relation never arrived, and the variant alone decides — the rule fails
+  closed rather than letting a size onto a cheaper preset.
+  Only a line that sent a customization has one stored — an empty one would
+  change `customizationSignature` and supersede a cart the shopper could reuse.
+- **The custom size carries two more keys again, and they are money:**
+  `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
+  written by the same widget and patch. They are what `areaUnitPrice` in
+  `@craftynp/types` multiplies and floors. They split like the bounds rather
+  than like the text limit — `resolveProductCustomization` reads them as
+  **null** where the bounds fall back to `CUSTOM_SIZE_FALLBACK_BOUNDS`, and
+  `validateProductCustomization` refuses to publish a custom-size product that
+  names neither. **There is deliberately no fallback rate**: a bound is a guard
+  and has a sane default, a price does not, and a constant here would be the
+  hidden pricing policy the story exists to remove. An unconfigured rate makes
+  `/store/price-quote` refuse to price rather than invent a number.
+- **Custom text carries a fifth customization key,
+  `customization_text_max_length`**, written
+  by the same widget and patch — how many characters that product allows.
+  It splits the same way the size bounds do, but the halves sit differently:
+  `resolveProductCustomization` falls back to
+  `CUSTOM_TEXT_FALLBACK_MAX_LENGTH` (120) on anything it cannot read, and
+  `validateProductCustomization` refuses only a value it could not honour —
+  a non-integer, or one past `CUSTOM_TEXT_LENGTH_CEILING` (1,000), which is
+  what `customTextSchema` will store. **It does not insist the key be set**,
+  because unlike a size bound the fallback is a sane answer rather than a
+  hidden policy, so a product may publish without naming one. A limit past the
+  ceiling is refused rather than clamped: honouring part of it would hide the
+  mistake. `checkTextLength` in `@craftynp/types` holds the comparison and the
+  message, so the storefront's counter and this rejection cannot disagree —
+  and both count graphemes through `textLength`, not UTF-16 code units, so an
+  emoji is one character on both sides.
+- **`min_order_quantity` is a product key that is not a customization key.**
+  It is the fewest units a shopper may order, and it applies to a ready-made
+  product exactly as it does to a made-to-order one — so it is deliberately
+  outside `ProductCustomization` and outside `customizationMetadataPatch`, for
+  the reason `resolveArtworkMinDpi` sits outside them:
+  `resolveProductCustomization` answers `READY_MADE_PRODUCT` for a product that
+  is not customizable, and a shared constant has nowhere to keep a per-product
+  number. The widget writes it as its own key beside the patch rather than
+  through it, because the patch is derived from a `ProductCustomization` and
+  switching Made to order off resets that — riding the patch would wipe the
+  minimum of the very products this key exists for. It splits the way the text
+  limit does: `resolveMinOrderQuantity` falls back to 1 on anything it cannot
+  read, and `validateProductCustomization` refuses a value it could not honour —
+  a fraction, a zero, a word — rather than rounding it, but **does not insist
+  the key be set**, because one is a sane answer rather than a hidden policy.
+  That check sits before the customizable-only clauses on purpose, so a
+  ready-made product is held to it too.
 - **`tsconfig.json` must keep `medusa-config.ts` in `include`, with `rootDir`
   at `./`.** `medusa build` emits exactly `tsConfig.fileNames`, so scoping the
   root to `src` leaves the built `.medusa/server` with no `medusa-config.js` and
@@ -91,6 +200,25 @@ for both actors.
   `auth-google-workspace/lib.ts` and requires both the verified `hd` claim and
   the email's own domain to match — the `hd` param on the authorize URL is only
   a UI hint. Do not collapse that two-part check.
+- **`auth-google-workspace` has two callers, and the second is not the admin.**
+  The storefront's `/design/*` gate signs in through this same provider (see
+  [apps/storefront/AGENTS.md](../storefront/AGENTS.md)), passing its own
+  `callback_url`. `authenticate()` honours it only on an exact match with
+  `GOOGLE_ADMIN_CALLBACK_URL` or an entry in `GOOGLE_ADMIN_ALLOWED_CALLBACK_URLS`
+  (`src/lib/callback-url.ts`); anything else falls back to
+  `GOOGLE_ADMIN_CALLBACK_URL` and logs `[auth:callback-url-ignored]`. The URL it
+  settles on is stashed in the OAuth state for the token exchange. The admin
+  sends none, so its flow is unchanged. **Both callback URLs have to be
+  registered on the Google Cloud OAuth client, and the storefront's listed in
+  the allowlist** — unlisted, the design sign-in returns to the admin login
+  page instead. The storefront needs no Medusa
+  `user` row: it only reads the email off the resulting token, so an actorless
+  token is a success there where the admin flow would go on to `/admin-sso/link`.
+- **`auth-auth0` applies the same `callback_url` allowlist** through
+  `AUTH0_ALLOWED_CALLBACK_URLS`, with `AUTH0_CALLBACK_URL` always accepted. The
+  storefront's `/auth/login` sends `${siteUrl}/auth/callback`, which is that
+  configured URL, so the list normally stays empty. A storefront whose site URL
+  disagrees with `AUTH0_CALLBACK_URL` is sent back to the configured callback.
 - **There is no admin auto-provisioning.** Google sign-in produces an actorless
   token; the login widget then calls `POST /admin-sso/link`, which links only an
   existing Medusa `user` matched by verified email. Create the admin with
@@ -135,7 +263,7 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
 
 ## Abuse and rate limiting
 
-Four store routes are reachable with no session at all, and two of them spend
+Seven store routes are reachable with no session at all, and two of them spend
 money on every call: `/store/tax-quote` bills a Stripe Tax calculation and
 `/store/shipping-rates` burns the ShipStation limit. Because there is
 deliberately no flat-rate fallback, exhausting ShipStation returns
@@ -181,9 +309,11 @@ this is a denial-of-checkout vector, not only a cost one.
 
 **Cloudflare is the first line and has no in-repo representation** — like the
 Auth0 and Stripe Tax dashboard state above, don't search for it here. The
-rate-limiting rule on `/store/tax-quote`, `/store/shipping-rates` and
-`/store/checkout/*` lives there and sheds volume long before it reaches this
-limiter.
+rate-limiting rule on `/store/tax-quote`, `/store/shipping-rates`,
+`/store/price-quote`, `/store/checkout/*` and `/store/artwork/*` lives there and
+sheds volume long before it reaches this limiter. It is one rule on the Free
+plan, so those paths share one counter per client (see
+[docs/dns.md](../../docs/dns.md)).
 
 - **Medusa is served from `api.thecraftynp.com`, a different zone from the
   storefront's `thecraftynp.org`, and Bot Fight Mode is deliberately off on
@@ -209,8 +339,11 @@ limiter.
   place minor units exist, crossed solely by `toMinorUnits` / `fromMinorUnits`
   in its `lib.ts`. Leaking cents outside that module multiplies money by 100.
 - **Resolve weight, dimensions, and `calculated_price` server-side via
-  `query.graph`.** Store request bodies carry only `{ variantId, quantity }` —
-  never accept a client-supplied weight or price on a `/store` route. The one
+  `query.graph`.** Store request bodies carry only `{ variantId, quantity }`
+  plus the dimensions an area price is computed from — a top-level
+  `dimensions` on `/store/price-quote` and `/store/tax-quote`, and on
+  `prepare-cart` only the line's `customization.dimensions`, since CNP-85.
+  Never accept a client-supplied weight or price on a `/store` route. The one
   exception is the authenticated admin parcel override on
   `/admin/orders/:id/shipment/rates` and `/buy`: the shop owner is looking at
   the packed box and the product defaults are only a guess, so she may correct
@@ -267,13 +400,14 @@ limiter.
   or private as a whole. One provider therefore cannot serve public
   site-content images and private labels. Site content gets the public
   `FILE_STORAGE_*` bucket through the file module; labels get their own private
-  one, reached only through `label-storage.ts`. The two buckets must never be
-  collapsed into one.
+  one, reached only through `label-storage.ts`, and customer artwork gets a
+  third private one reached only through `artwork-storage.ts`. The three
+  buckets must never be collapsed.
   `label_file_id` holds the object key. `label_url` holds our own route; it
   falls back to ShipStation's 90-day URL only when storage failed, which is
   exactly what a null `label_file_id` marks.
-- **Never make the labels bucket public**, and never point it at the bucket
-  that serves site-content images.
+- **Never make the labels or artwork bucket public**, and never point either at
+  the bucket that serves site-content images.
 - **Storing the label PDF must never throw.** It runs after the purchase, so
   throwing would trigger the compensating void and cancel a perfectly good label
   because our own disk was full. That is a worse outcome than a link that
@@ -300,6 +434,51 @@ limiter.
 `pnpm run list-carriers` prints every connected carrier's `carrier_id`, for
 finding `SHIPSTATION_USPS_CARRIER_ID`.
 
+## Pricing the configurator
+
+`POST /store/price-quote` is the only thing that prices a configured line, and
+`resolveLinePrice` (`src/lib/resolve-line-price.ts`) is the one derivation
+behind it — shared with `/store/tax-quote` and `prepare-cart` so a shopper
+cannot be shown one number and charged another.
+
+- **`GET /store/products` can never carry a quantity-break price.** Core's
+  `setPricingContext` middleware builds `{ region_id, currency_code, customer
+groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
+  always returns the `min_quantity <= 1` tier. That is why this route exists;
+  do not try to move quantity pricing back onto the product query.
+- **The quantity goes in the `QueryContext`.** `@medusajs/pricing` pulls it out
+  and matches `min_quantity <= q <= max_quantity`, which is how a price list's
+  tiers apply. Quantity breaks are otherwise stock Medusa — the admin's own
+  Pricing section creates the price lists and there is no custom code for them.
+- **A Medusa cart already applies tiers by itself**, per item, so an ordinary
+  line must be left alone. Only an **area-priced** line gets an explicit
+  `unit_price` in `prepare-cart`, because Medusa then marks it
+  `is_custom_price` and stops re-pricing it — wanted for an area price, wrong
+  for everything else.
+- **The tier is baked into the area price rather than left to Medusa**, for
+  that reason: `resolveLinePrice` prices the variant twice, at the ordered
+  quantity and at one, and passes the ratio to `areaUnitPrice`. The ratio
+  multiplies the rate term and **the floor is applied last**, so a volume
+  discount can never undercut the floor.
+- **The quote token is not the price.** `src/lib/price-quote.ts` signs which
+  line was quoted — variant, quantity and dimensions — and `prepare-cart`
+  re-derives the amount from the product's metadata rather than reading
+  `payload.amt`. A token minted against a rate the owner has since changed
+  buys nothing. The client never names a price, here as everywhere.
+- **In `prepare-cart`, a custom size has one source of truth: the line's
+  validated `customization.dimensions`.** The quote token is verified against
+  it, `resolveLinePrice` prices it, the cart-reuse comparison and the stored
+  `metadata.dimensions` are taken from it, and it is what gets made. There is
+  no second, top-level size to price from — `checkoutLineItemSchema` has none,
+  so zod strips one an old client still sends. A line that records a size with
+  no token is refused `400 invalid_price_quote:missing`, and a token quoted for
+  any other size is `line_mismatch`. Pricing one size while recording another
+  was the under-payment CNP-85 closed.
+- **`/store/tax-quote` must keep passing the quantity and the dimensions.**
+  Without the quantity it taxes every line at the single-unit tier; without the
+  dimensions it taxes a custom size at its variant's price rather than its own.
+- `PRICE_QUOTE_SECRET` is its own secret, like the shipping and tax ones.
+
 ## Cart, payments, and order placement
 
 - **The fulfillment and tax providers live beside — not instead of — the
@@ -322,6 +501,61 @@ finding `SHIPSTATION_USPS_CARRIER_ID`.
   return 400 — the storefront's stored id outlives its cart, and rejecting it
   wedges a shopper out of checkout permanently. Double-order protection lives in
   `/checkout/complete`'s order lookup, not here.
+- **It falls through for changed line items too** (`reason=items_changed`).
+  Reuse exists so an address edit keeps the shopper's PaymentIntent alive, and
+  `updateCartWorkflow` **cannot change line items** — so a cart whose lines no
+  longer match the request would be prepared, and charged, at the configuration
+  it was created with. The comparison covers the dimensions and the re-derived
+  area price as well as the variant and quantity: every custom size shares one
+  `Custom` variant, so the dimensions are the only thing that distinguishes an
+  8″ × 10″ line from a 12″ × 16″ one, and a rate the owner has edited since
+  makes the frozen `unit_price` stale. Non-area lines deliberately leave the
+  price out of the comparison — Medusa prices and refreshes those itself, so
+  including it would report a change the shopper never made.
+  **The reuse and fresh branches both need a test that asserts which workflow
+  ran.** The suite pinned neither for a long time, because the cart fixture
+  carried no `items` and every "reuse" test silently exercised the fresh-cart
+  branch while still passing.
+  **The customization is in the comparison for the same reason the dimensions
+  are.** A shopper who replaces their artwork and then edits their address would
+  otherwise keep the cart the first file was added to, and have the first file
+  made. `customizationSignature` covers the artwork storage key, the custom text
+  and the order notes — everything that changes what gets produced.
+- **On the admin order API the line's own metadata is `line_item_metadata`, not
+  `metadata`.** `order.items[]` merges the versioned `order_item` snapshot with
+  the `order_line_item` it points at, and the snapshot wins the `metadata` name;
+  the line item's own copy — the one `prepare-cart` wrote and the one
+  `promote-artwork` reads — is exposed beside it as `line_item_metadata`.
+  `query.graph({ entity: "order", fields: ["items.metadata"] })` resolves to the
+  line item's, so the two surfaces disagree on the same name. A widget reading
+  `item.metadata` finds the snapshot and silently renders nothing;
+  `order-customization.tsx` reads `line_item_metadata` and falls back.
+- **The configured line's metadata is `{ isCustomizable, details, dimensions?,
+customization? }`, and the server writes every key.** `details` is the
+  rendered half — label/value rows the cart, the confirmation page and the
+  order email all print — and `customization` is the structured half the maker
+  and the admin widget work from. `prepare-cart` builds `details` with
+  `lineItemDetails` from `@craftynp/types`, the function the storefront's cart
+  uses too, over the variant's own option values in the product's option order
+  (`orderLineFactsForVariant` in `src/lib/customization-rules.ts`) and the
+  validated customization, and takes `isCustomizable` from the product's
+  declaration. The request's `details` are never read — otherwise a shopper
+  could put rows on the confirmation, the email and the admin widget that
+  disagree with what gets made (CNP-90). `checkoutLineItemSchema` keeps them
+  only as a capped backstop, at most eight rows with a 64-character label and a
+  1,000-character value, and has no `isCustomizable` at all. The confirmation's
+  detail shape in `order.ts` is deliberately uncapped: a server-built row can
+  run past those caps, since order notes allow 500 graphemes and custom text
+  1,000. `dimensions` sits at the line's top level as well as inside the
+  customization, and both are written from the same validated
+  `customization.dimensions` — never from the request, which has had no
+  top-level size of its own since CNP-85. The top-level copy is what the
+  cart-reuse comparison reads off a stored cart, so it must keep being written
+  whenever the customization carries a size: without it every stored
+  custom-size line reads as sizeless and supersedes a cart the shopper could
+  have reused. **What is stored is the value `validateCustomization` returned,
+  not the request's** — the zod-trimmed one, with its artwork facts taken from
+  the ledger, is what `promote-artwork` later reads.
 - **`prepare-cart` re-attaches the shipping method on every call.** The workflow
   replaces rather than duplicates; skipping it leaves the previous address's
   `quoteToken` attached, which blocks checkout on the next address edit.
@@ -364,6 +598,201 @@ finding `SHIPSTATION_USPS_CARRIER_ID`.
   cart's tax can drift up to ~1¢ per line from the Stripe calculation. That is
   the accepted tradeoff, not a bug, and the tax provider is deliberately
   uncached unlike the sibling module service.
+
+## Customer artwork
+
+A shopper's artwork lands in a **third private bucket** (`ARTWORK_STORAGE_*`),
+reached only through `src/lib/artwork-storage.ts`. It cannot go through the file
+module for exactly the reason labels cannot — one provider, no object-level
+ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
+
+- **Uploads are two-phase, and the key is the point.** A shopper uploads before
+  a cart exists, so there is no order to key on: the object lands at
+  `staging/{uploadId}.{ext}`, and the `order.placed` subscriber copies it to
+  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` and deletes the staging
+  copy. That is what makes every stored file traceable to its order without
+  consulting the database.
+- **`presignArtworkUpload` binds Content-Length and does not bind
+  Content-Type.** The length is in the signature, so a URL can only ever write
+  the number of bytes it was minted for — that is the ceiling on what one
+  presign call can store. The S3 presigner adds `content-type` to its own
+  unsignable set and a `signableHeaders` override does not reach the signer, so
+  the declared type is advisory. Do not build a check on it. What contains a
+  mislabelled file is that the bucket is private and every read is a signed URL
+  forcing an attachment disposition — and the inspect route below, which is the
+  only thing that ever reads the bytes.
+- **`POST /store/artwork/uploads/:uploadId/inspect` is the gate, and the
+  storefront calls it straight after the PUT.** It reads the head of the
+  staging object over `Range` (`readArtworkHead`), sniffs the real format from
+  its magic bytes, and refuses anything whose bytes contradict the type it was
+  presigned as. `src/lib/artwork-inspection.ts` is the pure half — PNG's IHDR,
+  a JPEG marker walk past EXIF and Photoshop segments, and all three WebP chunk
+  types — and is tested against real encoder output rather than fixtures packed
+  the way the reader reads.
+  **An unmeasurable raster is rejected, not passed.** No dimensions means no
+  DPI check means nothing blocks the file, which is the one hole this exists to
+  close. **SVG, PDF and AI always bypass the resolution check**: a raster
+  wrapped in a PDF falls to the manual backstop (CNP-68) rather than to a PDF
+  parser here. `.ai` is accepted as either a PDF or a PostScript header.
+  The measurement is written to `artwork_asset`'s existing `width_px` /
+  `height_px` columns before the response, so the resolution the shopper was
+  gated on is the one an order can be checked against later. `dpi` is not
+  stored: it is a function of the pixel width and the ordered size, and a
+  stored copy could disagree with both.
+  **The same write stamps `inspected_at`, and only a success stamps it** — a
+  422 or a 502 leaves the column null. The pixels cannot say whether the bytes
+  were ever read: a vector file is recorded with null pixels, and so is an
+  upload that never reached this route, so a file presigned as SVG, PUT as a
+  PNG and never inspected would be indistinguishable from a genuine SVG.
+  `inspected_at` is the column that tells them apart, and `staging_key` is
+  indexed so `listByStagingKeys` can resolve a request's storage keys in one
+  query.
+- **The inspect route is anonymous, and that is the considered position, not an
+  oversight.** A shopper uploads before any cart or session exists, so there is
+  no identity to bind it to — the same reason the presign route is anonymous.
+  The `uploadId` is a v4 UUID and is therefore the capability: it cannot be
+  guessed, and knowing one buys only that file's pixel dimensions, never its
+  bytes or a URL to them. It is rate-limited like every other anonymous store
+  route that spends anything. Do not "fix" this by adding a session check that
+  the flow cannot satisfy.
+- **The inspect route's second read stops at `ARTWORK_FALLBACK_READ_BYTES`
+  (4 MiB), and a raster whose frame marker lies past it is `unreadable`.** The
+  first read takes `ARTWORK_HEADER_BYTES`; only a raster it could not measure
+  is read again. That is a trade-off, not a guarantee: an ICC profile can span
+  many APP2 segments and Extended XMP many APP1, so nothing in the format bounds
+  how far in the start-of-frame sits. Most exports put it a few hundred KiB in,
+  and a file whose frame lies past 4 MiB is rejected on purpose, because the
+  route is anonymous and shares its process with checkout — an uncapped re-read
+  would let any caller make Medusa buffer a whole 25 MB upload per request.
+  **`readArtworkHead` enforces the cap itself**, whatever byte count it is
+  asked for: it clamps the `Range` it sends, and it reads the body as a stream
+  and destroys it as soon as it runs past the clamped length in that `Range`,
+  keeping only that length, so a bucket that ignores `Range` and answers 200
+  still cannot make it hold more than one extra chunk. A response that ends
+  exactly at that length — every ordinary 64 KiB head read — is read to its end
+  instead: destroying a body cuts its keep-alive socket, and every inspect
+  would pay a fresh handshake to R2.
+- **The resolution decision is enforced in both places, and `prepare-cart` is
+  the server half.** The pixel count is measured here from the stored bytes;
+  the comparison against the product's threshold runs in the storefront for
+  the shopper and again in `prepare-cart` for the order, which is the last
+  point before money and the only server path a configured line reaches.
+  `customizationRulesForVariant` (`src/lib/customization-rules.ts`) resolves
+  the bounds, text limit, minimum DPI and ordered size that
+  `validateCustomization` needs. The artwork input mode is held here too: a
+  line missing artwork the product requires is refused
+  `invalid_customization:missing_required:artwork`, and artwork on a product
+  whose artwork mode is `off` is `invalid_customization:input_off:artwork` (see
+  the input modes paragraph under [Layout and config](#layout-and-config)).
+  **`prepare-cart` takes the artwork's facts from the upload ledger, never from
+  the request.** The request only names which upload it means. The route
+  collects the unique storage keys and, only when there are some, resolves them
+  in one `listByStagingKeys` call; `artworkFromLedger`
+  (`src/lib/artwork-ledger.ts`) then keeps the request's `storageKey` and takes
+  the file name, MIME type, size and pixels from the row, so a file claimed as
+  an SVG or at 99,999 pixels is held to what inspect actually measured. A key
+  with no row, or a row that is purged, already claimed (`order_id` or
+  `promoted_at` set), of a type the store refuses, or uploaded more than
+  `STAGING_WINDOW_DAYS` less `CHECKOUT_ARTWORK_MARGIN_DAYS` ago
+  (`checkoutWindowClosedBefore` — a day before its staging object expires, so
+  payment and promotion still have time; the sweepers keep the exact window) is
+  `artwork_not_found`; a row never stamped `inspected_at`, or a raster row
+  without pixels, is `artwork_not_inspected`. Both answer
+  `400 invalid_customization` with that `reason` and the message
+  `invalid_customization:<reason>`, and a lookup that throws answers
+  `502 checkout_unavailable:misconfigured`. The same upload on two lines of one
+  request is legal. `artworkReferenceSchema` caps `storageKey` at 128
+  characters, which bounds what a request can put into that query, and
+  `fileName` at 255, which only bounds the request body — the stored name comes
+  from the ledger row.
+  **The preset case is why the variant query asks for its option values.** The
+  payload names a variant, not the option values under it, so a preset size's
+  inches are reachable only through `variant.options[].metadata`. It asks for
+  `options.option.title` as well, which is how the variant carrying the named
+  Custom value is recognised, and `product.product_options` — the product's
+  own option values — to confirm the product carries that value at all. Not
+  `product.options.values`: a variant query does not narrow those to the
+  product, so an option shared across products lists every product's values.
+  A typed size always answers DPI — `customization.dimensions` survives the
+  mode checks only as the size being made and priced — and a preset
+  measurement only when no size was typed, so a measurement left on the Custom
+  value cannot stand in for the size the shopper chose.
+- **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,
+  written by `src/admin/widgets/category-artwork.tsx` and read through
+  `resolveArtworkMinDpi` in `@craftynp/types`, which takes the strictest value
+  among a product's categories. Unlike `CUSTOM_SIZE_FALLBACK_BOUNDS`,
+  `DEFAULT_ARTWORK_MIN_DPI` (150) **is reachable on a live product** — a
+  product need not belong to any category, so nothing can force a threshold to
+  be declared. It is deliberate policy, not a hidden one.
+  The ordered physical size comes from the shopper's typed dimensions when
+  there are any, and otherwise from the size option value's own
+  `width_inches` / `height_inches` metadata; see
+  [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
+  **Both axes are measured, and the coarsest one decides.** A 2400x600 file
+  ordered at 8" x 40" clears 300 DPI across and prints at 15 DPI down the
+  banner — checking the width alone, which is what the story's acceptance
+  criterion literally asks for, would call that acceptable.
+- **`artwork_min_dpi` is strict on the way in and tolerant on the way out.**
+  `resolveArtworkMinDpi` ignores what it cannot read, because a live category
+  must never break a product page — which leaves a typo (`3OO`) reading as no
+  threshold and quietly dropping the whole category to the default.
+  `validateCategoryArtwork` therefore guards the write:
+  `src/api/admin/product-categories/middlewares.ts` runs it on category create
+  and update, merging the patch over the stored metadata for the same reason
+  the product middleware does. There is no workflow-hook half here — Medusa
+  exposes no category equivalent — so a category written by a path that never
+  touches HTTP is unguarded.
+- **`GET /admin/artwork/:id` returns a signed URL where the label route streams
+  bytes.** That divergence is deliberate — a print-resolution file is far larger
+  than a label PDF and there is no reason to move it through Medusa. Do not
+  "unify" the two routes.
+- **Promotion must never throw.** It runs on `order.placed`, after payment, and
+  the repo rule that nothing after payment rolls back a paid order applies. It
+  swallows every failure, which means the event bus never sees one to retry —
+  so `promote-pending-artwork` (every 15 minutes) is the only retry there is.
+  The row is claimed onto the order _before_ the copy so a failure still leaves
+  the sweeper something to find, and a failed staging delete is not a failed
+  promotion: the R2 lifecycle rule reaps the leftover, and treating it as a
+  failure would send the sweeper back to re-copy an object already in place.
+- **`STAGING_WINDOW_DAYS` must equal the bucket's `staging/` lifecycle rule.**
+  Past it the staging object is gone, so the sweeper gives up once — marking
+  the row `staging_expired` and logging `[artwork:promote-abandoned]` — rather
+  than emitting a warn every 15 minutes forever on a tag that is an alerting
+  target. The same cutoff retires upload rows that never reached an order
+  (`never_ordered`); those rows are otherwise immortal, since a shopper who
+  abandons a cart leaves one behind.
+- **One upload can belong to two line items** — the same logo on two variants —
+  so the subscriber claims an asset only when it is unclaimed. Re-claiming
+  would repoint `line_item_id` at an item the stored key does not match.
+- **`requestChecksumCalculation: "WHEN_REQUIRED"` on the S3 client is
+  load-bearing.** Without it the SDK bakes `x-amz-checksum-crc32=AAAAAA==` —
+  the CRC32 of an empty body, because presigning sees no body — into the signed
+  query string, where a browser cannot strip it. MinIO ignores the mismatch, so
+  this is the shape of bug that passes locally and fails only in production.
+- **Retention lives in exactly one file**, `src/lib/artwork-retention.ts`.
+  Nothing else reads `ARTWORK_RETENTION_DAYS` or
+  `ARTWORK_RETENTION_FALLBACK_DAYS`. A blank value reads as unset rather than as
+  zero — set-but-empty is what a half-filled deployment looks like, and zero
+  means purge everything on the next run.
+- **The window runs from delivery, and the upload fallback is not a ceiling.**
+  An order delivered on day 56 still gets its full 30 days and purges on day 86,
+  rather than being cut off at the day-61 upload fallback. **This is why R2's own
+  lifecycle rules cannot own retention** — they can only age on creation date.
+  The native rules cover the `staging/` prefix and a 180-day safety net on
+  `artwork/`; that 180 is deliberately far past anything the job can produce and
+  is not the policy. See [docs/dns.md](../../docs/dns.md).
+- **Delivery has two sources and both count.** `deliveredAtByOrder` takes the
+  earlier of the non-voided shipment's `delivered_at` and the `delivered`
+  history entry, because the owner can move an order to delivered by hand and
+  that leaves the shipment column null. The cross-module join lives in the purge
+  job — neither module reaches into the other.
+- **The purge job writes `artwork_asset` and nothing else.** That is what makes
+  "deleting artwork does not touch the order" structural rather than a promise.
+  Keep it that way.
+- **Both `@aws-sdk` packages move together.** A version split between
+  `client-s3` and `s3-request-presigner` puts two copies of `@smithy/types` in
+  the tree and `getSignedUrl` stops accepting the `S3Client`, with a type error
+  that names neither package.
 
 ## Order status and shipment tracking
 
@@ -450,6 +879,13 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   row**, now purely to keep one email a sane size — the original reason
   (Resend's 2,000-character template-variable cap) no longer applies, since
   nothing here is sent as a template variable.
+- **A line's customization details get one line each, in both bodies, and a
+  value's own newlines are carried.** Order notes may run to several lines
+  (CNP-38), and joining every detail with `" · "` into one span was where
+  those breaks died. The HTML path converts `\n` to `<br>` **after**
+  `escapeHtml`, never before, or the escape would eat the tag; the plain-text
+  path re-indents continuation lines by the same two spaces, or the rest of a
+  note reads as a new item.
 - **Every interpolated value must go through `escapeHtml`** before landing in
   the HTML body — `order-email.ts` builds the email as a literal JS template
   string, so an unescaped value is a direct injection, not a framework quirk.
@@ -474,8 +910,10 @@ provider in `src/modules/notification-resend`, fired by subscribers on
 - **Monitoring here means stable warn-level log tags**, because nothing is
   deployed and there is no alerting sink until CNP-16. Attach alerts to
   `[email:send-failed]`, `[email:quota]`, `[email:quota-low]`,
-  `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]` and
-  `[email:order-failed]` rather than inventing an alerting system now.
+  `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]`,
+  `[email:order-failed]`, `[artwork:purge]`, `[artwork:purge-failed]`,
+  `[artwork:promote]` and `[artwork:promote-failed]` rather than inventing an
+  alerting system now.
 - **`STOREFRONT_URL` is what builds the tokenized order link.** `order-email.ts`
   constructs `/checkout/confirmation?order=&number=&token=` independently of the
   storefront's own `checkoutConfirmationHref()`; the two drifting is the
@@ -560,10 +998,39 @@ CNP-79.
   environment fails the migration rather than half-configuring the store.
 - **The ship-from address comes from `SHIP_FROM_*` env**, never hard-coded into
   a migration script, so the client's real address stays out of git.
-- **Shipping-dimension validation for publishable products is a workflow hook**
-  on `createProductsWorkflow` / `updateProductsWorkflow`, not route middleware —
-  a status-only publish, `/admin/products/batch`, CSV import, and custom
-  workflows all bypass HTTP. Add any similar guard there.
+- **Product validation is a workflow hook** on `createProductsWorkflow` /
+  `updateProductsWorkflow`, not route middleware — a status-only publish,
+  `/admin/products/batch`, CSV import, and custom workflows all bypass HTTP.
+  Add any similar guard to `src/workflows/hooks/validate-products.ts`, which is
+  where the shipping-dimension and customization guards both run. **It has to be
+  that one file:** Medusa throws on a second handler for a hook it has already
+  registered, so a new guard is a call added inside the existing handler, never
+  a new hook file.
+- **That hook rejects the save but cannot undo it, which is why
+  `src/api/admin/products/middlewares.ts` exists as well.** The only hooks
+  core exposes are `productsCreated` / `productsUpdated`, both of which run
+  _after_ the write, so a guard throwing there relies on the workflow
+  compensating. `updateProductsStep` compensates only its `products: [{ id }]`
+  branch; `POST /admin/products/:id` — the dashboard's own save — calls the
+  workflow with `selector` + `update`, whose compensation restores nothing.
+  The result was a 400 in the admin with the bad metadata written anyway, and
+  a product then wedged: the stored value failed the guard on every later save,
+  so it could not be corrected from the UI. Verified against a real container
+  in both shapes; the batch shape does roll back.
+  The middleware therefore re-runs **the same two `assert*` functions** on the
+  incoming update merged over the stored product, before the route reaches the
+  workflow. **It duplicates no rules** — the rules stay in `@craftynp/types`
+  and the `src/lib` guards — and it must keep merging rather than validating
+  the body alone, because Medusa merges product metadata (a patch of one key
+  leaves the rest in place). Deleting it does not fail a test that mocks the
+  workflow; it fails only against a real save, which is how this was found.
+  The hook stays as the catch-all for every path that never touches HTTP.
+- **A malformed customization declaration is rejected at any status; an
+  incomplete one only on publish.** A contradictory record — the flag off with
+  an input still on — or a value outside the registry's vocabulary is wrong
+  whatever the status. A product that is customizable but asks for nothing is a
+  draft mid-setup, and is refused only when it is published, the same line the
+  shipping-dimension guard draws.
 
 ## Testing
 

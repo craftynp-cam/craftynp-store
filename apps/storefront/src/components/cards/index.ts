@@ -1,5 +1,10 @@
 export { CartCard, type CartCardData, type CartCardProps } from "./cart-card";
 export {
+  CartLineDetailValue,
+  collapsedDetail,
+  isExpandableDetail,
+} from "./cart-line-detail-value";
+export {
   ProductCard,
   type ProductCardData,
   type ProductCardProps,

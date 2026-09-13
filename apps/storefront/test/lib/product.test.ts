@@ -134,6 +134,27 @@ describe("toProductDetail", () => {
     expect(detail.variants[0]?.availability).toBe("out_of_stock");
   });
 
+  it("reads the order minimum off the product's own metadata", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "stickers",
+      title: "Stickers",
+      metadata: { min_order_quantity: "50" },
+    });
+
+    expect(detail.minOrderQuantity).toBe(50);
+  });
+
+  it("orders one at a time when no minimum is declared", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "keychain",
+      title: "Keychain",
+    });
+
+    expect(detail.minOrderQuantity).toBe(1);
+  });
+
   it("maps option values with their ids, for the selector to key off", () => {
     const detail = toProductDetail({
       id: "prod_1",
@@ -162,6 +183,62 @@ describe("toProductDetail", () => {
         ],
       },
     ]);
+  });
+
+  it("takes a value's sub-label from its Medusa metadata, either key", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "keychain",
+      title: "Keychain",
+      options: [
+        {
+          id: "opt_color",
+          title: "Color",
+          values: [
+            {
+              id: "val_blush",
+              value: "Blush",
+              metadata: { subLabel: "  Matte finish  " },
+            },
+            {
+              id: "val_sage",
+              value: "Sage",
+              metadata: { sub_label: "Gloss finish" },
+            },
+          ],
+        },
+      ],
+      variants: [],
+    });
+
+    expect(detail.options[0]?.values).toEqual([
+      { id: "val_blush", value: "Blush", subLabel: "Matte finish" },
+      { id: "val_sage", value: "Sage", subLabel: "Gloss finish" },
+    ]);
+  });
+
+  it("leaves the sub-label off a value whose metadata does not define one", () => {
+    const detail = toProductDetail({
+      id: "prod_1",
+      handle: "keychain",
+      title: "Keychain",
+      options: [
+        {
+          id: "opt_color",
+          title: "Color",
+          values: [
+            { id: "val_blush", value: "Blush", metadata: { subLabel: "   " } },
+            { id: "val_sage", value: "Sage", metadata: { subLabel: 12 } },
+            { id: "val_navy", value: "Navy", metadata: null },
+          ],
+        },
+      ],
+      variants: [],
+    });
+
+    for (const value of detail.options[0]?.values ?? []) {
+      expect(value.subLabel).toBeUndefined();
+    }
   });
 });
 

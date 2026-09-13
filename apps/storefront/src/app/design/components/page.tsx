@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CartCard, Container, ProductCard, ThemeToggle } from "@/components";
+import { requireDesignAccess } from "@/lib/design-guard";
 
+import { ArtworkUploadDemo } from "./artwork-upload-demo";
 import { CartCardDemo } from "./cart-card-demo";
 
 export const metadata: Metadata = {
@@ -32,6 +34,7 @@ function Section({
 const componentNavEntries = [
   { id: "product-card", label: "Product Card" },
   { id: "cart-card", label: "Cart Card" },
+  { id: "artwork-upload", label: "Artwork Upload" },
 ];
 
 function ComponentNav() {
@@ -53,7 +56,9 @@ function ComponentNav() {
   );
 }
 
-export default function ComponentsPage() {
+export default async function ComponentsPage() {
+  await requireDesignAccess("/design/components");
+
   return (
     <main id="main-content" tabIndex={-1} className="py-16">
       <Container>
@@ -188,6 +193,7 @@ export default function ComponentsPage() {
                   initialLines={[
                     {
                       id: "ready-made",
+                      lineId: "line-ready-made",
                       href: "/products/wildflower-acrylic-keychain",
                       title: "Wildflower Acrylic Keychain",
                       unitPrice: 9,
@@ -196,6 +202,7 @@ export default function ComponentsPage() {
                     },
                     {
                       id: "customizable",
+                      lineId: "line-customizable",
                       href: "/products/custom-die-cut-stickers",
                       title: "Custom Die-Cut Stickers",
                       unitPrice: 0.75,
@@ -214,12 +221,13 @@ export default function ComponentsPage() {
 
               <Section
                 title="Long detail values"
-                description="A custom text or filename far longer than the panel truncates with an ellipsis rather than widening the card (AC 3)."
+                description="A short value truncates with an ellipsis rather than widening the card. A long or multi-line one clamps to two lines behind a disclosure, so an order note keeps its line breaks and stays readable in full (CNP-38 AC 3)."
               >
                 <CartCardDemo
                   initialLines={[
                     {
                       id: "long-details",
+                      lineId: "line-long-details",
                       href: "/products/custom-die-cut-stickers",
                       title: "Custom Die-Cut Stickers",
                       unitPrice: 0.75,
@@ -237,6 +245,11 @@ export default function ComponentsPage() {
                           value:
                             "sarahs-sweet-shop-final-logo-v3-approved-for-print-2026.png",
                         },
+                        {
+                          label: "Order notes",
+                          value:
+                            "Match the sage green on the sample I emailed, and centre the monogram.\n\nNeeded before the 14th if that's possible.",
+                        },
                       ],
                     },
                   ]}
@@ -251,6 +264,7 @@ export default function ComponentsPage() {
                   initialLines={[
                     {
                       id: "missing-image",
+                      lineId: "line-missing-image",
                       href: "/products/coming-soon",
                       title: "Coming Soon",
                       unitPrice: 5,
@@ -269,6 +283,15 @@ export default function ComponentsPage() {
                   <CartCard isLoading />
                   <CartCard isLoading />
                 </ul>
+              </Section>
+            </div>
+
+            <div id="artwork-upload">
+              <Section
+                title="Artwork upload"
+                description="Four states: idle, uploading with determinate progress, uploaded with filename, size and thumbnail, and error with retry. Uploads run against a simulated transport here, so every state is reachable without a backend. Keyboard operable — tab to the button and press Enter — and every transition is announced in a live region."
+              >
+                <ArtworkUploadDemo />
               </Section>
             </div>
           </div>
