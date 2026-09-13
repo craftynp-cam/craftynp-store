@@ -609,7 +609,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   **`readArtworkHead` enforces the cap itself**, whatever byte count it is
   asked for: it clamps the `Range` it sends, and it reads the body as a stream
   and destroys it at the cap, so a bucket that ignores `Range` and answers 200
-  still cannot make it hold more.
+  still cannot make it hold more. A response whose declared `Content-Length`
+  ends exactly at the cap is read to its end instead: destroying a body cuts
+  its keep-alive socket, and every inspect would pay a fresh handshake to R2.
 - **The resolution decision is enforced in both places, and `prepare-cart` is
   the server half.** The pixel count is measured here from the stored bytes and
   cannot be forged by the browser; the comparison against the product's

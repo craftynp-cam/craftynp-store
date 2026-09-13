@@ -237,25 +237,30 @@ export async function readArtworkHead(
 
   if (!result.Body) return new Uint8Array();
 
-  return readAtMost(result.Body as Readable, limit);
+  return readAtMost(result.Body as Readable, limit, result.ContentLength);
 }
 
-async function readAtMost(body: Readable, limit: number): Promise<Uint8Array> {
+async function readAtMost(
+  body: Readable,
+  limit: number,
+  declaredLength: number | undefined,
+): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
-  let length = 0;
+  let received = 0;
 
   for await (const chunk of body) {
-    const bytes = (chunk as Buffer).subarray(0, limit - length);
-    chunks.push(bytes);
-    length += bytes.length;
+    const bytes = chunk as Buffer;
+    chunks.push(bytes.subarray(0, limit - received));
+    received += bytes.length;
 
-    if (length >= limit) {
+    const endsAtLimit = received === limit && declaredLength === limit;
+    if (received >= limit && !endsAtLimit) {
       body.destroy();
       break;
     }
   }
 
-  return Buffer.concat(chunks, length);
+  return Buffer.concat(chunks, Math.min(received, limit));
 }
 
 export async function copyArtwork(

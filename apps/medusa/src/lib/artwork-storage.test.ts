@@ -132,10 +132,10 @@ describe("readUploadUrlTtlSeconds", () => {
 describe("readArtworkHead", () => {
   const send = jest.fn<Promise<unknown>, [GetObjectCommand]>();
 
-  function storedBody(object: Buffer) {
+  function storedBody(object: Buffer, chunkSize = 1_000_000) {
     const chunks: Buffer[] = [];
-    for (let offset = 0; offset < object.length; offset += 1_000_000) {
-      chunks.push(object.subarray(offset, offset + 1_000_000));
+    for (let offset = 0; offset < object.length; offset += chunkSize) {
+      chunks.push(object.subarray(offset, offset + chunkSize));
     }
 
     return Object.assign(Readable.from(chunks), {
@@ -152,7 +152,7 @@ describe("readArtworkHead", () => {
   it("never holds more than 4 MiB of a 25 MB object, even when storage ignores the Range", async () => {
     const object = randomBytes(25 * MIB);
     const body = storedBody(object);
-    send.mockResolvedValue({ Body: body });
+    send.mockResolvedValue({ Body: body, ContentLength: object.length });
 
     const head = await readArtworkHead(
       "staging/upl_1.jpg",
@@ -164,6 +164,21 @@ describe("readArtworkHead", () => {
     expect(head.length).toBe(4 * MIB);
     expect(Buffer.from(head).equals(object.subarray(0, 4 * MIB))).toBe(true);
     expect(body.destroyed).toBe(true);
+  });
+
+  it("reads a ranged response that ends exactly at the cap to its end, so its connection can be reused", async () => {
+    const object = randomBytes(64 * 1024);
+    const body = storedBody(object, 16 * 1024);
+    send.mockResolvedValue({ Body: body, ContentLength: object.length });
+
+    const head = await readArtworkHead(
+      "staging/upl_1.jpg",
+      object.length,
+      readArtworkStorageOptions(COMPLETE),
+    );
+
+    expect(Buffer.from(head).equals(object)).toBe(true);
+    expect(body.readableEnded).toBe(true);
   });
 });
 
