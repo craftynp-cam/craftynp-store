@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import {
-  checkoutLineItemDetailSchema,
-  checkoutTotalsSchema,
-} from "./checkout.js";
+import { checkoutTotalsSchema } from "./checkout.js";
 import { orderStatusSchema, orderTrackingSchema } from "./order-status.js";
 
 export const orderAddressSchema = z.object({
@@ -19,6 +16,11 @@ export const orderAddressSchema = z.object({
 });
 export type OrderAddress = z.infer<typeof orderAddressSchema>;
 
+const orderLineDetailSchema = z.object({
+  label: z.string().min(1),
+  value: z.string().min(1),
+});
+
 export const orderConfirmationLineSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -28,7 +30,7 @@ export const orderConfirmationLineSchema = z.object({
   unitPrice: z.number().nonnegative(),
   lineTotal: z.number().nonnegative(),
   isCustomizable: z.boolean(),
-  details: z.array(checkoutLineItemDetailSchema),
+  details: z.array(orderLineDetailSchema),
 });
 export type OrderConfirmationLine = z.infer<typeof orderConfirmationLineSchema>;
 

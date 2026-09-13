@@ -4,7 +4,11 @@ import {
   resolveArtworkMinDpi,
   resolveProductCustomization,
 } from "@craftynp/types";
-import type { OrderedSizeInches, ProductCustomization } from "@craftynp/types";
+import type {
+  LineItemOption,
+  OrderedSizeInches,
+  ProductCustomization,
+} from "@craftynp/types";
 
 import type { CustomizationRules } from "./validate-customization";
 
@@ -14,10 +18,12 @@ export type VariantWithCustomization = {
     metadata?: Record<string, unknown> | null;
     categories?:
       ({ metadata?: Record<string, unknown> | null } | null)[] | null;
+    options?: ({ id?: string | null } | null)[] | null;
   } | null;
   options?:
     | ({
         value?: string | null;
+        option_id?: string | null;
         metadata?: Record<string, unknown> | null;
         option?: { title?: string | null } | null;
       } | null)[]
@@ -28,10 +34,18 @@ export const VARIANT_CUSTOMIZATION_FIELDS = [
   "id",
   "product.metadata",
   "product.categories.metadata",
+  "product.options.id",
   "options.value",
+  "options.option_id",
   "options.metadata",
   "options.option.title",
 ];
+
+export type OrderLineFacts = {
+  isCustomizable: boolean;
+  options: LineItemOption[];
+  sizeOptionTitle: string | null;
+};
 
 // The payload names a variant, not the option values under it, so a preset
 // size's inches are only reachable through the variant's own option values.
@@ -85,5 +99,33 @@ export function customizationRulesForVariant(
       ),
     ),
     orderedSize: customSizeVariant === true ? undefined : presetSize(variant),
+  };
+}
+
+function productOptionRank(variant: VariantWithCustomization) {
+  const ids = (variant.product?.options ?? []).map((option) => option?.id);
+
+  return (optionId: string | null | undefined) => {
+    const index = optionId ? ids.indexOf(optionId) : -1;
+    return index === -1 ? ids.length : index;
+  };
+}
+
+export function orderLineFactsForVariant(
+  variant: VariantWithCustomization,
+): OrderLineFacts {
+  const customization = resolveProductCustomization(variant.product?.metadata);
+  const rank = productOptionRank(variant);
+
+  return {
+    isCustomizable: customization.isCustomizable,
+    options: [...(variant.options ?? [])]
+      .sort((a, b) => rank(a?.option_id) - rank(b?.option_id))
+      .flatMap((option) =>
+        option?.option?.title && option.value != null
+          ? [{ title: option.option.title, value: option.value }]
+          : [],
+      ),
+    sizeOptionTitle: customization.size.optionTitle,
   };
 }

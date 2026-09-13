@@ -1,6 +1,9 @@
 import { DEFAULT_ARTWORK_MIN_DPI } from "@craftynp/types";
 
-import { customizationRulesForVariant } from "./customization-rules";
+import {
+  customizationRulesForVariant,
+  orderLineFactsForVariant,
+} from "./customization-rules";
 import { validateCustomization } from "./validate-customization";
 
 const PRODUCT_METADATA = {
@@ -171,6 +174,39 @@ describe("customizationRulesForVariant", () => {
     expect(rules.orderedSize).toEqual({
       widthInches: null,
       heightInches: null,
+    });
+  });
+});
+
+describe("orderLineFactsForVariant", () => {
+  it("lists the variant's option values in the product's option order", () => {
+    expect(
+      orderLineFactsForVariant({
+        id: "variant_01",
+        product: {
+          metadata: PRODUCT_METADATA,
+          options: [{ id: "opt_finish" }, { id: "opt_size" }],
+        },
+        options: [
+          {
+            value: "Custom",
+            option_id: "opt_size",
+            option: { title: "Size" },
+          },
+          {
+            value: "Matte",
+            option_id: "opt_finish",
+            option: { title: "Finish" },
+          },
+        ],
+      }),
+    ).toEqual({
+      isCustomizable: true,
+      options: [
+        { title: "Finish", value: "Matte" },
+        { title: "Size", value: "Custom" },
+      ],
+      sizeOptionTitle: "Size",
     });
   });
 });

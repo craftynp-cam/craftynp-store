@@ -900,6 +900,37 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     });
   });
 
+  it("stores the detail rows and flag it derives, not the ones the request names (AC4)", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            isCustomizable: false,
+            details: [{ label: "Custom text", value: "Something else" }],
+            customization: { customText: { value: "  Ellie  " } },
+          },
+        ] as unknown as CheckoutPrepareRequest["items"],
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0].metadata).toEqual({
+      isCustomizable: true,
+      details: [
+        { label: "Size", value: "8 × 10" },
+        { label: "Custom text", value: "Ellie" },
+      ],
+      customization: { customText: { value: "Ellie" } },
+    });
+  });
+
   it("refuses an artwork key the upload ledger has no row for", async () => {
     const { req, res, status, json } = buildHarness({
       body: buildBody({

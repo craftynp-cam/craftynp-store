@@ -56,13 +56,34 @@ describe("checkoutLineItemSchema", () => {
     expect(checkoutLineItemSchema.safeParse(validItem).success).toBe(true);
   });
 
-  it("accepts a customizable line item with details", () => {
+  it("accepts eight details at the label and value caps", () => {
     const result = checkoutLineItemSchema.safeParse({
       ...validItem,
-      isCustomizable: true,
-      details: [{ label: "Engraving", value: "Happy Birthday" }],
+      details: Array.from({ length: 8 }, () => ({
+        label: "L".repeat(64),
+        value: "v".repeat(1000),
+      })),
     });
     expect(result.success).toBe(true);
+  });
+
+  it.each([
+    ["a label over 64 characters", [{ label: "L".repeat(65), value: "Ellie" }]],
+    [
+      "a value over 1,000 characters",
+      [{ label: "Custom text", value: "v".repeat(1001) }],
+    ],
+    [
+      "more than eight rows",
+      Array.from({ length: 9 }, (_, index) => ({
+        label: `Row ${index}`,
+        value: "Ellie",
+      })),
+    ],
+  ])("rejects details with %s", (_label, details) => {
+    expect(
+      checkoutLineItemSchema.safeParse({ ...validItem, details }).success,
+    ).toBe(false);
   });
 
   it("rejects a zero quantity", () => {

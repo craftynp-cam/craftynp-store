@@ -8,8 +8,10 @@ import {
   createPaymentSessionsWorkflow,
   updateCartWorkflow,
 } from "@medusajs/medusa/core-flows";
+import { lineItemDetails } from "@craftynp/types";
 import type {
   CheckoutAddress,
+  CheckoutLineItemDetail,
   CheckoutPrepareRequest,
   LineItemCustomization,
 } from "@craftynp/types";
@@ -31,6 +33,7 @@ import { pricedVariantQuery } from "../../price-quote/route";
 import {
   VARIANT_CUSTOMIZATION_FIELDS,
   customizationRulesForVariant,
+  orderLineFactsForVariant,
   type VariantWithCustomization,
 } from "../../../../lib/customization-rules";
 import {
@@ -248,6 +251,10 @@ export async function POST(
   // reaches. The artwork's facts come from the ledger inspect wrote, never the
   // request; the comparison against the product's threshold happens here.
   const validated = new Map<number, LineItemCustomization>();
+  const orderLines = new Map<
+    number,
+    { isCustomizable: boolean; details: CheckoutLineItemDetail[] }
+  >();
   let variants: VariantWithCustomization[];
 
   try {
@@ -361,6 +368,16 @@ export async function POST(
     }
 
     if (item.customization != null) validated.set(index, customization);
+
+    const facts = orderLineFactsForVariant(variant);
+    orderLines.set(index, {
+      isCustomizable: facts.isCustomizable,
+      details: lineItemDetails({
+        options: facts.options,
+        customization: validated.get(index),
+        sizeOptionTitle: facts.sizeOptionTitle,
+      }),
+    });
   }
 
   // An area-priced line cannot be left to Medusa: the amount depends on the
@@ -527,8 +544,7 @@ export async function POST(
               ? { unit_price: unitPrices.get(index) }
               : {}),
             metadata: {
-              isCustomizable: item.isCustomizable ?? false,
-              details: item.details ?? [],
+              ...orderLines.get(index),
               ...(customization?.dimensions
                 ? { dimensions: customization.dimensions }
                 : {}),

@@ -28,8 +28,6 @@ type CheckoutPreparePayload = {
   items: {
     variantId: string;
     quantity: number;
-    isCustomizable?: boolean;
-    details?: { label: string; value: string }[];
     priceQuoteToken?: string;
     customization?: LineItemCustomization;
   }[];

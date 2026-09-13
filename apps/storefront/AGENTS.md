@@ -335,7 +335,8 @@ guard that validates them).
   rows are built _from_ that result by `lineItemDetails` in `@craftynp/types`:
   the selected options, then Artwork, Custom text, Size and Order notes. The
   rendered half is derived from the structured half, so the two cannot
-  disagree about what the shopper filled in.
+  disagree about what the shopper filled in, and `prepare-cart` builds the
+  order line's rows with the same function.
 - **The artwork resolution check joins the one gate, and it blocks whatever the
   declared artwork mode is.** `optional` says the shopper need not supply
   artwork, not that a file too coarse to print is acceptable once they have —
@@ -744,6 +745,12 @@ between steps 3 and 4. The backend half is in
 - **Steps 1–3 are a client-side draft only.** No Medusa cart exists until the
   payment step POSTs `/checkout/prepare`, which writes `cartId` and
   `paymentClientSecret` onto the draft.
+- **Each `/checkout/prepare` line is `{ variantId, quantity, priceQuoteToken,
+customization }` and nothing more.** The cart line's `details` and
+  `isCustomizable` serve this app's own cart and stay here: `prepare-cart`
+  builds the order line's rows and flag itself, from the product and the
+  validated customization, and never reads a request's (see
+  [apps/medusa/AGENTS.md](../medusa/AGENTS.md)).
 - **Tax is quoted only after a shipping rate has settled**, because shipping
   itself is taxed, and it re-runs when the shopper picks a different rate. Do
   not fire the tax and shipping-rate calls in parallel.

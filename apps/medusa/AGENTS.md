@@ -524,10 +524,22 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   `item.metadata` finds the snapshot and silently renders nothing;
   `order-customization.tsx` reads `line_item_metadata` and falls back.
 - **The configured line's metadata is `{ isCustomizable, details, dimensions?,
-customization? }`.** `details` is the rendered half — label/value rows the
-  cart, the confirmation page and the order email all print — and
-  `customization` is the structured half the maker and the admin widget work
-  from. `dimensions` sits at the line's top level as well as inside the
+customization? }`, and the server writes every key.** `details` is the
+  rendered half — label/value rows the cart, the confirmation page and the
+  order email all print — and `customization` is the structured half the maker
+  and the admin widget work from. `prepare-cart` builds `details` with
+  `lineItemDetails` from `@craftynp/types`, the function the storefront's cart
+  uses too, over the variant's own option values in the product's option order
+  (`orderLineFactsForVariant` in `src/lib/customization-rules.ts`) and the
+  validated customization, and takes `isCustomizable` from the product's
+  declaration. The request's `details` are never read — otherwise a shopper
+  could put rows on the confirmation, the email and the admin widget that
+  disagree with what gets made (CNP-90). `checkoutLineItemSchema` keeps them
+  only as a capped backstop, at most eight rows with a 64-character label and a
+  1,000-character value, and has no `isCustomizable` at all. The confirmation's
+  detail shape in `order.ts` is deliberately uncapped: a server-built row can
+  run past those caps, since order notes allow 500 graphemes and custom text
+  1,000. `dimensions` sits at the line's top level as well as inside the
   customization, and both are written from the same validated
   `customization.dimensions` — never from the request, which has had no
   top-level size of its own since CNP-85. The top-level copy is what the
