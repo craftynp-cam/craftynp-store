@@ -609,10 +609,12 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   would let any caller make Medusa buffer a whole 25 MB upload per request.
   **`readArtworkHead` enforces the cap itself**, whatever byte count it is
   asked for: it clamps the `Range` it sends, and it reads the body as a stream
-  and destroys it at the cap, so a bucket that ignores `Range` and answers 200
-  still cannot make it hold more. A response whose declared `Content-Length`
-  ends exactly at the cap is read to its end instead: destroying a body cuts
-  its keep-alive socket, and every inspect would pay a fresh handshake to R2.
+  and destroys it as soon as it runs past the length asked for, keeping only
+  that length, so a bucket that ignores `Range` and answers 200 still cannot
+  make it hold more than one extra chunk. A response that ends exactly at the
+  requested length — every ordinary 64 KiB head read — is read to its end
+  instead: destroying a body cuts its keep-alive socket, and every inspect
+  would pay a fresh handshake to R2.
 - **The resolution decision is enforced in both places, and `prepare-cart` is
   the server half.** The pixel count is measured here from the stored bytes and
   cannot be forged by the browser; the comparison against the product's

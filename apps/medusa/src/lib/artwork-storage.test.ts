@@ -177,20 +177,26 @@ describe("readArtworkHead", () => {
     expect(body.served.bytes).toBeLessThanOrEqual(4 * MIB + 1_000_000);
   });
 
-  it("reads a ranged response that ends exactly at the cap to its end, so its connection can be reused", async () => {
-    const object = randomBytes(64 * 1024);
-    const body = storedBody(object, 16 * 1024);
-    send.mockResolvedValue({ Body: body, ContentLength: object.length });
+  it.each([
+    ["a ranged response", 64 * 1024],
+    ["a chunked response", undefined],
+  ])(
+    "reads %s that ends exactly at the requested length to its end, so its connection can be reused",
+    async (_label, contentLength) => {
+      const object = randomBytes(64 * 1024);
+      const body = storedBody(object, 16 * 1024);
+      send.mockResolvedValue({ Body: body, ContentLength: contentLength });
 
-    const head = await readArtworkHead(
-      "staging/upl_1.jpg",
-      object.length,
-      readArtworkStorageOptions(COMPLETE),
-    );
+      const head = await readArtworkHead(
+        "staging/upl_1.jpg",
+        object.length,
+        readArtworkStorageOptions(COMPLETE),
+      );
 
-    expect(Buffer.from(head).equals(object)).toBe(true);
-    expect(body.readableEnded).toBe(true);
-  });
+      expect(Buffer.from(head).equals(object)).toBe(true);
+      expect(body.readableEnded).toBe(true);
+    },
+  );
 });
 
 describe("contentDisposition", () => {
