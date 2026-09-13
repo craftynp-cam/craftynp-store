@@ -7,6 +7,7 @@ import type {
 
 import {
   isQuotaExceeded,
+  isRetryableRejection,
   readQuotaHeaders,
   RESEND_API_URL,
   RESEND_FREE_TIER_DAILY_CAP,
@@ -14,6 +15,7 @@ import {
   RESEND_QUOTA_LOW_LOG_TAG,
   RESEND_SEND_FAILED_LOG_TAG,
   ResendQuotaExceededError,
+  ResendRejectedError,
   ResendSendError,
   validateResendOptions,
   type ResendOptions,
@@ -106,38 +108,43 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= this.options_.maxRetries; attempt += 1) {
+      let response: Response;
       try {
-        const response = await fetch(RESEND_API_URL, {
+        response = await fetch(RESEND_API_URL, {
           method: "POST",
           headers,
           body,
           signal: AbortSignal.timeout(this.options_.timeoutMs),
         });
-
-        this.reportQuota_(response);
-
-        if (response.ok) return response;
-
-        const text = await response.text();
-
-        if (isQuotaExceeded(response.status, text)) {
-          throw new ResendQuotaExceededError(
-            `Resend daily quota exhausted: ${text}`,
-          );
-        }
-
-        const error = new ResendSendError(
-          `Resend rejected the send (${response.status}): ${text}`,
-          response.status,
-        );
-
-        if (response.status < 500 && response.status !== 429) throw error;
-        lastError = error;
       } catch (error) {
-        if (error instanceof ResendQuotaExceededError) throw error;
-        if (error instanceof ResendSendError && error.status < 500) throw error;
         lastError = error;
+        continue;
       }
+
+      this.reportQuota_(response);
+
+      if (response.ok) return response;
+
+      const text = await response.text().catch(() => "");
+
+      if (isQuotaExceeded(response.status, text)) {
+        throw new ResendQuotaExceededError(
+          `Resend daily quota exhausted: ${text}`,
+        );
+      }
+
+      if (!isRetryableRejection(response.status, text)) {
+        const rejection = new ResendRejectedError(response.status, text);
+        this.logger_.error(
+          `${RESEND_SEND_FAILED_LOG_TAG} error=${rejection.message}`,
+        );
+        throw rejection;
+      }
+
+      lastError = new ResendSendError(
+        `Resend rejected the send (${response.status}): ${text}`,
+        response.status,
+      );
     }
 
     const detail =
