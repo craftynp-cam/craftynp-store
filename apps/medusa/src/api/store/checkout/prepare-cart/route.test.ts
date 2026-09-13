@@ -1146,18 +1146,26 @@ describe("POST /store/checkout/prepare-cart customization", () => {
   });
 
   it("lets two lines of one request share an upload, each keeping its own text", async () => {
+    const forged = {
+      ...ARTWORK,
+      fileName: "forged.svg",
+      mimeType: "image/svg+xml" as const,
+      sizeBytes: 1,
+      widthPx: null,
+      heightPx: null,
+    };
     const { req, res, listByStagingKeys } = buildHarness({
       body: buildBody({
         items: [
           {
             variantId: "variant_01",
             quantity: 2,
-            customization: { artwork: ARTWORK, customText: { value: "Ellie" } },
+            customization: { artwork: forged, customText: { value: "Ellie" } },
           },
           {
             variantId: "variant_01",
             quantity: 1,
-            customization: { artwork: ARTWORK, customText: { value: "Max" } },
+            customization: { artwork: forged, customText: { value: "Max" } },
           },
         ],
       }),
