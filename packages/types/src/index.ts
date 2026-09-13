@@ -38,6 +38,7 @@ export {
   requiredPixels,
   textLength,
 } from "./customization.js";
+export { lineItemDetails } from "./line-item-details.js";
 export {
   ARTWORK_MIN_DPI_METADATA_KEY,
   CUSTOMIZABLE_METADATA_KEY,
@@ -182,6 +183,7 @@ export type {
   LineItemCustomization,
   OrderedSizeInches,
 } from "./customization.js";
+export type { LineItemOption } from "./line-item-details.js";
 export type {
   CustomSizeConfig,
   CustomTextConfig,

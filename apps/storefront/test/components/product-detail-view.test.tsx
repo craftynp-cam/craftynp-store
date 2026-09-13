@@ -1555,7 +1555,10 @@ describe("ProductDetailView editing a cart line", () => {
 
       const line = readCart().lines[0];
       if (!line) throw new Error("nothing was added to the cart");
-      expect(line.dimensions).toEqual({ widthInches: 8.5, heightInches: 10 });
+      expect(line.customization?.dimensions).toEqual({
+        widthInches: 8.5,
+        heightInches: 10,
+      });
       cleanup();
 
       searchParams = new URLSearchParams({ edit: line.lineId });
@@ -1577,7 +1580,7 @@ describe("ProductDetailView editing a cart line", () => {
 
       const lines = readCart().lines;
       expect(lines).toHaveLength(1);
-      expect(lines[0]?.dimensions).toEqual({
+      expect(lines[0]?.customization?.dimensions).toEqual({
         widthInches: 8.5,
         heightInches: 12,
       });

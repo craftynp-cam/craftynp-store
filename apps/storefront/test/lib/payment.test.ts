@@ -107,13 +107,27 @@ describe("paymentPrepareKey", () => {
     const eightByTen = paymentPrepareKey(
       draft,
       makeCart({
-        lines: [{ ...line, dimensions: { widthInches: 8, heightInches: 10 } }],
+        lines: [
+          {
+            ...line,
+            customization: {
+              dimensions: { widthInches: 8, heightInches: 10 },
+            },
+          },
+        ],
       }),
     );
     const twelveBySixteen = paymentPrepareKey(
       draft,
       makeCart({
-        lines: [{ ...line, dimensions: { widthInches: 12, heightInches: 16 } }],
+        lines: [
+          {
+            ...line,
+            customization: {
+              dimensions: { widthInches: 12, heightInches: 16 },
+            },
+          },
+        ],
       }),
     );
 

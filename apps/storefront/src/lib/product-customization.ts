@@ -21,7 +21,7 @@ import type {
 
 import { ARTWORK_SIZE_LIMIT_LABEL } from "./artwork-upload";
 import type { ArtworkReference } from "./artwork-upload";
-import type { CartLine, CartLineDetail } from "./cart";
+import type { CartLine } from "./cart";
 import type {
   ProductDetail,
   ProductDetailOption,
@@ -287,51 +287,6 @@ export function normalizeOrderNotes(value: string): string {
     .replace(/\r\n?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-export function customizationDetails(
-  customization: ProductCustomization,
-  draft: CustomizationDraft,
-): CartLineDetail[] {
-  const details: CartLineDetail[] = [];
-  if (!customization.isCustomizable) return details;
-
-  if (
-    customization.inputs.artwork !== "off" &&
-    isSatisfied("artwork", customization, draft) &&
-    draft.artwork
-  ) {
-    details.push({ label: "Artwork", value: draft.artwork.fileName });
-  }
-
-  if (
-    customization.inputs.customText !== "off" &&
-    isSatisfied("customText", customization, draft)
-  ) {
-    details.push({ label: "Custom text", value: draft.customText.trim() });
-  }
-
-  if (
-    customization.inputs.dimensions !== "off" &&
-    isSatisfied("dimensions", customization, draft)
-  ) {
-    details.push({
-      label: "Size",
-      value: `${draft.widthInches.trim()}\u2033 \u00d7 ${draft.heightInches.trim()}\u2033`,
-    });
-  }
-
-  if (
-    customization.inputs.orderNotes !== "off" &&
-    isSatisfied("orderNotes", customization, draft)
-  ) {
-    details.push({
-      label: "Order notes",
-      value: normalizeOrderNotes(draft.orderNotes),
-    });
-  }
-
-  return details;
 }
 
 export function lineItemCustomization(

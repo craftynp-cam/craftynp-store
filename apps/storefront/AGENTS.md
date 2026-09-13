@@ -139,11 +139,12 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   Left unmapped, the workspace symlink resolves through the
   package's `exports` map, which serves types and runtime separately. At the
   time it was the app's only value import of `@craftynp/types`, which is why it
-  was the only casualty. `artwork-upload.ts` is now the second — and it is worse
+  was the only casualty. `artwork-upload.ts` was the second — and it is worse
   placed, because it lands in a **client** bundle, so the same failure mode
   (`(void 0)(…)` at runtime, a green `tsc`, a green Jest) would reach shoppers
-  directly rather than only a server render. Every other import of the package
-  is still `import type`.
+  directly rather than only a server render. Several client modules
+  value-import the package, so treat any value import of it as able to reach
+  shoppers.
 
 ## Product configurator
 
@@ -294,13 +295,16 @@ the product query cannot answer this, is in
 - **Nothing is quoted while a custom size is half-typed or out of range.** The
   backend would only refuse it and the shopper is already being told by the
   field itself.
-- **The cart line carries the quote token and the dimensions**, and
-  `setCartLineQuantity` **drops the token** when the drawer changes a quantity:
-  the quote was issued for the old quantity and a tier makes that a different
-  unit price, so `prepare-cart` asks for a fresh one rather than charging a
-  stale tier.
-- **`taxQuoteKey` includes each line's dimensions**, or a resized line reuses
-  the cached tax for the size it used to be.
+- **The cart line carries the quote token, and its size only as
+  `customization.dimensions`.** There is no top-level copy to disagree with
+  it: `prepare-cart` prices and makes the size the customization records
+  (CNP-85). `setCartLineQuantity` **drops the token** when the drawer changes a
+  quantity: the quote was issued for the old quantity and a tier makes that a
+  different unit price, so `prepare-cart` asks for a fresh one rather than
+  charging a stale tier.
+- **`taxQuoteKey` and `paymentPrepareKey` include each line's
+  `customization.dimensions`**, or a resized line reuses the cached tax, or the
+  PaymentIntent, minted for the size it used to be.
 
 ## Product customization
 
@@ -328,10 +332,12 @@ guard that validates them).
   `kind` the wire has no use for. The result rides the cart line as
   `customization` and reaches Medusa's line item metadata under the same key —
   which is what `promote-artwork` reads to move the file out of `staging/`.
-  Every input also gets a `details` row for display, artwork included; the two
-  are the same configuration rendered and structured, and both are built from
-  the same `isSatisfied` predicate so they cannot disagree about what the
-  shopper filled in.
+  Every input also gets a `details` row for display, artwork included, and the
+  rows are built _from_ that result by `lineItemDetails` in `@craftynp/types`:
+  the selected options, then Artwork, Custom text, Size and Order notes. The
+  rendered half is derived from the structured half, so the two cannot
+  disagree about what the shopper filled in, and `prepare-cart` builds the
+  order line's rows with the same function.
 - **The artwork resolution check joins the one gate, and it blocks whatever the
   declared artwork mode is.** `optional` says the shopper need not supply
   artwork, not that a file too coarse to print is acceptable once they have —
@@ -450,7 +456,9 @@ for the keys).
   true, so this still lands in the one gate.
 - **The preset option's own detail row is dropped from the cart line while a
   custom size is on.** Both are called "Size", so keeping it showed the shopper
-  `Size: Custom` immediately above `Size: 8″ × 10″`.
+  `Size: Custom` immediately above `Size: 8″ × 10″`. `lineItemDetails` drops the
+  row of the option `customization_size_option` names whenever the
+  customization records dimensions.
 - **Field errors are not a second gate.** `customSizeErrors` feeds both the
   `isInvalid`/`errorMessage` on each input and the one `canAddToCart` gate, and
   adds one clause to the one hint. The wording of the range comes from
@@ -475,6 +483,9 @@ for the keys).
   row.** That row names the file, and two different files are routinely both
   called `logo.png` — keying on the row alone merged them into one line and
   produced the wrong artwork for one of the two.
+  **The `Size` row is written from the parsed numbers, not the typed text**, so
+  a width typed as `8.0` and one typed as `8` build the same key and merge
+  into one line. They are the same piece.
 - **A detail value that is long or multi-line is clamped behind a disclosure,
   and `isExpandableDetail` decides that from the value, not from the box.**
   Order notes may run to several lines, and `truncate` — which is
@@ -735,6 +746,12 @@ between steps 3 and 4. The backend half is in
 - **Steps 1–3 are a client-side draft only.** No Medusa cart exists until the
   payment step POSTs `/checkout/prepare`, which writes `cartId` and
   `paymentClientSecret` onto the draft.
+- **Each `/checkout/prepare` line is `{ variantId, quantity, priceQuoteToken,
+customization }` and nothing more.** The cart line's `details` and
+  `isCustomizable` serve this app's own cart and stay here: `prepare-cart`
+  builds the order line's rows and flag itself, from the product and the
+  validated customization, and never reads a request's (see
+  [apps/medusa/AGENTS.md](../medusa/AGENTS.md)).
 - **Tax is quoted only after a shipping rate has settled**, because shipping
   itself is taxed, and it re-runs when the shopper picks a different rate. Do
   not fire the tax and shipping-rate calls in parallel.

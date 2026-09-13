@@ -8,6 +8,7 @@ import {
 } from "../../../../lib/shipping-quote";
 import { signTaxQuote, taxSignature } from "../../../../lib/tax-quote";
 import { priceSignature, signPriceQuote } from "../../../../lib/price-quote";
+import type { ArtworkAssetRow } from "../../../../modules/artwork/service";
 
 const mockCreateCartRun = jest.fn();
 const mockUpdateCartRun = jest.fn();
@@ -56,13 +57,46 @@ const AREA_METADATA = {
   customization_size_price_floor: "4",
 };
 
+const CONFIGURATOR_METADATA = {
+  customizable: "true",
+  customization_artwork: "optional",
+  customization_text: "optional",
+  customization_notes: "optional",
+};
+
 const DIMENSIONS = { widthInches: 8, heightInches: 10 };
+
+function ledgerRow(overrides: Partial<ArtworkAssetRow> = {}): ArtworkAssetRow {
+  return {
+    id: "artasset_01",
+    upload_id: "up_1",
+    staging_key: "staging/up_1.png",
+    storage_key: null,
+    order_id: null,
+    line_item_id: null,
+    file_name: "logo.png",
+    mime_type: "image/png",
+    size_bytes: 51_200,
+    uploaded_at: new Date(),
+    promoted_at: null,
+    purged_at: null,
+    purge_reason: null,
+    width_px: 3000,
+    height_px: 3000,
+    inspected_at: new Date(),
+    ...overrides,
+  };
+}
 
 // 1.15 * 0.055 * 80, with no tier in play since the mock prices every quantity
 // the same.
 const AREA_UNIT_PRICE = 5.06;
 
-function priceQuoteToken(overrides: { quantity?: number } = {}) {
+function priceQuoteToken(
+  overrides: { quantity?: number; dimensions?: typeof DIMENSIONS } = {},
+) {
+  const dimensions = overrides.dimensions ?? DIMENSIONS;
+
   return signPriceQuote(
     {
       amt: AREA_UNIT_PRICE,
@@ -70,8 +104,8 @@ function priceQuoteToken(overrides: { quantity?: number } = {}) {
       ps: priceSignature({
         variantId: "variant_01",
         quantity: overrides.quantity ?? 2,
-        widthInches: DIMENSIONS.widthInches,
-        heightInches: DIMENSIONS.heightInches,
+        widthInches: dimensions.widthInches,
+        heightInches: dimensions.heightInches,
       }),
       exp: Date.now() + 60_000,
     },
@@ -82,6 +116,10 @@ function priceQuoteToken(overrides: { quantity?: number } = {}) {
 function buildBody(
   overrides: Partial<CheckoutPrepareRequest> = {},
 ): CheckoutPrepareRequest {
+  const quotedItems = (overrides.items ?? ITEMS).map(
+    ({ variantId, quantity }) => ({ variantId, quantity }),
+  );
+
   const shippingQuoteToken = signShippingQuote(
     {
       rid: "rate_01",
@@ -90,7 +128,7 @@ function buildBody(
       svc: "usps_ground_advantage",
       car: "usps",
       cs: cartSignature({
-        items: ITEMS,
+        items: quotedItems,
         postalCode: ADDRESS.postalCode,
         countryCode: ADDRESS.countryCode,
       }),
@@ -105,7 +143,7 @@ function buildBody(
       amt: 1.23,
       cur: "usd",
       ts: taxSignature({
-        items: ITEMS,
+        items: quotedItems,
         postalCode: ADDRESS.postalCode,
         countryCode: ADDRESS.countryCode,
         state: ADDRESS.state,
@@ -184,6 +222,13 @@ type Harness = {
   res: MedusaResponse;
   json: jest.Mock;
   status: jest.Mock;
+  listByStagingKeys: jest.Mock;
+};
+
+type OptionValueRow = {
+  value: string;
+  option: { title: string };
+  metadata: Record<string, unknown>;
 };
 
 /**
@@ -197,9 +242,16 @@ function buildHarness(options: {
   body: CheckoutPrepareRequest;
   before?: CartRow | null;
   after?: CartRow;
-  optionValues?: { metadata: Record<string, unknown> }[];
+  productMetadata?: Record<string, unknown>;
+  optionValues?: OptionValueRow[];
+  ledger?: ArtworkAssetRow[] | Error;
 }): Harness {
   let mutated = false;
+  const ledger = options.ledger ?? [ledgerRow()];
+  const listByStagingKeys = jest.fn(async (keys: string[]) => {
+    if (ledger instanceof Error) throw ledger;
+    return ledger.filter((row) => keys.includes(row.staging_key));
+  });
   const markMutated = async (result: unknown) => {
     mutated = true;
     return result;
@@ -232,8 +284,14 @@ function buildHarness(options: {
           {
             id: "variant_01",
             product: {
-              metadata: AREA_METADATA,
+              metadata: options.productMetadata ?? AREA_METADATA,
               categories: [{ metadata: { artwork_min_dpi: "300" } }],
+              product_options: (options.optionValues ?? []).map(
+                (optionValue) => ({
+                  product_option: { title: optionValue.option.title },
+                  values: [{ value: optionValue.value }],
+                }),
+              ),
             },
             options: options.optionValues ?? [],
             calculated_price: {
@@ -261,12 +319,15 @@ function buildHarness(options: {
         resolve: (key: string) =>
           key === ContainerRegistrationKeys.QUERY
             ? { graph }
-            : { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
+            : key === "artwork"
+              ? { listByStagingKeys }
+              : { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
       },
     } as unknown as MedusaRequest<CheckoutPrepareRequest>,
     res: { json, status } as unknown as MedusaResponse,
     json,
     status,
+    listByStagingKeys,
   };
 }
 
@@ -289,8 +350,8 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     },
   ];
 
@@ -374,12 +435,21 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 
-  it("refuses an area-priced line that carries no quote at all", async () => {
-    const { req, res, status } = buildHarness({
+  it("refuses a quote for a smaller size than the one the line records", async () => {
+    const quoted = { widthInches: 2, heightInches: 2 };
+    const { req, res, status, json } = buildHarness({
       body: buildBody({
         items: [
-          { variantId: "variant_01", quantity: 2, dimensions: DIMENSIONS },
-        ],
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            dimensions: quoted,
+            priceQuoteToken: priceQuoteToken({ dimensions: quoted }),
+            customization: {
+              dimensions: { widthInches: 40, heightInches: 40 },
+            },
+          },
+        ] as unknown as CheckoutPrepareRequest["items"],
       }),
       before: null,
     });
@@ -387,32 +457,24 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     await POST(req, res);
 
     expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_price_quote",
+      reason: "line_mismatch",
+      message: "invalid_price_quote:line_mismatch",
+    });
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 
-  it("refuses dimensions outside the product's own bounds", async () => {
-    const outOfBounds = { widthInches: 8, heightInches: 500 };
-    const { req, res, status } = buildHarness({
+  it("refuses a recorded size that carries no quote at all", async () => {
+    const { req, res, status, json } = buildHarness({
       body: buildBody({
         items: [
           {
             variantId: "variant_01",
             quantity: 2,
-            dimensions: outOfBounds,
-            priceQuoteToken: signPriceQuote(
-              {
-                amt: 1,
-                cur: "usd",
-                ps: priceSignature({
-                  variantId: "variant_01",
-                  quantity: 2,
-                  widthInches: outOfBounds.widthInches,
-                  heightInches: outOfBounds.heightInches,
-                }),
-                exp: Date.now() + 60_000,
-              },
-              PRICE_SECRET,
-            ),
+            customization: {
+              dimensions: { widthInches: 40, heightInches: 40 },
+            },
           },
         ],
       }),
@@ -422,6 +484,36 @@ describe("POST /store/checkout/prepare-cart area pricing", () => {
     await POST(req, res);
 
     expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_price_quote",
+      reason: "missing",
+      message: "invalid_price_quote:missing",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses dimensions outside the product's own bounds", async () => {
+    const outOfBounds = { widthInches: 8, heightInches: 500 };
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            priceQuoteToken: priceQuoteToken({ dimensions: outOfBounds }),
+            customization: { dimensions: outOfBounds },
+          },
+        ],
+      }),
+      before: null,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "invalid_customization" }),
+    );
     expect(mockCreateCartRun).not.toHaveBeenCalled();
   });
 });
@@ -587,9 +679,10 @@ describe("POST /store/checkout/prepare-cart", () => {
     const areaItem = {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     };
+    const previousSize = { widthInches: 12, heightInches: 16 };
 
     const { req, res } = buildHarness({
       body: buildBody({ cartId: CART_ID, items: [areaItem] }),
@@ -601,7 +694,8 @@ describe("POST /store/checkout/prepare-cart", () => {
             unit_price: AREA_UNIT_PRICE,
             is_custom_price: true,
             metadata: {
-              dimensions: { widthInches: 12, heightInches: 16 },
+              dimensions: previousSize,
+              customization: { dimensions: previousSize },
             },
           },
         ],
@@ -618,8 +712,8 @@ describe("POST /store/checkout/prepare-cart", () => {
     const areaItem = {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     };
 
     const { req, res } = buildHarness({
@@ -631,7 +725,10 @@ describe("POST /store/checkout/prepare-cart", () => {
             quantity: 2,
             unit_price: AREA_UNIT_PRICE,
             is_custom_price: true,
-            metadata: { dimensions: DIMENSIONS },
+            metadata: {
+              dimensions: DIMENSIONS,
+              customization: { dimensions: DIMENSIONS },
+            },
           },
         ],
       }),
@@ -649,8 +746,8 @@ describe("POST /store/checkout/prepare-cart", () => {
     const areaItem = {
       variantId: "variant_01",
       quantity: 2,
-      dimensions: DIMENSIONS,
       priceQuoteToken: priceQuoteToken(),
+      customization: { dimensions: DIMENSIONS },
     };
 
     const { req, res } = buildHarness({
@@ -662,7 +759,10 @@ describe("POST /store/checkout/prepare-cart", () => {
             quantity: 2,
             unit_price: 1.23,
             is_custom_price: true,
-            metadata: { dimensions: DIMENSIONS },
+            metadata: {
+              dimensions: DIMENSIONS,
+              customization: { dimensions: DIMENSIONS },
+            },
           },
         ],
       }),
@@ -763,7 +863,11 @@ describe("POST /store/checkout/prepare-cart customization", () => {
   };
 
   const PRESET_SIZE = [
-    { metadata: { width_inches: "8", height_inches: "10" } },
+    {
+      value: "8 × 10",
+      option: { title: "Size" },
+      metadata: { width_inches: "8", height_inches: "10" },
+    },
   ];
 
   function customizedItems(
@@ -778,16 +882,24 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     ] as CheckoutPrepareRequest["items"];
   }
 
-  it("stores the validated customization on the line item", async () => {
+  it("stores the validated customization, with the artwork facts the ledger recorded", async () => {
     const { req, res } = buildHarness({
       body: buildBody({
         items: customizedItems({
-          artwork: ARTWORK,
+          artwork: {
+            ...ARTWORK,
+            fileName: "forged.svg",
+            mimeType: "image/svg+xml",
+            sizeBytes: 1,
+            widthPx: null,
+            heightPx: null,
+          },
           customText: { value: "  Ellie  " },
           orderNotes: "Matte finish",
         }),
       }),
       before: null,
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
     });
 
@@ -801,15 +913,126 @@ describe("POST /store/checkout/prepare-cart customization", () => {
     });
   });
 
+  it("stores the detail rows and flag it derives, not the ones the request names (AC4)", async () => {
+    const { req, res } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            isCustomizable: false,
+            details: [{ label: "Custom text", value: "Something else" }],
+            customization: { customText: { value: "  Ellie  " } },
+          },
+        ] as unknown as CheckoutPrepareRequest["items"],
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0].metadata).toEqual({
+      isCustomizable: true,
+      details: [
+        { label: "Size", value: "8 × 10" },
+        { label: "Custom text", value: "Ellie" },
+      ],
+      customization: { customText: { value: "Ellie" } },
+    });
+  });
+
+  it("refuses an artwork key the upload ledger has no row for", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: customizedItems({
+          artwork: { ...ARTWORK, storageKey: "staging/made-up.png" },
+        }),
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_customization",
+      reason: "artwork_not_found",
+      message: "invalid_customization:artwork_not_found",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("holds a file claimed as SVG to the pixels the ledger measured on its PNG", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({
+        items: customizedItems({
+          artwork: {
+            ...ARTWORK,
+            mimeType: "image/svg+xml",
+            widthPx: null,
+            heightPx: null,
+          },
+        }),
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+      ledger: [ledgerRow({ width_px: 300, height_px: 300 })],
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "invalid_customization",
+        message: expect.stringContaining("300 DPI"),
+      }),
+    );
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Custom-variant line that names no size, before any cart exists", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({ items: ITEMS }),
+      before: null,
+      productMetadata: {
+        ...AREA_METADATA,
+        customization_size_option: "Size",
+        customization_size_option_value: "Custom",
+      },
+      optionValues: [
+        { value: "Custom", option: { title: "Size" }, metadata: {} },
+      ],
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: "invalid_customization",
+      reason: "missing_required",
+      message: "invalid_customization:missing_required:dimensions",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
   it("refuses artwork too coarse for the size the option value names", async () => {
     const { req, res, status, json } = buildHarness({
       body: buildBody({
         items: customizedItems({
-          artwork: { ...ARTWORK, widthPx: 300, heightPx: 300 },
+          artwork: { ...ARTWORK, widthPx: 99_999, heightPx: 99_999 },
         }),
       }),
       before: null,
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
+      ledger: [ledgerRow({ width_px: 300, height_px: 300 })],
     });
 
     await POST(req, res);
@@ -832,7 +1055,15 @@ describe("POST /store/checkout/prepare-cart customization", () => {
         }),
       }),
       before: null,
-      optionValues: [{ metadata: { width_inches: "1", height_inches: "1" } }],
+      ledger: [ledgerRow({ width_px: 300, height_px: 300 })],
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: [
+        {
+          value: "1 × 1",
+          option: { title: "Size" },
+          metadata: { width_inches: "1", height_inches: "1" },
+        },
+      ],
     });
 
     await POST(req, res);
@@ -859,6 +1090,7 @@ describe("POST /store/checkout/prepare-cart customization", () => {
           },
         ],
       }),
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
     });
 
@@ -883,6 +1115,7 @@ describe("POST /store/checkout/prepare-cart customization", () => {
           },
         ],
       }),
+      productMetadata: CONFIGURATOR_METADATA,
       optionValues: PRESET_SIZE,
     });
 
@@ -890,5 +1123,70 @@ describe("POST /store/checkout/prepare-cart customization", () => {
 
     expect(mockUpdateCartRun).toHaveBeenCalled();
     expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("answers 502 when the upload ledger cannot be read, before any cart exists", async () => {
+    const { req, res, status, json } = buildHarness({
+      body: buildBody({ items: customizedItems({ artwork: ARTWORK }) }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+      ledger: new Error("connection refused"),
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(502);
+    expect(json).toHaveBeenCalledWith({
+      error: "checkout_unavailable",
+      reason: "misconfigured",
+      message: "checkout_unavailable:misconfigured",
+    });
+    expect(mockCreateCartRun).not.toHaveBeenCalled();
+  });
+
+  it("lets two lines of one request share an upload, each keeping its own text", async () => {
+    const forged = {
+      ...ARTWORK,
+      fileName: "forged.svg",
+      mimeType: "image/svg+xml" as const,
+      sizeBytes: 1,
+      widthPx: null,
+      heightPx: null,
+    };
+    const { req, res, listByStagingKeys } = buildHarness({
+      body: buildBody({
+        items: [
+          {
+            variantId: "variant_01",
+            quantity: 2,
+            customization: { artwork: forged, customText: { value: "Ellie" } },
+          },
+          {
+            variantId: "variant_01",
+            quantity: 1,
+            customization: { artwork: forged, customText: { value: "Max" } },
+          },
+        ],
+      }),
+      before: null,
+      productMetadata: CONFIGURATOR_METADATA,
+      optionValues: PRESET_SIZE,
+    });
+
+    await POST(req, res);
+
+    expect(listByStagingKeys).toHaveBeenCalledWith([ARTWORK.storageKey]);
+    expect(mockCreateCartRun).toHaveBeenCalledTimes(1);
+
+    const input = mockCreateCartRun.mock.calls[0]?.[0]?.input;
+    expect(input.items[0].metadata.customization).toEqual({
+      artwork: ARTWORK,
+      customText: { value: "Ellie" },
+    });
+    expect(input.items[1].metadata.customization).toEqual({
+      artwork: ARTWORK,
+      customText: { value: "Max" },
+    });
   });
 });

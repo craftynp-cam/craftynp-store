@@ -18,6 +18,7 @@ export type ArtworkAssetRow = {
   purge_reason: string | null;
   width_px: number | null;
   height_px: number | null;
+  inspected_at: Date | null;
 };
 
 export type RecordUploadInput = {
@@ -34,6 +35,12 @@ export type PromoteInput = {
   storageKey: string;
 };
 
+export type RecordInspectionInput = {
+  widthPx: number | null;
+  heightPx: number | null;
+  inspectedAt: Date;
+};
+
 function toDate(value: Date | string | null): Date | null {
   if (value == null) return null;
   return value instanceof Date ? value : new Date(value);
@@ -45,6 +52,7 @@ function toRow(raw: Record<string, unknown>): ArtworkAssetRow {
     uploaded_at: toDate(raw.uploaded_at as Date | string) as Date,
     promoted_at: toDate(raw.promoted_at as Date | string | null),
     purged_at: toDate(raw.purged_at as Date | string | null),
+    inspected_at: toDate(raw.inspected_at as Date | string | null),
   };
 }
 
@@ -76,6 +84,16 @@ class ArtworkModuleService extends MedusaService({ ArtworkAsset }) {
     })) as unknown as Record<string, unknown>[];
 
     return rows[0] ? toRow(rows[0]) : null;
+  }
+
+  async listByStagingKeys(
+    stagingKeys: readonly string[],
+  ): Promise<ArtworkAssetRow[]> {
+    const rows = (await this.listArtworkAssets({
+      staging_key: [...stagingKeys],
+    })) as unknown as Record<string, unknown>[];
+
+    return rows.map(toRow);
   }
 
   async findAsset(id: string): Promise<ArtworkAssetRow | null> {
@@ -116,14 +134,15 @@ class ArtworkModuleService extends MedusaService({ ArtworkAsset }) {
     });
   }
 
-  async recordDimensions(
+  async recordInspection(
     id: string,
-    dimensions: { widthPx: number | null; heightPx: number | null },
+    inspection: RecordInspectionInput,
   ): Promise<void> {
     await this.updateArtworkAssets({
       id,
-      width_px: dimensions.widthPx,
-      height_px: dimensions.heightPx,
+      width_px: inspection.widthPx,
+      height_px: inspection.heightPx,
+      inspected_at: inspection.inspectedAt,
     });
   }
 

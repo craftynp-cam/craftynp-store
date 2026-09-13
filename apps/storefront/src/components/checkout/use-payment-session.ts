@@ -94,9 +94,6 @@ export function usePaymentSession(
           items: latestCart.lines.map((line) => ({
             variantId: line.id,
             quantity: line.quantity,
-            isCustomizable: line.isCustomizable,
-            details: line.details,
-            dimensions: line.dimensions,
             priceQuoteToken: line.priceQuoteToken,
             customization: line.customization,
           })),

@@ -56,15 +56,16 @@ function asset(overrides: Record<string, unknown> = {}) {
     purge_reason: null,
     width_px: null,
     height_px: null,
+    inspected_at: null,
     ...overrides,
   };
 }
 
 function harness(row: ReturnType<typeof asset> | null) {
-  const recordDimensions = jest.fn().mockResolvedValue(undefined);
+  const recordInspection = jest.fn().mockResolvedValue(undefined);
   const service = {
     findByUploadId: jest.fn().mockResolvedValue(row),
-    recordDimensions,
+    recordInspection,
   };
 
   const req = {
@@ -80,7 +81,7 @@ function harness(row: ReturnType<typeof asset> | null) {
     status: jest.fn().mockReturnValue({ json }),
   } as unknown as MedusaResponse;
 
-  return { req, res, json, status: res.status as jest.Mock, recordDimensions };
+  return { req, res, json, status: res.status as jest.Mock, recordInspection };
 }
 
 beforeEach(() => {
@@ -91,7 +92,7 @@ beforeEach(() => {
 
 describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
   it("measures the stored bytes and records them against the upload", async () => {
-    const { req, res, json, status, recordDimensions } = harness(asset());
+    const { req, res, json, status, recordInspection } = harness(asset());
 
     await POST(req, res);
 
@@ -102,9 +103,30 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
       widthPx: 7,
       heightPx: 3,
     });
-    expect(recordDimensions).toHaveBeenCalledWith("asset_1", {
+    expect(recordInspection).toHaveBeenCalledWith("asset_1", {
       widthPx: 7,
       heightPx: 3,
+      inspectedAt: expect.any(Date),
+    });
+  });
+
+  it("stamps a vector upload as inspected, though it has no pixels to record", async () => {
+    readHead.mockResolvedValue(
+      new Uint8Array(
+        Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>', "utf8"),
+      ),
+    );
+    const { req, res, status, recordInspection } = harness(
+      asset({ mime_type: "image/svg+xml", staging_key: "staging/upl_1.svg" }),
+    );
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(200);
+    expect(recordInspection).toHaveBeenCalledWith("asset_1", {
+      widthPx: null,
+      heightPx: null,
+      inspectedAt: expect.any(Date),
     });
   });
 
@@ -121,7 +143,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     // The presigned PUT cannot bind Content-Type, so a shopper could store a
     // text file under a .png key. This is where that is caught.
     readHead.mockResolvedValue(new Uint8Array(Buffer.from("hello", "utf8")));
-    const { req, res, json, status, recordDimensions } = harness(asset());
+    const { req, res, json, status, recordInspection } = harness(asset());
 
     await POST(req, res);
 
@@ -130,7 +152,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
       error: "artwork_rejected",
       reason: "mismatched_type",
     });
-    expect(recordDimensions).not.toHaveBeenCalled();
+    expect(recordInspection).not.toHaveBeenCalled();
   });
 
   it("re-reads up to the object's size when the head stopped short of it", async () => {
@@ -140,7 +162,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
       .mockResolvedValueOnce(JPEG_WITHOUT_FRAME)
       .mockResolvedValueOnce(new Uint8Array(PNG_7X3));
 
-    const { req, res, status, json, recordDimensions } = harness(
+    const { req, res, status, json, recordInspection } = harness(
       asset({ mime_type: "image/jpeg", size_bytes: 400_000 }),
     );
 
@@ -152,7 +174,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     expect(json.mock.calls[0]?.[0]).toMatchObject({
       reason: "mismatched_type",
     });
-    expect(recordDimensions).not.toHaveBeenCalled();
+    expect(recordInspection).not.toHaveBeenCalled();
   });
 
   it("re-reads no more than 4 MiB of a 25 MB upload, and a frame marker past that is unreadable", async () => {
@@ -223,11 +245,11 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
 
   it("answers 502 when the bucket read fails, rather than passing the file", async () => {
     readHead.mockRejectedValue(new Error("connection reset"));
-    const { req, res, status, recordDimensions } = harness(asset());
+    const { req, res, status, recordInspection } = harness(asset());
 
     await POST(req, res);
 
     expect(status).toHaveBeenCalledWith(502);
-    expect(recordDimensions).not.toHaveBeenCalled();
+    expect(recordInspection).not.toHaveBeenCalled();
   });
 });

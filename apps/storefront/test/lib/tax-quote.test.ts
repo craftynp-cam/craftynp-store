@@ -107,7 +107,14 @@ describe("taxQuoteKey", () => {
     const resized = taxQuoteKey(
       draft,
       makeCart({
-        lines: [{ ...line, dimensions: { widthInches: 8, heightInches: 10 } }],
+        lines: [
+          {
+            ...line,
+            customization: {
+              dimensions: { widthInches: 8, heightInches: 10 },
+            },
+          },
+        ],
       }),
     );
 

@@ -113,9 +113,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
   // The measurement is written before it is answered, so the resolution the
   // shopper was gated on is the one the order can be checked against later.
-  await artwork.recordDimensions(asset.id, {
+  await artwork.recordInspection(asset.id, {
     widthPx: inspection.widthPx,
     heightPx: inspection.heightPx,
+    inspectedAt: new Date(),
   });
 
   const payload: ArtworkInspectResponse = {

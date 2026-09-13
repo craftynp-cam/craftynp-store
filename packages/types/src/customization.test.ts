@@ -151,6 +151,29 @@ describe("artworkReferenceSchema", () => {
     const empty = { ...validArtwork, sizeBytes: 0 };
     expect(artworkReferenceSchema.safeParse(empty).success).toBe(false);
   });
+
+  it.each([
+    [
+      "a storage key of exactly 128 characters",
+      { storageKey: "k".repeat(128) },
+    ],
+    ["a file name of exactly 255 characters", { fileName: "f".repeat(255) }],
+  ])("accepts %s", (_label, overrides) => {
+    expect(
+      artworkReferenceSchema.safeParse({ ...validArtwork, ...overrides })
+        .success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["a storage key past 128 characters", { storageKey: "k".repeat(129) }],
+    ["a file name past 255 characters", { fileName: "f".repeat(256) }],
+  ])("rejects %s", (_label, overrides) => {
+    expect(
+      artworkReferenceSchema.safeParse({ ...validArtwork, ...overrides })
+        .success,
+    ).toBe(false);
+  });
 });
 
 describe("effectiveDpi", () => {

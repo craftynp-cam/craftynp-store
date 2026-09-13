@@ -260,6 +260,22 @@
           "enumItems": [],
           "mappedType": "integer"
         },
+        "inspected_at": {
+          "name": "inspected_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamptz",
@@ -338,6 +354,15 @@
           "primary": false,
           "unique": false,
           "expression": "CREATE INDEX IF NOT EXISTS \"IDX_artwork_asset_order_id\" ON \"artwork_asset\" (\"order_id\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_artwork_asset_staging_key",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_artwork_asset_staging_key\" ON \"artwork_asset\" (\"staging_key\") WHERE deleted_at IS NULL"
         },
         {
           "keyName": "artwork_asset_pkey",

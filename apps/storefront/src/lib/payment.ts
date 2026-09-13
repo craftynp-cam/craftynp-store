@@ -22,7 +22,7 @@ export function paymentPrepareKey(draft: CheckoutDraft, cart: Cart): string {
   const items = [...cart.lines]
     .map(
       (line) =>
-        `${line.id}:${line.quantity}:${line.dimensions?.widthInches ?? ""}x${line.dimensions?.heightInches ?? ""}`,
+        `${line.id}:${line.quantity}:${line.customization?.dimensions?.widthInches ?? ""}x${line.customization?.dimensions?.heightInches ?? ""}`,
     )
     .sort()
     .join(",");

@@ -66,6 +66,28 @@ tax provider), `notification-resend`, `auth-auth0`, and
   the ordered width and the custom text limit the same way, for the same
   reason. Its one caller is `prepare-cart`, through
   `customizationRulesForVariant` (`src/lib/customization-rules.ts`).
+  **The input modes are enforced there too, not only by the storefront's
+  gate.** `prepare-cart` validates every line, including one that sent no
+  customization, because a required input is exactly what a line can leave
+  out. A `required` input that is missing, or an `off` one that is present,
+  throws `CustomizationRejection`, answered as `400 invalid_customization`
+  with `reason` `missing_required` or `input_off` and the message
+  `invalid_customization:<reason>:<input>`. Blank order notes count as absent.
+  The size is held to the server's copy of the storefront's `usesCustomSize`:
+  on a product that names its Custom option, a line on the variant carrying
+  that value must send `customization.dimensions` and a line on any other
+  variant may not. Without the first a `Custom` variant sells at its own
+  multiplier price; without the second a size is priced against a cheaper
+  preset's base, since `/store/price-quote` quotes dimensions on any variant.
+  A product whose own options do not carry the named value counts as naming
+  none, as it does for the storefront's `resolveCustomSizeOption`, so the
+  dimensions mode alone decides rather than every variant refusing a size.
+  Options that did not load are not options that lack it: every Medusa
+  product has at least one, so a missing or empty `product_options` means the
+  relation never arrived, and the variant alone decides — the rule fails
+  closed rather than letting a size onto a cheaper preset.
+  Only a line that sent a customization has one stored — an empty one would
+  change `customizationSignature` and supersede a cart the shopper could reuse.
 - **The custom size carries two more keys again, and they are money:**
   `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
   written by the same widget and patch. They are what `areaUnitPrice` in
@@ -318,8 +340,10 @@ plan, so those paths share one counter per client (see
   in its `lib.ts`. Leaking cents outside that module multiplies money by 100.
 - **Resolve weight, dimensions, and `calculated_price` server-side via
   `query.graph`.** Store request bodies carry only `{ variantId, quantity }`
-  plus, since CNP-42, the `dimensions` an area price is computed from — never
-  accept a client-supplied weight or price on a `/store` route. The one
+  plus the dimensions an area price is computed from — a top-level
+  `dimensions` on `/store/price-quote` and `/store/tax-quote`, and on
+  `prepare-cart` only the line's `customization.dimensions`, since CNP-85.
+  Never accept a client-supplied weight or price on a `/store` route. The one
   exception is the authenticated admin parcel override on
   `/admin/orders/:id/shipment/rates` and `/buy`: the shop owner is looking at
   the packed box and the product defaults are only a guess, so she may correct
@@ -441,6 +465,15 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   re-derives the amount from the product's metadata rather than reading
   `payload.amt`. A token minted against a rate the owner has since changed
   buys nothing. The client never names a price, here as everywhere.
+- **In `prepare-cart`, a custom size has one source of truth: the line's
+  validated `customization.dimensions`.** The quote token is verified against
+  it, `resolveLinePrice` prices it, the cart-reuse comparison and the stored
+  `metadata.dimensions` are taken from it, and it is what gets made. There is
+  no second, top-level size to price from — `checkoutLineItemSchema` has none,
+  so zod strips one an old client still sends. A line that records a size with
+  no token is refused `400 invalid_price_quote:missing`, and a token quoted for
+  any other size is `line_mismatch`. Pricing one size while recording another
+  was the under-payment CNP-85 closed.
 - **`/store/tax-quote` must keep passing the quantity and the dimensions.**
   Without the quantity it taxes every line at the single-unit tier; without the
   dimensions it taxes a custom size at its variant's price rather than its own.
@@ -498,15 +531,31 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   `item.metadata` finds the snapshot and silently renders nothing;
   `order-customization.tsx` reads `line_item_metadata` and falls back.
 - **The configured line's metadata is `{ isCustomizable, details, dimensions?,
-customization? }`.** `details` is the rendered half — label/value rows the
-  cart, the confirmation page and the order email all print — and
-  `customization` is the structured half the maker and the admin widget work
-  from. `dimensions` sits at the line's top level as well as inside the
-  customization, and that duplication is deliberate: `priceSignature`,
-  `resolveLinePrice` and the tax-quote key all predate customization and none of
-  them should have to reach through one to price a line. **What is stored is the
-  value `validateCustomization` returned, not the request's** — the zod-trimmed
-  one is what `promote-artwork` later reads.
+customization? }`, and the server writes every key.** `details` is the
+  rendered half — label/value rows the cart, the confirmation page and the
+  order email all print — and `customization` is the structured half the maker
+  and the admin widget work from. `prepare-cart` builds `details` with
+  `lineItemDetails` from `@craftynp/types`, the function the storefront's cart
+  uses too, over the variant's own option values in the product's option order
+  (`orderLineFactsForVariant` in `src/lib/customization-rules.ts`) and the
+  validated customization, and takes `isCustomizable` from the product's
+  declaration. The request's `details` are never read — otherwise a shopper
+  could put rows on the confirmation, the email and the admin widget that
+  disagree with what gets made (CNP-90). `checkoutLineItemSchema` keeps them
+  only as a capped backstop, at most eight rows with a 64-character label and a
+  1,000-character value, and has no `isCustomizable` at all. The confirmation's
+  detail shape in `order.ts` is deliberately uncapped: a server-built row can
+  run past those caps, since order notes allow 500 graphemes and custom text
+  1,000. `dimensions` sits at the line's top level as well as inside the
+  customization, and both are written from the same validated
+  `customization.dimensions` — never from the request, which has had no
+  top-level size of its own since CNP-85. The top-level copy is what the
+  cart-reuse comparison reads off a stored cart, so it must keep being written
+  whenever the customization carries a size: without it every stored
+  custom-size line reads as sizeless and supersedes a cart the shopper could
+  have reused. **What is stored is the value `validateCustomization` returned,
+  not the request's** — the zod-trimmed one, with its artwork facts taken from
+  the ledger, is what `promote-artwork` later reads.
 - **`prepare-cart` re-attaches the shipping method on every call.** The workflow
   replaces rather than duplicates; skipping it leaves the previous address's
   `quoteToken` attached, which blocks checkout on the next address edit.
@@ -590,6 +639,14 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   gated on is the one an order can be checked against later. `dpi` is not
   stored: it is a function of the pixel width and the ordered size, and a
   stored copy could disagree with both.
+  **The same write stamps `inspected_at`, and only a success stamps it** — a
+  422 or a 502 leaves the column null. The pixels cannot say whether the bytes
+  were ever read: a vector file is recorded with null pixels, and so is an
+  upload that never reached this route, so a file presigned as SVG, PUT as a
+  PNG and never inspected would be indistinguishable from a genuine SVG.
+  `inspected_at` is the column that tells them apart, and `staging_key` is
+  indexed so `listByStagingKeys` can resolve a request's storage keys in one
+  query.
 - **The inspect route is anonymous, and that is the considered position, not an
   oversight.** A shopper uploads before any cart or session exists, so there is
   no identity to bind it to — the same reason the presign route is anonymous.
@@ -616,18 +673,50 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   instead: destroying a body cuts its keep-alive socket, and every inspect
   would pay a fresh handshake to R2.
 - **The resolution decision is enforced in both places, and `prepare-cart` is
-  the server half.** The pixel count is measured here from the stored bytes and
-  cannot be forged by the browser; the comparison against the product's
-  threshold runs in the storefront for the shopper and again in `prepare-cart`
-  for the order, which is the last point before money and the only server path
-  a configured line reaches. `customizationRulesForVariant`
-  (`src/lib/customization-rules.ts`) resolves the bounds, text limit, minimum
-  DPI and ordered size that `validateCustomization` needs.
+  the server half.** The pixel count is measured here from the stored bytes;
+  the comparison against the product's threshold runs in the storefront for
+  the shopper and again in `prepare-cart` for the order, which is the last
+  point before money and the only server path a configured line reaches.
+  `customizationRulesForVariant` (`src/lib/customization-rules.ts`) resolves
+  the bounds, text limit, minimum DPI and ordered size that
+  `validateCustomization` needs. The artwork input mode is held here too: a
+  line missing artwork the product requires is refused
+  `invalid_customization:missing_required:artwork`, and artwork on a product
+  whose artwork mode is `off` is `invalid_customization:input_off:artwork` (see
+  the input modes paragraph under [Layout and config](#layout-and-config)).
+  **`prepare-cart` takes the artwork's facts from the upload ledger, never from
+  the request.** The request only names which upload it means. The route
+  collects the unique storage keys and, only when there are some, resolves them
+  in one `listByStagingKeys` call; `artworkFromLedger`
+  (`src/lib/artwork-ledger.ts`) then keeps the request's `storageKey` and takes
+  the file name, MIME type, size and pixels from the row, so a file claimed as
+  an SVG or at 99,999 pixels is held to what inspect actually measured. A key
+  with no row, or a row that is purged, already claimed (`order_id` or
+  `promoted_at` set), of a type the store refuses, or uploaded more than
+  `STAGING_WINDOW_DAYS` less `CHECKOUT_ARTWORK_MARGIN_DAYS` ago
+  (`checkoutWindowClosedBefore` — a day before its staging object expires, so
+  payment and promotion still have time; the sweepers keep the exact window) is
+  `artwork_not_found`; a row never stamped `inspected_at`, or a raster row
+  without pixels, is `artwork_not_inspected`. Both answer
+  `400 invalid_customization` with that `reason` and the message
+  `invalid_customization:<reason>`, and a lookup that throws answers
+  `502 checkout_unavailable:misconfigured`. The same upload on two lines of one
+  request is legal. `artworkReferenceSchema` caps `storageKey` at 128
+  characters, which bounds what a request can put into that query, and
+  `fileName` at 255, which only bounds the request body — the stored name comes
+  from the ledger row.
   **The preset case is why the variant query asks for its option values.** The
   payload names a variant, not the option values under it, so a preset size's
-  inches are reachable only through `variant.options[].metadata`; a custom size
-  answers from the payload's own `dimensions`, which `validateCustomization`
-  already falls back to.
+  inches are reachable only through `variant.options[].metadata`. It asks for
+  `options.option.title` as well, which is how the variant carrying the named
+  Custom value is recognised, and `product.product_options` — the product's
+  own option values — to confirm the product carries that value at all. Not
+  `product.options.values`: a variant query does not narrow those to the
+  product, so an option shared across products lists every product's values.
+  A typed size always answers DPI — `customization.dimensions` survives the
+  mode checks only as the size being made and priced — and a preset
+  measurement only when no size was typed, so a measurement left on the Custom
+  value cannot stand in for the size the shopper chose.
 - **The minimum DPI is `artwork_min_dpi` on product _category_ metadata**,
   written by `src/admin/widgets/category-artwork.tsx` and read through
   `resolveArtworkMinDpi` in `@craftynp/types`, which takes the strictest value
@@ -635,9 +724,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   `DEFAULT_ARTWORK_MIN_DPI` (150) **is reachable on a live product** — a
   product need not belong to any category, so nothing can force a threshold to
   be declared. It is deliberate policy, not a hidden one.
-  The ordered physical size comes from the size option value's own
-  `width_inches` / `height_inches` metadata, or from the shopper's typed
-  dimensions; see [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
+  The ordered physical size comes from the shopper's typed dimensions when
+  there are any, and otherwise from the size option value's own
+  `width_inches` / `height_inches` metadata; see
+  [apps/storefront/AGENTS.md](../storefront/AGENTS.md).
   **Both axes are measured, and the coarsest one decides.** A 2400x600 file
   ordered at 8" x 40" clears 300 DPI across and prints at 15 DPI down the
   banner — checking the width alone, which is what the story's acceptance

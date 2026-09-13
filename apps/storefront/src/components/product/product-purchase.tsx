@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { lineItemDetails } from "@craftynp/types";
 import type { ProductCustomization } from "@craftynp/types";
 
 import { Badge, Button, QuantityStepper } from "../ui";
@@ -21,7 +22,6 @@ import {
   artworkResolutionError,
   customSizeErrors,
   customTextProblem,
-  customizationDetails,
   joinLabels,
   lineItemCustomization,
   missingInputLabels,
@@ -307,25 +307,17 @@ export function ProductPurchase({
           : `Price: ${totalPrice}`
         : "";
 
-  const detailsForCart = [
-    ...options
-      .filter(
-        (option) =>
-          !(
-            usesCustomSize(customization, draft) &&
-            option.id === customSizeOption?.option.id
-          ),
-      )
-      .map((option) => {
-        const valueId = selected[option.id];
-        const value = option.values.find(
-          (candidate) => candidate.id === valueId,
-        );
-        return value ? { label: option.title, value: value.value } : undefined;
-      })
-      .filter((detail) => detail != null),
-    ...customizationDetails(customization, draft),
-  ];
+  const cartCustomization = lineItemCustomization(customization, draft);
+  const detailsForCart = lineItemDetails({
+    options: options.flatMap((option) => {
+      const value = option.values.find(
+        (candidate) => candidate.id === selected[option.id],
+      );
+      return value ? [{ title: option.title, value: value.value }] : [];
+    }),
+    customization: cartCustomization,
+    sizeOptionTitle: customization.size.optionTitle,
+  });
 
   function handleSubmit() {
     if (!canAddToCart) {
@@ -346,9 +338,8 @@ export function ProductPurchase({
       minOrderQuantity,
       isCustomizable: customization.isCustomizable,
       details: detailsForCart,
-      dimensions: quoteDimensions,
       priceQuoteToken: quote.quoteToken,
-      customization: lineItemCustomization(customization, draft),
+      customization: cartCustomization,
     };
 
     const saved = editLineId
