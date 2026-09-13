@@ -69,6 +69,10 @@ export function authLogoutHref(): string {
   return "/auth/logout";
 }
 
+export function siteUrl(requestUrl: string): string {
+  return process.env.NEXT_PUBLIC_SITE_URL ?? new URL(requestUrl).origin;
+}
+
 export function sanitizeReturnTo(value: string | null | undefined): string {
   if (value && value.startsWith("/") && !/^\/[/\\]/.test(value)) {
     return value;
