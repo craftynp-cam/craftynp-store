@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 
 import { CheckoutView } from "@/components";
@@ -1338,13 +1339,24 @@ describe("CheckoutView", () => {
       },
     };
 
+    const freshQuote = {
+      unitAmount: 6.5,
+      lineTotal: 13,
+      originalUnitAmount: null,
+      currencyCode: "usd",
+      isAreaPriced: true,
+      quoteToken: "fresh-quote.signature",
+    };
+
     function mockFullCheckoutFetch(
       overrides: {
         prepare?: { ok: boolean; status?: number; body?: unknown };
         complete?: { ok: boolean; status?: number; body?: unknown };
+        priceQuote?: { ok: boolean; status?: number; body?: unknown };
       } = {},
     ) {
       const prepare = overrides.prepare ?? { ok: true, body: prepareResponse };
+      const priceQuote = overrides.priceQuote ?? { ok: true, body: freshQuote };
       const complete = overrides.complete ?? {
         ok: true,
         body: { orderId: "order_1", displayId: 42 },
@@ -1377,11 +1389,21 @@ describe("CheckoutView", () => {
             json: () => Promise.resolve(complete.body),
           });
         }
+        if (url === "/checkout/price-quote") {
+          return Promise.resolve({
+            ok: priceQuote.ok,
+            status: priceQuote.status ?? (priceQuote.ok ? 200 : 502),
+            json: () => Promise.resolve(priceQuote.body),
+          });
+        }
         return Promise.resolve({ ok: true, status: 201 });
       });
     }
 
-    async function reachReadyPayment(fetchMock: jest.Mock) {
+    async function reachReadyPayment(
+      fetchMock: jest.Mock,
+      awaitedUrl = "/checkout/prepare",
+    ) {
       render(
         <CheckoutView
           customer={null}
@@ -1410,11 +1432,40 @@ describe("CheckoutView", () => {
         jest.advanceTimersByTime(1000);
       });
       await waitFor(() =>
-        expect(fetchMock).toHaveBeenCalledWith(
-          "/checkout/prepare",
-          expect.anything(),
-        ),
+        expect(fetchMock).toHaveBeenCalledWith(awaitedUrl, expect.anything()),
       );
+    }
+
+    const customDimensions = { widthInches: 8, heightInches: 10 };
+
+    function quoteToken(exp: number): string {
+      const payload = btoa(
+        JSON.stringify({ v: 1, amt: 5.06, cur: "usd", ps: "sig", exp }),
+      ).replace(/=+$/, "");
+      return `${payload}.signature`;
+    }
+
+    function addAreaLine(priceQuoteToken: string) {
+      addCartLine({
+        id: "variant_custom",
+        href: "/signs/banner",
+        title: "Custom Banner",
+        unitPrice: 5.06,
+        currencyCode: "usd",
+        quantity: 2,
+        isCustomizable: true,
+        details: [{ label: "Size", value: "8″ × 10″" }],
+        priceQuoteToken,
+        customization: { dimensions: customDimensions },
+      });
+    }
+
+    function callsTo(fetchMock: jest.Mock, url: string) {
+      return fetchMock.mock.calls.filter(([calledUrl]) => calledUrl === url);
+    }
+
+    function sentBody(call: unknown[] | undefined) {
+      return JSON.parse((call?.[1] as RequestInit).body as string);
     }
 
     beforeEach(() => {
@@ -1614,6 +1665,144 @@ describe("CheckoutView", () => {
       expect(
         screen.queryByText("We couldn't load the payment form."),
       ).not.toBeInTheDocument();
+    });
+
+    it("re-quotes an area line whose quote has expired before it prepares", async () => {
+      addAreaLine(quoteToken(Date.now() - 1));
+      const fetchMock = mockFullCheckoutFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock);
+
+      const urls = fetchMock.mock.calls.map(([url]) => url);
+      expect(urls.indexOf("/checkout/price-quote")).toBeGreaterThan(-1);
+      expect(urls.indexOf("/checkout/price-quote")).toBeLessThan(
+        urls.indexOf("/checkout/prepare"),
+      );
+      expect(sentBody(callsTo(fetchMock, "/checkout/price-quote")[0])).toEqual({
+        variantId: "variant_custom",
+        quantity: 2,
+        dimensions: customDimensions,
+      });
+      expect(
+        sentBody(callsTo(fetchMock, "/checkout/prepare")[0]).items[1]
+          .priceQuoteToken,
+      ).toBe("fresh-quote.signature");
+      expect(readCart().lines[1]).toMatchObject({
+        priceQuoteToken: "fresh-quote.signature",
+        unitPrice: 6.5,
+      });
+    });
+
+    it("leaves an area line with a live quote alone", async () => {
+      const live = quoteToken(Date.now() + 30 * 60 * 1000);
+      addAreaLine(live);
+      const fetchMock = mockFullCheckoutFetch();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock);
+
+      expect(callsTo(fetchMock, "/checkout/price-quote")).toHaveLength(0);
+      expect(
+        sentBody(callsTo(fetchMock, "/checkout/prepare")[0]).items[1]
+          .priceQuoteToken,
+      ).toBe(live);
+    });
+
+    it("offers the retryable error, and prepares nothing, when a re-quote fails", async () => {
+      addAreaLine(quoteToken(Date.now() - 1));
+      const fetchMock = mockFullCheckoutFetch({
+        priceQuote: { ok: false, body: { error: "price_unavailable" } },
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock, "/checkout/price-quote");
+
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            "We couldn't set up payment for this order right now.",
+          ),
+        ).toBeInTheDocument(),
+      );
+      expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+      expect(callsTo(fetchMock, "/checkout/prepare")).toHaveLength(0);
+    });
+
+    it("names the refused item with a link to edit it, and no Try again", async () => {
+      addAreaLine(quoteToken(Date.now() + 30 * 60 * 1000));
+      const refused = {
+        error: "invalid_customization",
+        reason: "artwork_not_found",
+        line: 1,
+      };
+      const fetchMock = mockFullCheckoutFetch({
+        prepare: {
+          ok: false,
+          status: 400,
+          body: { ...refused, lines: [refused] },
+        },
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock);
+
+      const payment = screen.getByRole("region", { name: /Payment/ });
+      const editHref = `/signs/banner?edit=${readCart().lines[1]?.lineId}`;
+
+      await waitFor(() =>
+        expect(
+          within(payment).getByText("Custom Banner (8″ × 10″)"),
+        ).toBeInTheDocument(),
+      );
+      expect(within(payment).getByText(/press Replace/)).toBeInTheDocument();
+      expect(
+        within(payment).getByRole("link", { name: "Edit this item" }),
+      ).toHaveAttribute("href", editHref);
+      expect(
+        screen.getByRole("link", { name: "Edit Custom Banner" }),
+      ).toHaveAttribute("href", editHref);
+      expect(
+        screen.queryByRole("button", { name: "Try again" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("re-quotes and retries once when prepare still calls a quote expired", async () => {
+      addAreaLine(quoteToken(Date.now() + 30 * 60 * 1000));
+      const refused = {
+        error: "invalid_price_quote",
+        reason: "expired",
+        line: 1,
+      };
+      const fetchMock = mockFullCheckoutFetch({
+        prepare: {
+          ok: false,
+          status: 400,
+          body: { ...refused, lines: [refused] },
+        },
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock);
+
+      const payment = screen.getByRole("region", { name: /Payment/ });
+      await waitFor(() =>
+        expect(
+          within(payment).getByText(
+            "We couldn't confirm this item's price — open it to refresh.",
+          ),
+        ).toBeInTheDocument(),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      expect(callsTo(fetchMock, "/checkout/price-quote")).toHaveLength(1);
+      const prepares = callsTo(fetchMock, "/checkout/prepare");
+      expect(prepares).toHaveLength(2);
+      expect(sentBody(prepares[1]).items[1].priceQuoteToken).toBe(
+        "fresh-quote.signature",
+      );
     });
   });
 });

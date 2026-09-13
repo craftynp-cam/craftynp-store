@@ -2,6 +2,7 @@
 
 import { flushSync } from "react-dom";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -421,6 +422,27 @@ export function CheckoutView({
                 submitRef={paymentSubmitRef}
                 onLoadError={showPayError}
               />
+            ) : paymentSession.refusals.length > 0 ? (
+              <ul aria-live="polite" className="space-y-4">
+                {paymentSession.refusals.map((problem) => (
+                  <li key={problem.lineId} className="space-y-1 text-sm">
+                    <p
+                      id={`payment-problem-${problem.lineId}`}
+                      className="font-medium text-foreground"
+                    >
+                      {problem.itemName}
+                    </p>
+                    <p className="text-danger-foreground">{problem.message}</p>
+                    <Link
+                      href={problem.editHref}
+                      aria-describedby={`payment-problem-${problem.lineId}`}
+                      className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Edit this item
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             ) : paymentSession.status === "error" ? (
               <div aria-live="polite" className="space-y-3">
                 <p className="text-sm text-danger-foreground">
@@ -473,7 +495,10 @@ export function CheckoutView({
           </Button>
         </form>
 
-        <CheckoutSummary onEditCart={openCartDrawer} />
+        <CheckoutSummary
+          onEditCart={openCartDrawer}
+          lineProblems={paymentSession.refusals}
+        />
       </div>
     </>
   );
