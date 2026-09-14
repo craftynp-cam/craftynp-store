@@ -3,6 +3,9 @@ export const ARTWORK_PURGE_FAILED_LOG_TAG = "[artwork:purge-failed]";
 export const ARTWORK_PROMOTE_LOG_TAG = "[artwork:promote]";
 export const ARTWORK_PROMOTE_FAILED_LOG_TAG = "[artwork:promote-failed]";
 export const ARTWORK_PROMOTE_ABANDONED_LOG_TAG = "[artwork:promote-abandoned]";
+export const ARTWORK_PROMOTE_SHARED_LOG_TAG = "[artwork:promote-shared]";
+export const ARTWORK_CHANGED_AFTER_INSPECT_LOG_TAG =
+  "[artwork:changed-after-inspect]";
 
 // Must equal the staging/ lifecycle rule on the bucket (docs/dns.md). Past
 // this point the staging object is gone, so a promotion that has not
@@ -89,7 +92,7 @@ export type PurgeCandidate = {
 
 export function selectPurgeCandidates<T extends PurgeCandidate>(
   rows: readonly T[],
-  deliveredAtByAsset: ReadonlyMap<string, Date | null>,
+  deliveredAtById: ReadonlyMap<string, Date | null>,
   now: Date,
   policy: RetentionPolicy,
 ): { row: T; reason: PurgeReason }[] {
@@ -101,7 +104,7 @@ export function selectPurgeCandidates<T extends PurgeCandidate>(
 
     const subject: RetentionSubject = {
       uploadedAt: row.uploaded_at,
-      deliveredAt: deliveredAtByAsset.get(row.id) ?? null,
+      deliveredAt: deliveredAtById.get(row.id) ?? null,
     };
 
     if (purgeDueAt(subject, policy).getTime() > now.getTime()) continue;

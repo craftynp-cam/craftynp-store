@@ -609,9 +609,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **Uploads are two-phase, and the key is the point.** A shopper uploads before
   a cart exists, so there is no order to key on: the object lands at
   `staging/{uploadId}.{ext}`, and the `order.placed` subscriber copies it to
-  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` and deletes the staging
-  copy. That is what makes every stored file traceable to its order without
-  consulting the database.
+  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` once for every line that
+  carries it, deleting the staging copy once no line on that upload is still
+  waiting for its own. That is what makes every stored file traceable to its
+  order and line without consulting the database.
 - **`presignArtworkUpload` binds Content-Length and does not bind
   Content-Type.** The length is in the signature, so a URL can only ever write
   the number of bytes it was minted for — that is the ceiling on what one
@@ -621,6 +622,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   mislabelled file is that the bucket is private and every read is a signed URL
   forcing an attachment disposition — and the inspect route below, which is the
   only thing that ever reads the bytes.
+  **The length is the only thing the URL binds, and using it does not spend
+  it.** Until it expires (`ARTWORK_UPLOAD_URL_TTL_SECONDS`, an hour at most) the
+  same URL can PUT a different file of the same length over one the inspect
+  route has already measured. Nothing about the URL closes that; the ETag
+  binding below does (CNP-96).
 - **`POST /store/artwork/uploads/:uploadId/inspect` is the gate, and the
   storefront calls it straight after the PUT.** It reads the head of the
   staging object over `Range` (`readArtworkHead`), sniffs the real format from
@@ -636,9 +642,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   parser here. `.ai` is accepted as either a PDF or a PostScript header.
   The measurement is written to `artwork_asset`'s existing `width_px` /
   `height_px` columns before the response, so the resolution the shopper was
-  gated on is the one an order can be checked against later. `dpi` is not
-  stored: it is a function of the pixel width and the ordered size, and a
-  stored copy could disagree with both.
+  gated on is the one an order can be checked against later. There is no `dpi`
+  column (CNP-98 dropped one nothing ever wrote): DPI is a function of the
+  pixels and the ordered size, and a stored copy could disagree with both.
   **The same write stamps `inspected_at`, and only a success stamps it** — a
   422 or a 502 leaves the column null. The pixels cannot say whether the bytes
   were ever read: a vector file is recorded with null pixels, and so is an
@@ -646,7 +652,32 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   PNG and never inspected would be indistinguishable from a genuine SVG.
   `inspected_at` is the column that tells them apart, and `staging_key` is
   indexed so `listByStagingKeys` can resolve a request's storage keys in one
-  query.
+  query. The route answers 404 for an upload any order has claimed, filed or
+  not, so the measurement an order was checked against cannot be rewritten
+  after checkout.
+  **The same write stamps `inspected_etag`**, the ETag of the very `GetObject`
+  response the measured bytes came from — never a separate HEAD, which a PUT
+  could land between (CNP-96). Storage answering with no ETag is a 502 with
+  nothing stamped: a null ETag is what a row inspected before the column
+  existed looks like, and promotion copies those unconditionally.
+  **Inspection is write-once.** A repeat inspect whose ETag still matches
+  answers 200 and rewrites nothing; a different ETag answers
+  `409 artwork_changed` and keeps the first measurement. Re-measuring would let
+  a caller pass `prepare-cart` with one file, PUT a lower-resolution file of the
+  same length through the still-live URL, and inspect again, so that
+  promotion's ETag check matched the swap. The write's selector carries
+  `inspected_etag: null`, so an inspect that reads the row after another
+  inspect has committed writes nothing, re-reads the row and answers 409
+  unless the stored ETag is its own. It does not serialise two inspects that
+  overlap: a Medusa selector update lists the matching rows and then updates
+  each by primary key, so both writes can land and the later one wins. That is
+  tolerable because every write stores an ETag together with the measurement
+  taken under it, so the stored pair always agrees, and promotion's conditional
+  copy compares against whichever pair is stored. A row inspected before the
+  column existed still has a null ETag, so it can be re-measured once. The
+  storefront reads that 409 as its generic `inspect_failed`, which is
+  acceptable because its flow presigns, PUTs once and inspects once — an honest
+  shopper never re-inspects different bytes.
 - **The inspect route is anonymous, and that is the considered position, not an
   oversight.** A shopper uploads before any cart or session exists, so there is
   no identity to bind it to — the same reason the presign route is anonymous.
@@ -658,7 +689,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **The inspect route's second read stops at `ARTWORK_FALLBACK_READ_BYTES`
   (4 MiB), and a raster whose frame marker lies past it is `unreadable`.** The
   first read takes `ARTWORK_HEADER_BYTES`; only a raster it could not measure
-  is read again. That is a trade-off, not a guarantee: an ICC profile can span
+  is read again, with `If-Match` set to the first read's ETag so both reads
+  describe one version of the object — a PUT between them fails the second
+  read with a 412, which answers 502 with nothing recorded. The cap is a
+  trade-off, not a guarantee: an ICC profile can span
   many APP2 segments and Extended XMP many APP1, so nothing in the format bounds
   how far in the start-of-frame sits. Most exports put it a few hundred KiB in,
   and a file whose frame lies past 4 MiB is rejected on purpose, because the
@@ -691,8 +725,8 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   (`src/lib/artwork-ledger.ts`) then keeps the request's `storageKey` and takes
   the file name, MIME type, size and pixels from the row, so a file claimed as
   an SVG or at 99,999 pixels is held to what inspect actually measured. A key
-  with no row, or a row that is purged, already claimed (`order_id` or
-  `promoted_at` set), of a type the store refuses, or uploaded more than
+  with no row, or a row that is purged, already claimed by an order (it has an
+  `artwork_claim`, read as `claimed`), of a type the store refuses, or uploaded more than
   `STAGING_WINDOW_DAYS` less `CHECKOUT_ARTWORK_MARGIN_DAYS` ago
   (`checkoutWindowClosedBefore` — a day before its staging object expires, so
   payment and promotion still have time; the sweepers keep the exact window) is
@@ -705,6 +739,15 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   characters, which bounds what a request can put into that query, and
   `fileName` at 255, which only bounds the request body — the stored name comes
   from the ledger row.
+  **`prepare-cart` deliberately compares no ETags (CNP-96).** It still does no
+  storage I/O, and it does not refuse a row inspected before `inspected_etag`
+  existed. A HEAD per key would add a storage round trip and a Class B
+  operation to an anonymous checkout route without closing anything: the
+  upload URL is still live after `prepare-cart`, so a swap can land between it
+  and `order.placed`, and promotion's conditional copy is the check that holds
+  either way. Refusing null-ETag rows would only catch swaps made before the
+  deploy, whose URLs expire within one TTL of it, at the cost of every cart
+  already carrying such an upload.
   **The preset case is why the variant query asks for its option values.** The
   payload names a variant, not the option values under it, so a preset size's
   inches are reachable only through `variant.options[].metadata`. It asks for
@@ -745,25 +788,113 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **`GET /admin/artwork/:id` returns a signed URL where the label route streams
   bytes.** That divergence is deliberate — a print-resolution file is far larger
   than a label PDF and there is no reason to move it through Medusa. Do not
-  "unify" the two routes.
+  "unify" the two routes. **Its id is a claim id**, one per order line: the
+  list route returns one entry per claim and the widget downloads by that id.
+  The CNP-97 migration gave every claim it backfilled its asset's id, so a
+  link built before it still resolves. A claim not yet filed answers 404, and
+  the message follows `purge_reason` through `artworkLineState` in
+  `@craftynp/types` — never filed (`staging_expired`) and replaced after it was
+  checked (`changed_after_inspect`) are not deleted after retention
+  (`delivered` / `undelivered`). `order-customization.tsx` renders
+  each line from the same function, which is why a line still waiting for its
+  copy shows "Still being filed" rather than a Download that cannot work.
+  **A failed list request is checked before that function.** It reads a line
+  with no entry as unclaimed, so an admin API outage would otherwise tell the
+  owner to ask for files that are already filed.
 - **Promotion must never throw.** It runs on `order.placed`, after payment, and
   the repo rule that nothing after payment rolls back a paid order applies. It
   swallows every failure, which means the event bus never sees one to retry —
   so `promote-pending-artwork` (every 15 minutes) is the only retry there is.
-  The row is claimed onto the order _before_ the copy so a failure still leaves
-  the sweeper something to find, and a failed staging delete is not a failed
-  promotion: the R2 lifecycle rule reaps the leftover, and treating it as a
-  failure would send the sweeper back to re-copy an object already in place.
+  Every line is claimed _before_ any copy so a failure part-way through still
+  leaves the sweeper a claim for each line, and a failed staging delete is not
+  a failed promotion: the R2 lifecycle rule reaps the leftover, and treating it
+  as a failure would send the sweeper back to re-copy an object already in
+  place.
 - **`STAGING_WINDOW_DAYS` must equal the bucket's `staging/` lifecycle rule.**
-  Past it the staging object is gone, so the sweeper gives up once — marking
-  the row `staging_expired` and logging `[artwork:promote-abandoned]` — rather
-  than emitting a warn every 15 minutes forever on a tag that is an alerting
-  target. The same cutoff retires upload rows that never reached an order
-  (`never_ordered`); those rows are otherwise immortal, since a shopper who
+  Past it the staging object is gone, so a claim with no filed sibling to copy
+  from either is given up on once — the sweeper marks that claim
+  `staging_expired` and logs `[artwork:promote-abandoned]` — rather than
+  emitting a warn every 15 minutes forever on a tag that is an alerting target.
+  The same cutoff retires upload rows no order ever claimed (`never_ordered`,
+  on `artwork_asset`); those rows are otherwise immortal, since a shopper who
   abandons a cart leaves one behind.
-- **One upload can belong to two line items** — the same logo on two variants —
-  so the subscriber claims an asset only when it is unclaimed. Re-claiming
-  would repoint `line_item_id` at an item the stored key does not match.
+- **One upload can belong to many order lines, so every line has its own
+  claim** (CNP-97). `artwork_asset` stays one row per upload — what was
+  uploaded, measured and inspected — and `artwork_claim` holds one row per line
+  that carries it: `order_id`, a unique `line_item_id`, and that line's own
+  `storage_key`, `promoted_at`, `purged_at` and `purge_reason`. The same logo on
+  two variants, or a second order placed on an upload before the first order's
+  claim was written, is filed for every line under its own key. A copied asset
+  row per line was rejected because the upload's facts could drift between the
+  copies and `upload_id` would stop being unique; one object shared by many
+  lines was rejected because it breaks key-to-order traceability and needs
+  purge ref-counting across two orders' delivery clocks.
+  **Claimed is derived from the claims, never stored on the asset.**
+  `ArtworkAssetRow.claimed` is computed from the `claims` relation, which every
+  asset read in the service loads; a stored copy is the drift CNP-98 removed.
+  `listAbandonedUploads` asks for "no claims" in the query (`$none`), not in
+  JS. `claimLine` inserts first and re-reads by `line_item_id` on a failure
+  (the `recordWebhookEvent` pattern), so a redelivered `order.placed` or two
+  handlers at once make one claim per line — the unique index is the
+  idempotency key, not a read before the write.
+  **Staging is deleted only once no claim on the upload is pending.** Every
+  claim copies from staging first, and one whose copy answers `NoSuchKey` —
+  staging already deleted by another order's promotion, or reaped — copies from
+  a filed, unpurged sibling claim's object instead. There is no HEAD first: a
+  conditional copy reports a missing source as `NoSuchKey` before it evaluates
+  its condition (verified on MinIO), so a HEAD would add a request and a race
+  and nothing else; a store that answered 412 for a missing source would still
+  reach a filed sibling, through the changed-after-inspect path below. Only
+  `isMissingObject` (`NotFound`, `NoSuchKey` or a 404) and that 412 fall back;
+  any other storage failure is retried. A second order on an already-claimed
+  upload is promoted too, and logged
+  `[artwork:promote-shared] asset= order= other_orders=` so the owner can spot
+  a possible duplicate purchase: `prepare-cart` already accepted that order,
+  and the key is never shown to anyone but the admin. With
+  `ARTWORK_RETENTION_DAYS=0` a sibling can be purged before a later claim copies
+  from it; that claim then has no source and is given up on at the staging
+  window.
+  **Known gap:** a line whose subscriber failed before its claim was written —
+  the order query or `findByStagingKey` threw — has no claim, so the sweeper
+  cannot see it. It is logged `[artwork:promote-failed] order=`, and the widget
+  shows it as not picked up for filing, which, unlike a pending claim, nothing
+  retries. A deploy that changes the artwork tables is a certain trigger:
+  between medusa-server's pre-deploy `db:migrate` and medusa-worker running the
+  matching code, `findByStagingKey` throws on whichever side does not match the
+  schema, so an artwork order paid in that window has no claim. To recover one,
+  run a temporary `medusa exec` script that calls the default export of
+  `src/subscribers/promote-artwork.ts` with
+  `{ event: { name: "order.placed", data: { id } }, container }` for the order.
+  That is safe to repeat, because `claimLine` is insert-first and
+  `promoteArtworkClaim` returns early for a filed claim.
+- **Promotion files only the bytes the inspect route measured (CNP-96).** The
+  staging copy is a `CopyObject` with `x-amz-copy-source-if-match` set to the
+  upload's `inspected_etag`, an atomic compare-and-copy with no HEAD-then-copy
+  window for a PUT to land in. `copyArtwork` turns any 412 into
+  `ArtworkChangedAfterInspectError`: MinIO names it `PreconditionFailed` and the
+  SDK has no modelled class for it, so it is matched by name or status, never
+  by `instanceof`. Promotion then logs
+  `[artwork:changed-after-inspect] claim= asset= order= resolution= …` and
+  looks for a filed, unpurged sibling claim on the same upload. That object was
+  copied under the check, so its bytes are the inspected ones: the line is
+  copied from it and marked promoted (`resolution=sibling`). Only when there is
+  no such sibling does promotion file nothing (`resolution=retired`) and mark
+  every still-pending claim on that upload `changed_after_inspect`, so the
+  sweeper stops retrying a copy that can never succeed and the widget shows
+  those lines as replaced after they were checked. Either way the staging
+  object is left to the lifecycle rule. If that marking fails it logs
+  `[artwork:promote-failed] … outcome=changed_not_retired` and the sweeper
+  meets the same 412 on its next run. A copy from a filed sibling carries no
+  condition, because that object was itself copied under the check; a row
+  inspected before `inspected_etag` existed copies unconditionally and is
+  logged `[artwork:promote] … etag=unbound`.
+  **The binding is MD5-strength.** For a single-part PUT the ETag on S3, R2 and
+  MinIO is the object's MD5, and same-length MD5 collisions between valid
+  images are a published technique, so a deliberate collision is the one way
+  past it; the presign's Content-Length is what forces that collision to be
+  the same length. A ranged `GetObject` returning the whole object's ETag, and
+  a stale condition answering 412 on both `CopyObject` and `GetObject`, were
+  verified against the local MinIO, which is not evidence for R2.
 - **`requestChecksumCalculation: "WHEN_REQUIRED"` on the S3 client is
   load-bearing.** Without it the SDK bakes `x-amz-checksum-crc32=AAAAAA==` —
   the CRC32 of an empty body, because presigning sees no body — into the signed
@@ -786,9 +917,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   history entry, because the owner can move an order to delivered by hand and
   that leaves the shipment column null. The cross-module join lives in the purge
   job — neither module reaches into the other.
-- **The purge job writes `artwork_asset` and nothing else.** That is what makes
+- **The purge job writes `artwork_claim` and nothing else.** That is what makes
   "deleting artwork does not touch the order" structural rather than a promise.
-  Keep it that way.
+  Keep it that way. It works one claim at a time, deleting that line's own
+  object on its own order's delivery clock, so one order's retention never
+  removes another order's copy of a shared upload.
 - **Both `@aws-sdk` packages move together.** A version split between
   `client-s3` and `s3-request-presigner` puts two copies of `@smithy/types` in
   the tree and `getSignedUrl` stops accepting the `S3Client`, with a type error
@@ -912,8 +1045,11 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   `[email:send-failed]`, `[email:quota]`, `[email:quota-low]`,
   `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]`,
   `[email:order-failed]`, `[artwork:purge]`, `[artwork:purge-failed]`,
-  `[artwork:promote]` and `[artwork:promote-failed]` rather than inventing an
-  alerting system now.
+  `[artwork:promote]`, `[artwork:promote-failed]`,
+  `[artwork:promote-abandoned]`, `[artwork:promote-shared]`,
+  `[artwork:changed-after-inspect]`, `[artwork:inspect-failed]`,
+  `[artwork:download-failed]` and `[artwork:upload-url-failed]` rather than
+  inventing an alerting system now.
 - **`STOREFRONT_URL` is what builds the tokenized order link.** `order-email.ts`
   constructs `/checkout/confirmation?order=&number=&token=` independently of the
   storefront's own `checkoutConfirmationHref()`; the two drifting is the
@@ -960,6 +1096,16 @@ against a real container, schema, or workflow.
   stock locations actually linked to the service zone's fulfillment set**, not
   against `medusa-config.ts` — `link.create` the provider onto the stock
   location first.
+- **`update<Model>s({ selector, data })` is not a compare-and-set.**
+  `MedusaInternalService.update` runs `list(selector)` inside its transaction
+  without a lock, and the repository assigns and persists each row it found,
+  so MikroORM flushes `UPDATE ... WHERE id = ?`
+  (`ChangeSetPersister.updateEntity` conditions only on the primary key when a
+  model has no version or concurrency-check property). Under Postgres' default
+  READ COMMITTED, two overlapping calls both see the old row and both writes
+  land. Anything that must have one winner — a claim, money — needs a unique
+  index and insert-first (the `claimLine` / `recordWebhookEvent` pattern), not
+  a narrowed selector.
 
 Verify provider, seed, and checkout-route changes with `pnpm run db:migrate` and
 a real `pnpm run dev` checkout, not `tsc`/`jest` alone.

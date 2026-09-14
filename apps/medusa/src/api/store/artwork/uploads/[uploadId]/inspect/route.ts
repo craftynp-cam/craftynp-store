@@ -27,6 +27,11 @@ const REJECTION_MESSAGES = {
     "We could not read that image. It may be damaged — export it again and re-upload.",
 } as const;
 
+const CHANGED_RESPONSE = {
+  error: "artwork_changed",
+  message: "That file changed after it was checked. Upload it again.",
+} as const;
+
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const logger = req.scope.resolve<Logger>(ContainerRegistrationKeys.LOGGER);
   const artwork = req.scope.resolve<ArtworkModuleService>(ARTWORK_MODULE);
@@ -34,9 +39,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
   const asset = await artwork.findByUploadId(uploadId);
 
-  // A promoted or purged upload has no staging object left to read, so it is
-  // as absent as one that never existed.
-  if (!asset || asset.promoted_at !== null || asset.purged_at !== null) {
+  // A claimed upload already belongs to an order, whose line was checked
+  // against what was measured here, and a purged one has no staging object
+  // left to read. Either is as absent as one that never existed.
+  if (!asset || asset.claimed || asset.purged_at !== null) {
     return res.status(404).json({
       error: "artwork_not_found",
       message: "That upload could not be found. Upload the file again.",
@@ -67,7 +73,17 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     throw error;
   }
 
+  const storageUnavailable = (reason: string) => {
+    logger.error(`${ARTWORK_INSPECT_FAILED_LOG_TAG} ${reason}`);
+    return res.status(502).json({
+      error: "artwork_storage_unavailable",
+      reason,
+      message: "Could not check that file. Please try again.",
+    });
+  };
+
   let inspection;
+  let etag: string;
   try {
     const head = await readArtworkHead(
       asset.staging_key,
@@ -75,7 +91,14 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       options,
     );
 
-    inspection = inspectArtworkBytes(head, declaredMimeType.data);
+    if (head.etag === null) return storageUnavailable("no_etag");
+    etag = head.etag;
+
+    if (asset.inspected_etag !== null && asset.inspected_etag !== etag) {
+      return res.status(409).json(CHANGED_RESPONSE);
+    }
+
+    inspection = inspectArtworkBytes(head.bytes, declaredMimeType.data);
 
     // A JPEG carrying a large colour profile or an embedded thumbnail can push
     // its start-of-frame marker past the head we read, and rejecting a good
@@ -84,23 +107,18 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     if (
       !inspection.ok &&
       inspection.reason === "unreadable" &&
-      head.length < asset.size_bytes
+      head.bytes.length < asset.size_bytes
     ) {
       const deeper = await readArtworkHead(
         asset.staging_key,
         Math.min(asset.size_bytes, ARTWORK_FALLBACK_READ_BYTES),
         options,
+        { ifMatch: etag },
       );
-      inspection = inspectArtworkBytes(deeper, declaredMimeType.data);
+      inspection = inspectArtworkBytes(deeper.bytes, declaredMimeType.data);
     }
   } catch (error) {
-    const reason = describeError(error);
-    logger.error(`${ARTWORK_INSPECT_FAILED_LOG_TAG} ${reason}`);
-    return res.status(502).json({
-      error: "artwork_storage_unavailable",
-      reason,
-      message: "Could not check that file. Please try again.",
-    });
+    return storageUnavailable(describeError(error));
   }
 
   if (!inspection.ok) {
@@ -113,11 +131,21 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
   // The measurement is written before it is answered, so the resolution the
   // shopper was gated on is the one the order can be checked against later.
-  await artwork.recordInspection(asset.id, {
-    widthPx: inspection.widthPx,
-    heightPx: inspection.heightPx,
-    inspectedAt: new Date(),
-  });
+  if (asset.inspected_etag === null) {
+    const recorded = await artwork.recordInspection(asset.id, {
+      widthPx: inspection.widthPx,
+      heightPx: inspection.heightPx,
+      inspectedAt: new Date(),
+      etag,
+    });
+
+    if (!recorded) {
+      const current = await artwork.findByUploadId(uploadId);
+      if (current?.inspected_etag !== etag) {
+        return res.status(409).json(CHANGED_RESPONSE);
+      }
+    }
+  }
 
   const payload: ArtworkInspectResponse = {
     uploadId,

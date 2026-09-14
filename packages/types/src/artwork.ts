@@ -123,12 +123,41 @@ export const artworkOrderAssetSchema = z.object({
   fileName: z.string().min(1),
   mimeType: z.string().min(1),
   sizeBytes: z.number().int().nonnegative(),
-  lineItemId: z.string().nullable(),
+  lineItemId: z.string().min(1),
   uploadedAt: z.string().min(1),
   promotedAt: z.string().nullable(),
   purgedAt: z.string().nullable(),
+  purgeReason: z.string().nullable(),
 });
 export type ArtworkOrderAsset = z.infer<typeof artworkOrderAssetSchema>;
+
+export type ArtworkLineState =
+  | { kind: "download"; claimId: string }
+  | { kind: "unclaimed" }
+  | { kind: "filing" }
+  | { kind: "never_filed" }
+  | { kind: "replaced" }
+  | { kind: "deleted" };
+
+export function artworkLineState(
+  entry:
+    | Pick<ArtworkOrderAsset, "id" | "promotedAt" | "purgedAt" | "purgeReason">
+    | undefined,
+): ArtworkLineState {
+  if (!entry) return { kind: "unclaimed" };
+
+  if (entry.purgedAt !== null) {
+    if (entry.purgeReason === "staging_expired") return { kind: "never_filed" };
+    if (entry.purgeReason === "changed_after_inspect") {
+      return { kind: "replaced" };
+    }
+    return { kind: "deleted" };
+  }
+
+  if (entry.promotedAt === null) return { kind: "filing" };
+
+  return { kind: "download", claimId: entry.id };
+}
 
 export const artworkOrderListResponseSchema = z.object({
   artwork: z.array(artworkOrderAssetSchema),
