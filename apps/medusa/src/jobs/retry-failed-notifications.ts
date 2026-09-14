@@ -146,13 +146,14 @@ export default async function retryFailedNotifications(
       continue;
     }
 
-    if (
-      row.status === "failure" &&
-      !ledger.exhausted &&
-      new Date(row.created_at).getTime() < windowStart
-    ) {
-      await exhaust(row, "window_expired");
+    if (ledger.exhausted || new Date(row.created_at).getTime() >= windowStart) {
+      continue;
     }
+
+    await exhaust(
+      row,
+      row.status === "failure" ? "window_expired" : "stuck_pending",
+    );
   }
 }
 

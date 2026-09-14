@@ -389,6 +389,44 @@ describe("retryFailedNotifications", () => {
     ]);
   });
 
+  it("clears the stored copy of an email stuck pending past the retry window, and reports it once", async () => {
+    const fetchMock = mockFetch();
+    const harness = buildHarness();
+
+    harness.table.rows.set("noti_stuck", {
+      id: "noti_stuck",
+      to: "jamie@example.com",
+      from: null,
+      channel: "email",
+      template: null,
+      data: null,
+      provider_data: {
+        replay_content: { subject: "s", html: "h", text: "t" },
+      },
+      trigger_type: "order.placed",
+      resource_id: "order_01",
+      resource_type: "order",
+      receiver_id: null,
+      original_notification_id: null,
+      idempotency_key: "order-confirmation:order_01",
+      external_id: null,
+      status: "pending",
+      provider_id: "resend",
+      created_at: new Date(Date.now() - 25 * HOUR_MS),
+    });
+
+    await retryFailedNotifications(harness.container);
+    await retryFailedNotifications(harness.container);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(harness.onlyRow().provider_data?.replay_content).toBeNull();
+    expect(
+      linesContaining(harness.logger.warn, "[email:retry-exhausted]"),
+    ).toEqual([
+      "[email:retry-exhausted] reason=stuck_pending notification=noti_stuck",
+    ]);
+  });
+
   it("stops replaying an email Resend refused outright", async () => {
     const fetchMock = mockFetch(
       unavailable(),

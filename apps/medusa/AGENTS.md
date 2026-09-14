@@ -885,10 +885,11 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   `provider_data`, never `data`** — `GET /admin/notifications` returns `data` by
   default and not `provider_data`, and the body holds the shipping address and a
   90-day bearer order link. The copy is short-lived: the retry job writes
-  `replay_content: null` once a row is sent, refused, or past the retry window,
-  so a sent email's copy normally goes within 15 minutes and a failed one's
-  within 24 hours and one run. The job looks back only seven days, so a worker
-  down for longer leaves those copies in place, and account deletion
+  `replay_content: null` once a row is sent, refused, or past the retry window
+  — whether it failed there or was left `pending` by a send that never recorded
+  an outcome — so a sent email's copy normally goes within 15 minutes and any
+  other's within 24 hours and one run. The job looks back only seven days, so a
+  worker down for longer leaves those copies in place, and account deletion
   (`purgeCustomerIdentity`) never touches this table.
 - **`order-email-render.ts` still truncates a long order to a "+N more items"
   row**, now purely to keep one email a sane size — the original reason
@@ -931,15 +932,21 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   the first send, so the job's window always closes first — retrying past it
   would start duplicating rather than resuming. A reprocess returns nothing, so
   the outcome is read back with `retrieveNotification`. A second pass over the
-  last seven days then nulls `replay_content` on sent rows.
+  last seven days then nulls `replay_content` on sent rows, and retires any row
+  past the window that is still `failure` or `pending`.
 - **`[email:retry-exhausted]` is logged once per row, with a `reason`, and the
   row is never replayed after it:** `no_idempotency_key`; `no_stored_content`,
   a row from before the body was stored, which needs a manual resend;
-  `rejected status=<n>`, Resend refusing the send itself; and `window_expired`,
-  a failure still undelivered after 24 hours. "Once" is recorded on the row as
-  `provider_data.replay_exhausted` rather than in a column, so it needed no
-  migration. Until one of those happens, `[email:retry] outcome=still_failing`
-  repeats every run and carries Resend's own error.
+  `rejected status=<n>`, Resend refusing the send itself; `window_expired`, a
+  failure still undelivered after 24 hours; and `stuck_pending`, a row still
+  `pending` after 24 hours. That is a send that never recorded an outcome — the
+  worker died mid-send, or Medusa's status write after it failed — so it may or
+  may not have reached the customer and needs checking in Resend. A `pending`
+  row inside the window is left alone, since it may still be in flight. "Once"
+  is recorded on the row as `provider_data.replay_exhausted` rather than in a
+  column, so it needed no migration. Until one of those happens,
+  `[email:retry] outcome=still_failing` repeats every run and carries Resend's
+  own error.
 - **The provider decides what is permanent, and the job reads it from the
   message.** A 5xx, a plain 429, a network error and a 409
   `concurrent_idempotent_requests` (another request holding the key is still
