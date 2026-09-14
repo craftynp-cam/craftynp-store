@@ -9,6 +9,7 @@ import type {
   INotificationModuleService,
 } from "@medusajs/framework/types";
 
+import { replayableEmail } from "../lib/notification-replay";
 import { loadOrderConfirmation } from "../lib/order-confirmation";
 import {
   formatOrderDate,
@@ -77,15 +78,17 @@ export default async function sendOrderShippedEmail({
       resource_id: loaded.order.orderId,
       resource_type: "order",
       idempotency_key: `order-shipped:${fulfillmentId}`,
-      content: orderShippedContent(loaded.order, {
-        carrierName:
-          fulfillment?.shipping_option?.name ??
-          loaded.order.shippingMethodName ??
-          "the carrier",
-        trackingNumber: label?.tracking_number ?? "",
-        trackingUrl: label?.tracking_url ?? "",
-        shipDate: formatOrderDate(fulfillment?.shipped_at ?? ""),
-      }),
+      ...replayableEmail(
+        orderShippedContent(loaded.order, {
+          carrierName:
+            fulfillment?.shipping_option?.name ??
+            loaded.order.shippingMethodName ??
+            "the carrier",
+          trackingNumber: label?.tracking_number ?? "",
+          trackingUrl: label?.tracking_url ?? "",
+          shipDate: formatOrderDate(fulfillment?.shipped_at ?? ""),
+        }),
+      ),
     });
   } catch (error) {
     logger.error(

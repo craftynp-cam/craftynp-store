@@ -1,7 +1,11 @@
 import type { Logger } from "@medusajs/framework/types";
 
 import ResendNotificationProviderService from "./service";
-import { ResendQuotaExceededError, ResendSendError } from "./lib";
+import {
+  permanentRejectionStatus,
+  ResendQuotaExceededError,
+  ResendSendError,
+} from "./lib";
 
 const OPTIONS = {
   channels: ["email"],
@@ -215,6 +219,93 @@ describe("ResendNotificationProviderService.send", () => {
     await expect(service.send(NOTIFICATION)).rejects.toBeInstanceOf(
       ResendSendError,
     );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a refused send under [email:send-failed], and marks it as not worth replaying", async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response('{"name":"validation_error"}', { status: 422 }),
+      ) as unknown as typeof fetch;
+
+    const { service, logger } = buildService();
+    const error: Error = await service.send(NOTIFICATION).catch((e) => e);
+
+    expect(permanentRejectionStatus(error.message)).toBe(422);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("[email:send-failed]"),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("validation_error"),
+    );
+  });
+
+  it.each([
+    [
+      401,
+      '{"statusCode":401,"name":"missing_api_key","message":"Missing API key in the authorization header."}',
+    ],
+    [
+      403,
+      '{"statusCode":403,"name":"validation_error","message":"The domain is not verified."}',
+    ],
+  ])(
+    "leaves a %i replayable, since it is an account problem the owner can fix",
+    async (status, body) => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValue(new Response(body, { status }));
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      const { service, logger } = buildService();
+      const error: Error = await service.send(NOTIFICATION).catch((e) => e);
+
+      expect(error).toBeInstanceOf(ResendSendError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(permanentRejectionStatus(error.message)).toBeNull();
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining("[email:send-failed]"),
+      );
+    },
+  );
+
+  it("retries a 409 concurrent_idempotent_requests, since the request holding that key is still in flight", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('{"name":"concurrent_idempotent_requests"}', {
+          status: 409,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ id: "re_1" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { service } = buildService();
+
+    await expect(service.send(CONTENT_NOTIFICATION)).resolves.toEqual({
+      id: "re_1",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("names a 409 invalid_idempotent_request as a changed payload, and never retries it", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response('{"name":"invalid_idempotent_request"}', {
+        status: 409,
+      }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { service } = buildService();
+    const error: Error = await service
+      .send(CONTENT_NOTIFICATION)
+      .catch((e) => e);
+
+    expect(error.message).toContain(
+      "idempotency key was already used with a different payload",
+    );
+    expect(permanentRejectionStatus(error.message)).toBe(409);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

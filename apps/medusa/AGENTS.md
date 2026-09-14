@@ -871,10 +871,29 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   fallback path with anything that has a variable — it is the broken one.
 - **A notification _provider_, not a bespoke service.** `INotificationProvider`
   is already the swappable seam, and the module's `notification` table records
-  `status`, `external_id` and `idempotency_key` per send — the send log and the
-  retry ledger without a migration of our own. It talks to Resend over raw
-  `fetch`, like `shipstation`, so the mock-at-the-module-boundary testing rule
-  applies unchanged.
+  `status`, `external_id` and `idempotency_key` per send — the send log without
+  a migration of our own. It talks to Resend over raw `fetch`, like
+  `shipstation`, so the mock-at-the-module-boundary testing rule applies
+  unchanged.
+- **That table stores no email body, so both subscribers store their own copy
+  in `provider_data.replay_content`** (`replayableEmail` in
+  `src/lib/notification-replay.ts`), beside the `content` they send. Medusa's
+  `notification` model has no content column, and rebuilding the body later
+  cannot work: the order link's token is signed with `Date.now()`, so a rebuilt
+  email never matches the first attempt, and Resend answers a changed payload
+  under the same key with `409 invalid_idempotent_request`. **It goes in
+  `provider_data`, never `data`** — `GET /admin/notifications` returns `data` by
+  default and not `provider_data`, and the body holds the shipping address and a
+  90-day bearer order link. Default fields are not access control: any admin
+  credential — a session or a secret API key — gets the stored body back by
+  asking for `fields=+provider_data`, so what keeps it private is that the copy
+  is short-lived. The retry job writes
+  `replay_content: null` once a row is sent, refused, or past the retry window
+  — whether it failed there or was left `pending` by a send that never recorded
+  an outcome — so a sent email's copy normally goes within 15 minutes and any
+  other's within 24 hours and one run. The job looks back only seven days, so a
+  worker down for longer leaves those copies in place, and account deletion
+  (`purgeCustomerIdentity`) never touches this table.
 - **`order-email-render.ts` still truncates a long order to a "+N more items"
   row**, now purely to keep one email a sane size — the original reason
   (Resend's 2,000-character template-variable cap) no longer applies, since
@@ -901,10 +920,54 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   that fails is caught and swallowed by the subscriber (see below), so the bus
   never sees a failure to retry. Without `REDIS_URL` the bus is in-memory and
   does not retry at all, which is the local and CI case. Either way the job is
-  the only retry there is. It replays a failure under its original
-  `idempotency_key` — which the module reprocesses only while the row is
-  `FAILURE` — inside Resend's own 24-hour idempotency window. Retrying past
-  that window would start duplicating rather than resuming.
+  the only retry there is — **and it retries only a send that reached
+  `createNotifications`.** A subscriber that fails earlier, loading the order
+  or the site content, logs `[email:order-failed]` and leaves no row behind.
+- **How the job replays.** Every 15 minutes it lists `failure` rows created in
+  the last 24 hours and calls `createNotifications` again with the row's own
+  `id`, its original `idempotency_key` and the stored `replay_content`
+  verbatim. The module reprocesses a key only while its row is `FAILURE`, and
+  the `id` is what lands that reprocess on the original row (see
+  [Medusa runtime traps](#medusa-runtime-traps)). The body must be
+  byte-identical to the first attempt: if that attempt reached Resend, the same
+  key with the same payload returns the original response instead of sending
+  twice. The 24 hours are Resend's own key retention, and `created_at` precedes
+  the first send, so the job's window always closes first — retrying past it
+  would start duplicating rather than resuming. A reprocess returns nothing, so
+  the outcome is read back with `retrieveNotification`. A second pass over the
+  last seven days then nulls `replay_content` on sent rows, and retires any row
+  past the window that is still `failure` or `pending`.
+- **`[email:retry-exhausted]` is logged once per row, with a `reason`, and the
+  row is never replayed after it:** `no_idempotency_key`; `no_stored_content`,
+  a row from before the body was stored, which needs a manual resend;
+  `rejected status=<n>`, Resend refusing the send itself with a 4xx other than
+  401 or 403; `window_expired`, a failure still undelivered after 24 hours; and
+  `stuck_pending`, a row still `pending` after 24 hours. That is a send that
+  never recorded an outcome — the worker died mid-send, or Medusa's status write
+  after it failed — so it may or may not have reached the customer and needs
+  checking in Resend. A `pending`
+  row inside the window is left alone, since it may still be in flight. "Once"
+  is recorded on the row as `provider_data.replay_exhausted` rather than in a
+  column, so it needed no migration. Until one of those happens,
+  `[email:retry] outcome=still_failing` repeats every run and carries Resend's
+  own error.
+- **The provider decides what is permanent, and the job reads it from the
+  message.** A 5xx, a plain 429, a network error and a 409
+  `concurrent_idempotent_requests` (another request holding the key is still
+  in flight) are retried in-process and then left for the next run, and so is
+  a daily-quota 429. A 401 or 403 — a deleted or deactivated API key, or a
+  sending domain that lost verification — is logged under `[email:send-failed]`
+  and not retried in-process, but carries no marker, so the job replays it
+  every run (`[email:retry] outcome=still_failing`) until it is sent or reaches
+  `window_expired`: fixing the key or the domain within 24 hours delivers it.
+  Every other 4xx throws `ResendRejectedError`, logs `[email:send-failed]`, and
+  ends the replay — including a 409 `invalid_idempotent_request`, which means
+  the payload changed under the key, normally because `RESEND_FROM_EMAIL` or
+  `RESEND_REPLY_TO` changed between attempts. Medusa rethrows a provider error
+  as a new one that keeps only its message, so `permanentRejectionStatus` in
+  `notification-resend/lib.ts` parses the `(<status>, will not retry)` marker
+  `ResendRejectedError` writes. The two sit side by side and must change
+  together.
 - **A send failure never rolls back a paid order.** Both subscribers log and
   swallow, like the tax subscriber.
 - **Monitoring here means stable warn-level log tags**, because nothing is
@@ -960,6 +1023,27 @@ against a real container, schema, or workflow.
   stock locations actually linked to the service zone's fulfillment set**, not
   against `medusa-config.ts` — `link.create` the provider onto the stock
   location first.
+- **Replaying a notification must pass the row's own `id` to
+  `createNotifications`.** Medusa 2.18's `createNotifications_`
+  (`@medusajs/notification`, `dist/services/notification-module-service.js`)
+  re-admits an `idempotency_key` whose row is `FAILURE`, builds
+  `{ id: generateEntityId(), ...entry }`, skips the insert because the key
+  exists, calls the provider, and then updates by that id in a `finally`.
+  Without an `id` in the entry that update targets a row that was never
+  written, and `MedusaInternalService.update` throws
+  `Notification with id "noti_…" not found` — from `finally`, so it replaces
+  both a successful send and the provider's real error, and the `FAILURE` row
+  is never touched. A different id on every run is the tell. Passing `id` works
+  only because the spread follows the generated id;
+  `retry-failed-notifications.test.ts` runs the real module class over an
+  in-memory table whose `update` copies that NOT_FOUND branch, so an upgrade
+  that reorders the spread fails there — one that changes
+  `MedusaInternalService.update` itself would not. A reprocess also returns no
+  row, since only inserted rows are returned.
+- **A module service's generated `update` merges a jsonb column instead of
+  replacing it** (`manager.assign(…, { mergeObjectProperties: true })`), so a
+  key left out of the update survives. To drop one, write it as `null`, which
+  is what `withoutReplayContent` does for `provider_data.replay_content`.
 
 Verify provider, seed, and checkout-route changes with `pnpm run db:migrate` and
 a real `pnpm run dev` checkout, not `tsc`/`jest` alone.
