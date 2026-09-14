@@ -1877,9 +1877,7 @@ describe("CheckoutView", () => {
       });
       fireEvent.click(remove);
 
-      expect(readCart().lines.map((line) => line.lineId)).not.toContain(
-        lineId,
-      );
+      expect(readCart().lines.map((line) => line.lineId)).not.toContain(lineId);
       expect(readCart().lines).toHaveLength(1);
     });
 

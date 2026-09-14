@@ -67,9 +67,7 @@ function summaryMessage(errors: CheckoutErrors): string | null {
   return count === 1 ? "Check 1 field below." : `Check ${count} fields below.`;
 }
 
-function refusalAnnouncement(
-  refusals: readonly CheckoutLineProblem[],
-): string {
+function refusalAnnouncement(refusals: readonly CheckoutLineProblem[]): string {
   if (refusals.length === 0) return "";
   const names = refusals.map((problem) => problem.itemName).join(", ");
   return refusals.length === 1

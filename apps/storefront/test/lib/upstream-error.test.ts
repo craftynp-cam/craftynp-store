@@ -112,7 +112,10 @@ describe("priceQuoteFailureResponse", () => {
   it.each([
     [
       "unknown_variant",
-      new FetchErrorLike("invalid_line:unknown_variant unknown variant v_1", 400),
+      new FetchErrorLike(
+        "invalid_line:unknown_variant unknown variant v_1",
+        400,
+      ),
     ],
     [
       "bad_dimensions",
