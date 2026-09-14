@@ -296,6 +296,23 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     expect(status).toHaveBeenCalledWith(409);
   });
 
+  it("answers 200 when a rival inspect already recorded these same bytes", async () => {
+    const row = asset();
+    const { req, res, status, recordInspection, findByUploadId } = harness(row);
+    recordInspection.mockResolvedValue(false);
+    findByUploadId.mockResolvedValueOnce(row).mockResolvedValueOnce({
+      ...row,
+      inspected_etag: ETAG,
+      width_px: 7,
+      height_px: 3,
+      inspected_at: new Date(),
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(200);
+  });
+
   it("answers 404 for an upload it has no row for", async () => {
     const { req, res, status } = harness(null);
 

@@ -666,12 +666,18 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   a caller pass `prepare-cart` with one file, PUT a lower-resolution file of the
   same length through the still-live URL, and inspect again, so that
   promotion's ETag check matched the swap. The write's selector carries
-  `inspected_etag: null`, so of two concurrent inspects only one lands; the
-  other re-reads the row and answers 409 unless the winner recorded the same
-  ETag. A row inspected before the column existed still has a null ETag, so it
-  can be re-measured once. The storefront reads that 409 as its generic
-  `inspect_failed`, which is acceptable because its flow presigns, PUTs once
-  and inspects once — an honest shopper never re-inspects different bytes.
+  `inspected_etag: null`, so an inspect that reads the row after another
+  inspect has committed writes nothing, re-reads the row and answers 409
+  unless the stored ETag is its own. It does not serialise two inspects that
+  overlap: a Medusa selector update lists the matching rows and then updates
+  each by primary key, so both writes can land and the later one wins. That is
+  tolerable because every write stores an ETag together with the measurement
+  taken under it, so the stored pair always agrees, and promotion's conditional
+  copy compares against whichever pair is stored. A row inspected before the
+  column existed still has a null ETag, so it can be re-measured once. The
+  storefront reads that 409 as its generic `inspect_failed`, which is
+  acceptable because its flow presigns, PUTs once and inspects once — an honest
+  shopper never re-inspects different bytes.
 - **The inspect route is anonymous, and that is the considered position, not an
   oversight.** A shopper uploads before any cart or session exists, so there is
   no identity to bind it to — the same reason the presign route is anonymous.
@@ -1072,6 +1078,16 @@ against a real container, schema, or workflow.
   stock locations actually linked to the service zone's fulfillment set**, not
   against `medusa-config.ts` — `link.create` the provider onto the stock
   location first.
+- **`update<Model>s({ selector, data })` is not a compare-and-set.**
+  `MedusaInternalService.update` runs `list(selector)` inside its transaction
+  without a lock, and the repository assigns and persists each row it found,
+  so MikroORM flushes `UPDATE ... WHERE id = ?`
+  (`ChangeSetPersister.updateEntity` conditions only on the primary key when a
+  model has no version or concurrency-check property). Under Postgres' default
+  READ COMMITTED, two overlapping calls both see the old row and both writes
+  land. Anything that must have one winner — a claim, money — needs a unique
+  index and insert-first (the `claimLine` / `recordWebhookEvent` pattern), not
+  a narrowed selector.
 
 Verify provider, seed, and checkout-route changes with `pnpm run db:migrate` and
 a real `pnpm run dev` checkout, not `tsc`/`jest` alone.
