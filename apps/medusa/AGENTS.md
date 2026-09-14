@@ -482,7 +482,8 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
 - **A `/store/price-quote` error's `message` starts with a fixed head**,
   `invalid_line:<reason>` on a 400 (`unknown_variant`, `bad_dimensions`) and
   `price_unavailable:<reason>` on a 502 (`unpriced`, `unconfigured`,
-  `misconfigured`), with `resolveLinePrice`'s own text after a space.
+  `misconfigured`). `resolveLinePrice`'s own text follows a space;
+  `misconfigured` carries none.
   `sdk.client.fetch` keeps only the status and `message`, so the head is how
   the storefront's checkout tells a line Medusa refuses to price from a
   transient failure. Keep the heads' wording; the storefront reads them.

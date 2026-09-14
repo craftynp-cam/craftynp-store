@@ -1,6 +1,7 @@
 import {
   parseCheckoutLineRefusals,
   type CheckoutLineRefusal,
+  type CheckoutLineRefusalReason,
 } from "@craftynp/types";
 
 export type UpstreamErrorDetail = {
@@ -59,4 +60,49 @@ export function prepareFailureResponse(error: unknown): PrepareFailureResponse {
   }
 
   return { status: 502, body: { error: "checkout_unavailable", ...detail } };
+}
+
+const PRICE_QUOTE_REFUSAL_HEADS = {
+  unknown_variant: { status: 400, head: "invalid_line" },
+  bad_dimensions: { status: 400, head: "invalid_line" },
+  unpriced: { status: 502, head: "price_unavailable" },
+  unconfigured: { status: 502, head: "price_unavailable" },
+} as const satisfies Partial<
+  Record<
+    CheckoutLineRefusalReason<"invalid_price_quote">,
+    { status: number; head: string }
+  >
+>;
+
+export type PriceQuoteRefusalReason = keyof typeof PRICE_QUOTE_REFUSAL_HEADS;
+
+export function isPriceQuoteRefusalReason(
+  value: unknown,
+): value is PriceQuoteRefusalReason {
+  return (
+    typeof value === "string" && Object.hasOwn(PRICE_QUOTE_REFUSAL_HEADS, value)
+  );
+}
+
+export type PriceQuoteFailureResponse =
+  | {
+      status: 400;
+      body: { error: "price_unavailable"; reason: PriceQuoteRefusalReason };
+    }
+  | { status: 502; body: { error: "price_unavailable" } };
+
+export function priceQuoteFailureResponse(
+  error: unknown,
+): PriceQuoteFailureResponse {
+  const { upstreamStatus, reason: message } = describeUpstreamError(error);
+  const [head = "", reason] = (message.split(" ", 1)[0] ?? "").split(":");
+
+  if (isPriceQuoteRefusalReason(reason)) {
+    const expected = PRICE_QUOTE_REFUSAL_HEADS[reason];
+    if (expected.status === upstreamStatus && expected.head === head) {
+      return { status: 400, body: { error: "price_unavailable", reason } };
+    }
+  }
+
+  return { status: 502, body: { error: "price_unavailable" } };
 }

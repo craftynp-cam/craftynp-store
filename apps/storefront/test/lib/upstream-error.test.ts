@@ -1,6 +1,7 @@
 import {
   describeUpstreamError,
   prepareFailureResponse,
+  priceQuoteFailureResponse,
 } from "@/lib/upstream-error";
 
 class FetchErrorLike extends Error {
@@ -103,6 +104,59 @@ describe("prepareFailureResponse", () => {
         upstreamStatus,
         reason: error.message,
       },
+    });
+  });
+});
+
+describe("priceQuoteFailureResponse", () => {
+  it.each([
+    [
+      "unknown_variant",
+      new FetchErrorLike("invalid_line:unknown_variant unknown variant v_1", 400),
+    ],
+    [
+      "bad_dimensions",
+      new FetchErrorLike(
+        "invalid_line:bad_dimensions Enter a height between 2 and 48 inches.",
+        400,
+      ),
+    ],
+    [
+      "unpriced",
+      new FetchErrorLike(
+        "price_unavailable:unpriced variant v_1 has no price in this region",
+        502,
+      ),
+    ],
+    [
+      "unconfigured",
+      new FetchErrorLike(
+        "price_unavailable:unconfigured this product has no custom size pricing configured",
+        502,
+      ),
+    ],
+  ])("names a line Medusa refuses to price as %s", (reason, error) => {
+    expect(priceQuoteFailureResponse(error)).toEqual({
+      status: 400,
+      body: { error: "price_unavailable", reason },
+    });
+  });
+
+  it.each([
+    ["a rate limit", new FetchErrorLike("Too many requests", 429)],
+    [
+      "a misconfigured store",
+      new FetchErrorLike("price_unavailable:misconfigured", 502),
+    ],
+    ["a failure that never reached Medusa", new Error("fetch failed")],
+    [
+      "an older Medusa's message with no head",
+      new FetchErrorLike("unknown variant v_1", 400),
+    ],
+  ])("keeps %s a retryable 502", (_case, error) => {
+    expect(priceQuoteFailureResponse(error)).toEqual({
+      status: 502,
+      body: { error: "price_unavailable" },
     });
   });
 });

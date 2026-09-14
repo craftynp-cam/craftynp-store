@@ -824,7 +824,13 @@ customization }` and nothing more.** The cart line's `details` and
   `@craftynp/types`) becomes `400 { error, reason, line, lines }`, and
   everything else stays `502 checkout_unavailable`. That includes a message with
   no line, which is what a Medusa deployed before CNP-93 sends, so the two apps
-  can deploy in either order.
+  can deploy in either order. `/checkout/price-quote` does the same through
+  `priceQuoteFailureResponse`: a line Medusa refuses to price —
+  `invalid_line:unknown_variant` or `bad_dimensions` on a 400,
+  `price_unavailable:unpriced` or `unconfigured` on a 502 — becomes
+  `400 { error: "price_unavailable", reason }`. A rate limit, a misconfigured
+  store, a network failure and an older Medusa's head-less message all stay
+  `502 price_unavailable`.
 - **Keep `<Elements>` keyed on `` `${clientSecret}:${mode}` ``.** Stripe reads
   `options.clientSecret` only on first mount, so an address edit needs a full
   remount against the freshly minted secret.
