@@ -798,6 +798,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   (`delivered` / `undelivered`). `order-customization.tsx` renders
   each line from the same function, which is why a line still waiting for its
   copy shows "Still being filed" rather than a Download that cannot work.
+  **A failed list request is checked before that function.** It reads a line
+  with no entry as unclaimed, so an admin API outage would otherwise tell the
+  owner to ask for files that are already filed.
 - **Promotion must never throw.** It runs on `order.placed`, after payment, and
   the repo rule that nothing after payment rolls back a paid order applies. It
   swallows every failure, which means the event bus never sees one to retry —

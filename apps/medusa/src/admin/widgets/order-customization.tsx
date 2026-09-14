@@ -127,10 +127,12 @@ const ArtworkBlock = ({
   artwork,
   stored,
   isLoading,
+  isError,
 }: {
   artwork: NonNullable<LineItemCustomization["artwork"]>;
   stored: ArtworkOrderAsset | undefined;
   isLoading: boolean;
+  isError: boolean;
 }) => {
   const state = artworkLineState(stored);
 
@@ -149,6 +151,11 @@ const ArtworkBlock = ({
 
       {isLoading ? (
         <Spinner className="animate-spin" />
+      ) : isError ? (
+        <Hint variant="error">
+          Could not load this order&apos;s artwork. Reload the page to try
+          again.
+        </Hint>
       ) : state.kind === "download" ? (
         <DownloadArtworkButton claimId={state.claimId} />
       ) : (
@@ -169,7 +176,11 @@ const ArtworkBlock = ({
 const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
   const lines = customizedLines(data);
 
-  const { data: stored, isLoading } = useQuery({
+  const {
+    data: stored,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["order-artwork", data.id],
     queryFn: () =>
       sdk.client.fetch<ArtworkOrderListResponse>("/admin/artwork", {
@@ -223,6 +234,7 @@ const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
                 artwork={line.customization.artwork}
                 stored={storedByLine.get(line.id)}
                 isLoading={isLoading}
+                isError={isError}
               />
             ) : null}
           </div>
