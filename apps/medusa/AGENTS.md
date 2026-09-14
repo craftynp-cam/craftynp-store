@@ -1076,9 +1076,8 @@ CNP-79.
   `product_options`, and the publish check then refuses the product as having
   no such option. **It duplicates no rules** — the rules stay in
   `@craftynp/types` and the `src/lib` guards — and it must keep merging rather
-  than validating
-  the body alone, because Medusa merges product metadata (a patch of one key
-  leaves the rest in place). Deleting it does not fail a test that mocks the
+  than validating the body alone, because Medusa merges product metadata (a
+  patch of one key leaves the rest in place). Deleting it does not fail a test that mocks the
   workflow; it fails only against a real save, which is how this was found.
   The hook stays as the catch-all for every path that never touches HTTP.
 - **A malformed customization declaration is rejected at any status; an
