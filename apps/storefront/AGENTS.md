@@ -85,8 +85,12 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   rejection that is not a `FetchError` (DNS, refused, TLS, timeout), or one
   carrying 401/403 (wrong publishable key), 404 on a core store route, or any
   5xx, is a misconfigured or down backend and is rethrown as
-  `MedusaUnavailableError`, which each page catches to render
-  `<StoreUnavailable />` (and `app/sitemap.ts` lets through as a 500). Anything
+  `MedusaUnavailableError`. The catalogue pages (home, `/products`, `/about`,
+  category, product) catch it and render `<StoreUnavailable />`; the root
+  layout catches its own nav and site-content calls; `app/sitemap.ts` lets it
+  through as a 500. `/checkout`, `/checkout/confirmation` and
+  `/account/addresses` also call a throwing helper but have no catch, and there
+  is no `app/error.tsx`, so they reach Next's default error page. Anything
   else — a rejected filter, a 422 — still degrades to an empty or default value.
   New fetchers follow this split.
   Degrading on everything, which is what this used to say, meant a wrong
