@@ -13,6 +13,7 @@ export type CheckoutLineProblem = {
   lineId: string;
   itemName: string;
   message: string;
+  action: "edit" | "remove";
   editHref: string;
 };
 
@@ -107,10 +108,13 @@ export function lineProblems(
     const messages: Record<string, string> =
       LINE_REFUSAL_MESSAGES[refusal.error];
 
+    const message = messages[refusal.reason] ?? NEEDS_A_CHANGE;
+
     problems.push({
       lineId: line.lineId,
       itemName: cartLineName(line),
-      message: messages[refusal.reason] ?? NEEDS_A_CHANGE,
+      message,
+      action: message === NO_LONGER_AVAILABLE ? "remove" : "edit",
       editHref: productEditHref(line.href, line.lineId),
     });
   }

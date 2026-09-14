@@ -409,7 +409,9 @@ gate, the price quote and the artwork upload.
   without either flashing during hydration or mismatching it, and checkout
   already declines to special-case the empty server snapshot. Checkout's
   refused-line links land here too, which is why a line refused as no longer
-  available tells the shopper to remove it rather than edit it.
+  available tells the shopper to remove it rather than edit it, and why the
+  payment step gives that line a Remove this item button beside the edit
+  link.
 - **Save and Cancel move focus to `#main-content` before opening the
   drawer.** The keyed remount removes the button that had focus, so the drawer
   would otherwise return focus to `<body>` when it closes. Only an edit does
@@ -791,7 +793,8 @@ customization }` and nothing more.** The cart line's `details` and
   not the live cart. The payment step lists each refused item by its title plus
   its Size or file name, since every custom size of a product shares one
   title, with its message and an "Edit this item" link to `?edit=<lineId>`,
-  and **shows no Try again**: resending an unchanged cart cannot succeed. The
+  plus a "Remove this item" button when the line is no longer available, and
+  **shows no Try again**: resending an unchanged cart cannot succeed. The
   summary's `CartCard` for that line gets the same message and edit link, even
   when the line is not customizable — a product the owner has since given a
   required input is exactly that line. The payment step carries the message
@@ -803,7 +806,8 @@ customization }` and nothing more.** The cart line's `details` and
   edit page re-seeds the same dead file reference and a plain Save would be
   refused again. A variant or price the product no longer has says to
   **remove** the item, for the `?edit=` fallback reason under Editing a cart
-  line.
+  line. `lineProblems` sets the Remove action from that same message, so the
+  copy and the control cannot disagree.
 - **Tax is quoted only after a shipping rate has settled**, because shipping
   itself is taxed, and it re-runs when the shopper picks a different rate. Do
   not fire the tax and shipping-rate calls in parallel.

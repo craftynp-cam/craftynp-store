@@ -29,9 +29,11 @@ import {
   subscribeToCheckoutDraft,
 } from "@/lib/checkout-draft";
 import {
+  cartLineKey,
   clearCart,
   readCart,
   readServerCart,
+  removeCartLine,
   subscribeToCart,
 } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
@@ -287,6 +289,11 @@ export function CheckoutView({
     }
   }
 
+  function removeRefusedLine(lineId: string) {
+    const line = cart.lines.find((candidate) => candidate.lineId === lineId);
+    if (line) removeCartLine(cartLineKey(line));
+  }
+
   const isUsingExistingAddress = savedAddresses.some(
     (address) => address.id === values.savedAddressId,
   );
@@ -433,13 +440,25 @@ export function CheckoutView({
                       {problem.itemName}
                     </p>
                     <p className="text-danger-foreground">{problem.message}</p>
-                    <Link
-                      href={problem.editHref}
-                      aria-describedby={`payment-problem-${problem.lineId}`}
-                      className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      Edit this item
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {problem.action === "remove" ? (
+                        <button
+                          type="button"
+                          onClick={() => removeRefusedLine(problem.lineId)}
+                          aria-describedby={`payment-problem-${problem.lineId}`}
+                          className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          Remove this item
+                        </button>
+                      ) : null}
+                      <Link
+                        href={problem.editHref}
+                        aria-describedby={`payment-problem-${problem.lineId}`}
+                        className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        Edit this item
+                      </Link>
+                    </div>
                   </li>
                 ))}
               </ul>

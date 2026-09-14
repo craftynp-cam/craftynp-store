@@ -1797,8 +1797,42 @@ describe("CheckoutView", () => {
         screen.getByRole("link", { name: "Edit Custom Banner" }),
       ).toHaveAttribute("href", editHref);
       expect(
+        within(payment).queryByRole("button", { name: "Remove this item" }),
+      ).not.toBeInTheDocument();
+      expect(
         screen.queryByRole("button", { name: "Try again" }),
       ).not.toBeInTheDocument();
+    });
+
+    it("offers to remove an item that is no longer available", async () => {
+      addAreaLine(quoteToken(Date.now() + 30 * 60 * 1000));
+      const lineId = readCart().lines[1]?.lineId;
+      const refused = {
+        error: "invalid_customization",
+        reason: "unknown_variant",
+        line: 1,
+      };
+      const fetchMock = mockFullCheckoutFetch({
+        prepare: {
+          ok: false,
+          status: 400,
+          body: { ...refused, lines: [refused] },
+        },
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock);
+
+      const payment = screen.getByRole("region", { name: /Payment/ });
+      const remove = await within(payment).findByRole("button", {
+        name: "Remove this item",
+      });
+      fireEvent.click(remove);
+
+      expect(readCart().lines.map((line) => line.lineId)).not.toContain(
+        lineId,
+      );
+      expect(readCart().lines).toHaveLength(1);
     });
 
     it("names a line whose forced re-quote Medusa refuses, with the prepare's other refusals", async () => {
