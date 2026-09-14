@@ -13,6 +13,7 @@ const artworkUploadUrl = process.env.NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN;
 const artworkUpload = artworkUploadUrl ? new URL(artworkUploadUrl) : null;
 
 const STRIPE_JS = "https://js.stripe.com https://*.js.stripe.com";
+const STRIPE_LINK = "https://link.com https://*.link.com";
 
 function contentSecurityPolicy(isProduction: boolean): string {
   const connectSources = [
@@ -20,17 +21,27 @@ function contentSecurityPolicy(isProduction: boolean): string {
     backend.origin,
     artworkUpload?.origin,
     "https://api.stripe.com",
+    STRIPE_LINK,
     isProduction ? undefined : "ws:",
+  ].filter(Boolean);
+
+  const imageSources = [
+    "'self'",
+    "blob:",
+    "data:",
+    backend.origin,
+    media?.origin,
+    "https://*.link.com",
   ].filter(Boolean);
 
   return [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"} ${STRIPE_JS}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' blob: data:",
+    `img-src ${imageSources.join(" ")}`,
     "font-src 'self'",
     `connect-src ${connectSources.join(" ")}`,
-    `frame-src ${STRIPE_JS} https://hooks.stripe.com`,
+    `frame-src ${STRIPE_JS} https://hooks.stripe.com ${STRIPE_LINK}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "object-src 'none'",

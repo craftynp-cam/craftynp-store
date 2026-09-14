@@ -1008,13 +1008,22 @@ tabs are not built yet — CNP-60 covers them.
     HMR.
   - `https://js.stripe.com https://*.js.stripe.com` as script and frame,
     `https://hooks.stripe.com` as frame, and `https://api.stripe.com` as
-    connect — the Payment Element.
+    connect — Stripe.js and the Payment Element.
+  - `https://link.com https://*.link.com` as frame and connect, and
+    `https://*.link.com` as img — Stripe Link, which the Payment Element shows
+    under Medusa's automatic payment methods whenever the Stripe Dashboard has
+    it on. Nothing in code turns it off. These are the Link section of Stripe's
+    CSP guide (docs.stripe.com/security/guide), on top of the Stripe.js hosts.
   - `style-src 'unsafe-inline'` — inline style attributes: the layout's
     `--announcement-height`, React Aria's visually-hidden styles, `next/image`
     fill.
-  - `img-src 'self' blob: data:` — every catalogue image is same-origin
-    `/_next/image`, so **the media host is absent on purpose**. `blob:` is the
-    artwork preview, the one `unoptimized` image.
+  - `img-src` — raster catalogue images go through same-origin `/_next/image`,
+    but `next/image` serves an `.svg` source unoptimized, straight from its
+    host, because `dangerouslyAllowSVG` is off. The Medusa dashboard's product
+    media, the site-content image field and the category image widget can all
+    produce SVG URLs, so the backend and media origins — the same two hosts
+    `images.remotePatterns` allows — are listed. `blob:` is the artwork
+    preview, the one `unoptimized` image.
   - `connect-src` — the backend origin for the artwork presign and inspect
     calls, which go straight to Medusa, and the artwork upload origin for the
     presigned PUT.
