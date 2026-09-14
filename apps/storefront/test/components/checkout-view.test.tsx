@@ -1729,6 +1729,40 @@ describe("CheckoutView", () => {
       expect(callsTo(fetchMock, "/checkout/prepare")).toHaveLength(0);
     });
 
+    it("names a stale line Medusa refuses to price, and prepares nothing", async () => {
+      addAreaLine(quoteToken(Date.now() - 1));
+      const fetchMock = mockFullCheckoutFetch({
+        priceQuote: {
+          ok: false,
+          status: 400,
+          body: { error: "price_unavailable", reason: "unknown_variant" },
+        },
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock, "/checkout/price-quote");
+
+      const payment = screen.getByRole("region", { name: /Payment/ });
+      await waitFor(() =>
+        expect(
+          within(payment).getByText("Custom Banner (8″ × 10″)"),
+        ).toBeInTheDocument(),
+      );
+      expect(
+        within(payment).getByText(/no longer available/),
+      ).toBeInTheDocument();
+      expect(
+        within(payment).getByRole("link", { name: "Edit this item" }),
+      ).toHaveAttribute(
+        "href",
+        `/signs/banner?edit=${readCart().lines[1]?.lineId}`,
+      );
+      expect(
+        screen.queryByRole("button", { name: "Try again" }),
+      ).not.toBeInTheDocument();
+      expect(callsTo(fetchMock, "/checkout/prepare")).toHaveLength(0);
+    });
+
     it("names the refused item with a link to edit it, and no Try again", async () => {
       addAreaLine(quoteToken(Date.now() + 30 * 60 * 1000));
       const refused = {
@@ -1765,6 +1799,45 @@ describe("CheckoutView", () => {
       expect(
         screen.queryByRole("button", { name: "Try again" }),
       ).not.toBeInTheDocument();
+    });
+
+    it("names a line whose forced re-quote Medusa refuses, with the prepare's other refusals", async () => {
+      addAreaLine(quoteToken(Date.now() + 30 * 60 * 1000));
+      const expired = {
+        error: "invalid_price_quote",
+        reason: "expired",
+        line: 1,
+      };
+      const artwork = {
+        error: "invalid_customization",
+        reason: "artwork_not_found",
+        line: 0,
+      };
+      const fetchMock = mockFullCheckoutFetch({
+        prepare: {
+          ok: false,
+          status: 400,
+          body: { ...artwork, lines: [artwork, expired] },
+        },
+        priceQuote: {
+          ok: false,
+          status: 400,
+          body: { error: "price_unavailable", reason: "unpriced" },
+        },
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await reachReadyPayment(fetchMock);
+
+      const payment = screen.getByRole("region", { name: /Payment/ });
+      await waitFor(() =>
+        expect(
+          within(payment).getByText(/no longer available/),
+        ).toBeInTheDocument(),
+      );
+      expect(within(payment).getByText("Custom Mug")).toBeInTheDocument();
+      expect(within(payment).getByText(/press Replace/)).toBeInTheDocument();
+      expect(callsTo(fetchMock, "/checkout/prepare")).toHaveLength(1);
     });
 
     it("re-quotes and retries once when prepare still calls a quote expired", async () => {

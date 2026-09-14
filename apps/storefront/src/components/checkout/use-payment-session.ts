@@ -10,6 +10,7 @@ import { patchCheckoutDraft } from "@/lib/checkout-draft";
 import {
   isRequotableRefusal,
   lineProblems,
+  priceQuoteRefusal,
   refusalsFromBody,
   type CheckoutLineProblem,
 } from "@/lib/checkout-refusal";
@@ -65,8 +66,9 @@ function toAddressPayload(draft: CheckoutDraft, prefix: "" | "billing") {
 
 async function requoteLine(
   line: CartLine,
+  index: number,
   signal: AbortSignal,
-): Promise<CartLine> {
+): Promise<CartLine | CheckoutLineRefusal> {
   const dimensions = line.customization?.dimensions;
   if (!dimensions) return line;
 
@@ -80,7 +82,14 @@ async function requoteLine(
     }),
     signal,
   });
-  if (!response.ok) throw new Error("price_unavailable");
+  if (!response.ok) {
+    const refusal =
+      response.status === 400
+        ? priceQuoteRefusal(await response.json().catch(() => null), index)
+        : null;
+    if (refusal) return refusal;
+    throw new Error("price_unavailable");
+  }
 
   const quote = (await response.json()) as PriceQuoteResponse;
   const fresh = {
@@ -96,16 +105,24 @@ async function requoteLines(
   lines: readonly CartLine[],
   shouldRequote: (line: CartLine, index: number) => boolean,
   signal: AbortSignal,
-): Promise<CartLine[]> {
+): Promise<{ lines: CartLine[]; refusals: CheckoutLineRefusal[] }> {
   const refreshed: CartLine[] = [];
+  const refusals: CheckoutLineRefusal[] = [];
 
   for (const [index, line] of lines.entries()) {
-    refreshed.push(
-      shouldRequote(line, index) ? await requoteLine(line, signal) : line,
-    );
+    const requoted = shouldRequote(line, index)
+      ? await requoteLine(line, index, signal)
+      : line;
+
+    if ("error" in requoted) {
+      refusals.push(requoted);
+      refreshed.push(line);
+    } else {
+      refreshed.push(requoted);
+    }
   }
 
-  return refreshed;
+  return { lines: refreshed, refusals };
 }
 
 function postPrepare(
@@ -145,16 +162,33 @@ async function readRefusals(
   return refusalsFromBody(await response.json().catch(() => null));
 }
 
+function refusedOutcome(
+  lines: readonly CartLine[],
+  refusals: readonly CheckoutLineRefusal[],
+): PrepareOutcome {
+  const problems = lineProblems(
+    lines,
+    [...refusals].sort((a, b) => a.line - b.line),
+  );
+  if (!problems) throw new Error("checkout_unavailable");
+  return { kind: "refused", refusals: problems };
+}
+
 async function preparePayment(
   draft: CheckoutDraft,
   cart: Cart,
   signal: AbortSignal,
 ): Promise<PrepareOutcome> {
-  let lines = await requoteLines(
+  const stale = await requoteLines(
     cart.lines,
     (line) => needsFreshPriceQuote(line, Date.now()),
     signal,
   );
+  if (stale.refusals.length > 0) {
+    return refusedOutcome(stale.lines, stale.refusals);
+  }
+
+  let lines = stale.lines;
   let response = await postPrepare(draft, lines, signal);
   let refusals = await readRefusals(response);
 
@@ -162,12 +196,20 @@ async function preparePayment(
     refusals?.filter(isRequotableRefusal).map((refusal) => refusal.line),
   );
 
-  if (requotable.size > 0) {
-    lines = await requoteLines(
+  if (refusals && requotable.size > 0) {
+    const forced = await requoteLines(
       lines,
       (_line, index) => requotable.has(index),
       signal,
     );
+    if (forced.refusals.length > 0) {
+      return refusedOutcome(forced.lines, [
+        ...refusals.filter((refusal) => !isRequotableRefusal(refusal)),
+        ...forced.refusals,
+      ]);
+    }
+
+    lines = forced.lines;
     response = await postPrepare(draft, lines, signal);
     refusals = await readRefusals(response);
   }

@@ -768,12 +768,18 @@ customization }` and nothing more.** The cart line's `details` and
   back with `setCartLineQuote`, which refuses if the line's quantity or size
   moved while the quote was in flight. `/checkout/prepare` is posted only once
   every re-quote has succeeded, with items built from that refreshed snapshot.
-  **A failed re-quote is the ordinary retryable error, never a line refusal**:
-  a rate limit or a flaky query is not something the shopper can edit. The
-  browser can neither verify a signature nor trust its own clock, so a prepare
-  that still answers `invalid_price_quote` `expired`, `malformed`,
+  **Only a transient re-quote failure is the retryable error** — a rate limit,
+  a network failure or a misconfigured store is not something the shopper can
+  edit. A re-quote Medusa refuses for the line itself (`unknown_variant`,
+  `bad_dimensions`, `unpriced`, `unconfigured`, which the proxy answers as a
+  `400` with that `reason`) is named like a prepare refusal, as
+  `invalid_price_quote` with the same reason. Every stale line is still
+  checked, and nothing is prepared, because Try again would repeat the same
+  refusal. The browser can neither verify a signature nor trust its own clock,
+  so a prepare that still answers `invalid_price_quote` `expired`, `malformed`,
   `bad_signature` or `line_mismatch` gets **one** forced re-quote of those
-  lines and one retry, never a loop.
+  lines and one retry, never a loop. A forced re-quote Medusa refuses is named
+  alongside that prepare's other refusals.
 - **Keep the token and `unitPrice` out of `paymentPrepareKey` and
   `taxQuoteKey`.** The write-back re-renders every cart reader, so if either
   key read them, storing a fresh quote would re-trigger the very prepare it

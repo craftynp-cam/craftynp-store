@@ -7,6 +7,7 @@ import {
 
 import type { CartLine } from "./cart";
 import { productEditHref } from "./routes";
+import { isPriceQuoteRefusalReason } from "./upstream-error";
 
 export type CheckoutLineProblem = {
   lineId: string;
@@ -69,6 +70,20 @@ export function refusalsFromBody(body: unknown): CheckoutLineRefusal[] | null {
 
   if (!Array.isArray(lines) || lines.length === 0) return null;
   return lines.every(isCheckoutLineRefusal) ? lines : null;
+}
+
+export function priceQuoteRefusal(
+  body: unknown,
+  line: number,
+): CheckoutLineRefusal | null {
+  const reason =
+    typeof body === "object" && body !== null
+      ? (body as { reason?: unknown }).reason
+      : undefined;
+
+  return isPriceQuoteRefusalReason(reason)
+    ? { error: "invalid_price_quote", reason, line }
+    : null;
 }
 
 function cartLineName(line: CartLine): string {
