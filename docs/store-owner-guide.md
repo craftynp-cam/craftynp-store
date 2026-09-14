@@ -364,16 +364,32 @@ Everything on this page follows the same rules:
   line.**
 - Closing band: heading, one line of body copy, and the button label.
 
-**Turnaround and shipping** — two lines shown in the "How your order is made"
-panel on every product page, on the thank-you page, and _inside the confirmation
-email_.
+**Turnaround and shipping** — two timing lines.
 
-- _Production turnaround_ — how long you take to make an order.
-- _Shipping window_ — how long delivery takes once it's gone.
+- _Production turnaround_ — how long you take to make an order. Shown in the
+  "How your order is made" panel on made-to-order product pages, on the
+  thank-you page, and _inside the confirmation email_.
+- _Shipping window_ — how long delivery takes once it's gone. Shown on every
+  product page, on the thank-you page, and in the confirmation email.
 
 Keep these honest and current. They set the expectation that decides whether a
 customer emails you asking where their order is — and on the product page they
 are read before anyone has paid.
+
+**Ready-to-ship product pages** — the panel under the description of a product
+that isn't made to order. It takes the place of "How your order is made", so a
+ready-to-ship piece is never described as something you still have to make.
+
+- _Panel heading_, _First step title_ and _First step body_ — the words that
+  tell a shopper the piece is already made. Leave one empty and the site uses
+  its standard wording for it.
+- _Dispatch time_ — how soon a ready-to-ship piece leaves the workshop. Until you
+  change it, it says "within a few business days", so put your real number in.
+  Leave it empty to hide it.
+
+The shipping window above shows on these pages too. The thank-you page and the
+confirmation email still show your production turnaround, even for a
+ready-to-ship order.
 
 **Get in touch** — your phone number and email address, shown in the footer at
 the bottom of every page.

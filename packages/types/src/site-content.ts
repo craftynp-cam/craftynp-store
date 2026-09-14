@@ -290,7 +290,7 @@ export const SITE_CONTENT_FIELDS = [
     group: "Turnaround and shipping",
     label: "Production turnaround",
     description:
-      "How long making the order takes. Shown on every product page, on the confirmation page and in the confirmation email.",
+      "How long making the order takes. Shown on made-to-order product pages, on the confirmation page and in the confirmation email.",
     defaultValue:
       "Most pieces are made to order and leave the workshop in 3–5 business days.",
     maxLength: 160,
@@ -301,9 +301,51 @@ export const SITE_CONTENT_FIELDS = [
     group: "Turnaround and shipping",
     label: "Shipping window",
     description:
-      "How long delivery takes once the order ships. Shown beside the turnaround note everywhere it appears.",
+      "How long delivery takes once the order ships. Shown on every product page, on the confirmation page and in the confirmation email.",
     defaultValue:
       "Once shipped, delivery usually takes another 2–5 business days.",
+    maxLength: 160,
+  },
+  {
+    key: "ready_to_ship_heading",
+    type: "text",
+    group: "Ready-to-ship product pages",
+    label: "Panel heading",
+    description:
+      "Heading of the panel under a ready-to-ship product's details. Leave empty to use the default.",
+    defaultValue: "How your order gets to you",
+    maxLength: 80,
+  },
+  {
+    key: "ready_to_ship_step_title",
+    type: "text",
+    group: "Ready-to-ship product pages",
+    label: "First step title",
+    description:
+      "Title of the step that says the piece is already made. Leave empty to use the default.",
+    defaultValue: "It's already made",
+    maxLength: 60,
+  },
+  {
+    key: "ready_to_ship_step_body",
+    type: "text",
+    group: "Ready-to-ship product pages",
+    label: "First step body",
+    description:
+      "One line under the first step's title. Leave empty to use the default.",
+    defaultValue:
+      "This piece was made by hand ahead of time, so there's no production wait.",
+    maxLength: 200,
+  },
+  {
+    key: "ready_to_ship_dispatch_note",
+    type: "text",
+    group: "Ready-to-ship product pages",
+    label: "Dispatch time",
+    description:
+      "How soon a ready-to-ship piece leaves the workshop. Shown under the first step, in place of the production turnaround. Leave empty to hide it.",
+    defaultValue:
+      "Ready-to-ship pieces usually leave the workshop within a few business days.",
     maxLength: 160,
   },
   {
@@ -360,6 +402,10 @@ function findField(key: SiteContentKey): SiteContentField {
     throw new Error(`Unknown site content key: ${key}`);
   }
   return field;
+}
+
+export function siteContentDefault(key: SiteContentKey): string {
+  return findField(key).defaultValue;
 }
 
 function isAllowedImageUrl(value: string): boolean {

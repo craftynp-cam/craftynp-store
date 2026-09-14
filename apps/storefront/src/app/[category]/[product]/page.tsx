@@ -67,8 +67,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           <ProductDetailView
             product={product}
-            turnaroundNote={content.order_turnaround_note}
-            shippingWindowNote={content.order_shipping_window_note}
+            processContent={{
+              turnaroundNote: content.order_turnaround_note,
+              shippingWindowNote: content.order_shipping_window_note,
+              readyToShipHeading: content.ready_to_ship_heading,
+              readyToShipStepTitle: content.ready_to_ship_step_title,
+              readyToShipStepBody: content.ready_to_ship_step_body,
+              readyToShipDispatchNote: content.ready_to_ship_dispatch_note,
+            }}
           />
         </Container>
       </main>
