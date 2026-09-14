@@ -19,6 +19,7 @@ export const ARTWORK_DOWNLOAD_FAILED_LOG_TAG = "[artwork:download-failed]";
 
 const UNAVAILABLE_MESSAGES = {
   missing: "No stored artwork for that id.",
+  unclaimed: "No stored artwork for that id.",
   filing: "This artwork is still being filed. Try again shortly.",
   never_filed:
     "This artwork was never filed: its upload expired before it could be copied onto the order.",

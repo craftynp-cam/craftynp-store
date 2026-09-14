@@ -79,6 +79,8 @@ function formatBytes(bytes: number): string {
 }
 
 const ARTWORK_HINTS = {
+  unclaimed:
+    "Not picked up for filing yet. If this still shows a few minutes after the order was placed, nothing will retry it — look for [artwork:promote-failed] on this order, or ask the customer to send the file again.",
   filing:
     "Still being filed. The file is safe in staging and is retried every 15 minutes — reload shortly.",
   never_filed:
@@ -150,7 +152,13 @@ const ArtworkBlock = ({
       ) : state.kind === "download" ? (
         <DownloadArtworkButton claimId={state.claimId} />
       ) : (
-        <Hint variant={state.kind === "filing" ? "info" : "error"}>
+        <Hint
+          variant={
+            state.kind === "filing" || state.kind === "unclaimed"
+              ? "info"
+              : "error"
+          }
+        >
           {ARTWORK_HINTS[state.kind]}
         </Hint>
       )}

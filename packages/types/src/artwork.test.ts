@@ -156,8 +156,8 @@ describe("artworkLineState", () => {
     });
   });
 
-  it("keeps a line nothing has claimed yet waiting", () => {
-    expect(artworkLineState(undefined)).toEqual({ kind: "filing" });
+  it("tells a line nothing has claimed apart from one waiting for its copy", () => {
+    expect(artworkLineState(undefined)).toEqual({ kind: "unclaimed" });
   });
 
   it.each([

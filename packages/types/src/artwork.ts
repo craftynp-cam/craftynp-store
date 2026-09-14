@@ -133,6 +133,7 @@ export type ArtworkOrderAsset = z.infer<typeof artworkOrderAssetSchema>;
 
 export type ArtworkLineState =
   | { kind: "download"; claimId: string }
+  | { kind: "unclaimed" }
   | { kind: "filing" }
   | { kind: "never_filed" }
   | { kind: "replaced" }
@@ -143,7 +144,7 @@ export function artworkLineState(
     | Pick<ArtworkOrderAsset, "id" | "promotedAt" | "purgedAt" | "purgeReason">
     | undefined,
 ): ArtworkLineState {
-  if (!entry) return { kind: "filing" };
+  if (!entry) return { kind: "unclaimed" };
 
   if (entry.purgedAt !== null) {
     if (entry.purgeReason === "staging_expired") return { kind: "never_filed" };

@@ -852,7 +852,8 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   **Known gap:** a line whose subscriber failed before its claim was written —
   the order query or `findByStagingKey` threw — has no claim, so the sweeper
   cannot see it. It is logged `[artwork:promote-failed] order=`, and the widget
-  keeps showing the line as still being filed.
+  shows it as not picked up for filing, which, unlike a pending claim, nothing
+  retries.
 - **Promotion files only the bytes the inspect route measured (CNP-96).** The
   staging copy is a `CopyObject` with `x-amz-copy-source-if-match` set to the
   upload's `inspected_etag`, an atomic compare-and-copy with no HEAD-then-copy
