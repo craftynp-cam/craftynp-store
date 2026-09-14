@@ -798,7 +798,11 @@ customization }` and nothing more.** The cart line's `details` and
   summary's `CartCard` for that line gets the same message and edit link, even
   when the line is not customizable — a product the owner has since given a
   required input is exactly that line. The payment step carries the message
-  itself because the summary sits below the Pay button on a phone.
+  itself because the summary sits below the Pay button on a phone. **An
+  always-mounted `role="status"` in the Payment section names the refused
+  items**, so they are announced rather than arriving with the list's node,
+  and pressing Pay while a line is refused moves focus to that list's first
+  action instead of returning silently.
 - **The shopper copy is a `satisfies` map over every refusal reason**, so a
   reason added to `CHECKOUT_LINE_REFUSAL_REASONS` in `@craftynp/types` with no
   words here is a type error, and it carries no test of its own. Expired or

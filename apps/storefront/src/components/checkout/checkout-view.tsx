@@ -37,6 +37,7 @@ import {
   subscribeToCart,
 } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
+import type { CheckoutLineProblem } from "@/lib/checkout-refusal";
 import { shippingRateDraftPatch } from "@/lib/shipping-rates";
 import { checkoutConfirmationHref, checkoutHref } from "@/lib/routes";
 import { formatMoney } from "@/lib/money";
@@ -64,6 +65,16 @@ function summaryMessage(errors: CheckoutErrors): string | null {
   const count = Object.keys(errors).length;
   if (count === 0) return null;
   return count === 1 ? "Check 1 field below." : `Check ${count} fields below.`;
+}
+
+function refusalAnnouncement(
+  refusals: readonly CheckoutLineProblem[],
+): string {
+  if (refusals.length === 0) return "";
+  const names = refusals.map((problem) => problem.itemName).join(", ");
+  return refusals.length === 1
+    ? `1 item in your order needs attention: ${names}`
+    : `${refusals.length} items in your order need attention: ${names}`;
 }
 
 const SAVED_ADDRESS_FIELDS = [
@@ -114,6 +125,7 @@ export function CheckoutView({
     clientSecret: string | null;
   } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const refusalListRef = useRef<HTMLUListElement>(null);
   const paymentSubmitRef = useRef<PaymentSubmitHandle>(null);
   const submittingRef = useRef(false);
   const displayedPayError =
@@ -236,6 +248,11 @@ export function CheckoutView({
         '[aria-invalid="true"]',
       );
       firstInvalid?.focus();
+      return;
+    }
+
+    if (paymentSession.refusals.length > 0) {
+      refusalListRef.current?.querySelector<HTMLElement>("a, button")?.focus();
       return;
     }
 
@@ -422,6 +439,9 @@ export function CheckoutView({
           ) : null}
 
           <CheckoutSection step={4} title="Payment">
+            <p role="status" className="sr-only">
+              {refusalAnnouncement(paymentSession.refusals)}
+            </p>
             {paymentSession.status === "ready" &&
             paymentSession.clientSecret ? (
               <PaymentFields
@@ -430,7 +450,7 @@ export function CheckoutView({
                 onLoadError={showPayError}
               />
             ) : paymentSession.refusals.length > 0 ? (
-              <ul aria-live="polite" className="space-y-4">
+              <ul ref={refusalListRef} className="space-y-4">
                 {paymentSession.refusals.map((problem) => (
                   <li key={problem.lineId} className="space-y-1 text-sm">
                     <p

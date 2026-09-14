@@ -1804,6 +1804,54 @@ describe("CheckoutView", () => {
       ).not.toBeInTheDocument();
     });
 
+    function refuseArtworkOnPrepare() {
+      addAreaLine(quoteToken(Date.now() + 30 * 60 * 1000));
+      const refused = {
+        error: "invalid_customization",
+        reason: "artwork_not_found",
+        line: 1,
+      };
+      const fetchMock = mockFullCheckoutFetch({
+        prepare: {
+          ok: false,
+          status: 400,
+          body: { ...refused, lines: [refused] },
+        },
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+      return fetchMock;
+    }
+
+    it("announces refused items through a status region mounted before they arrive", async () => {
+      const fetchMock = refuseArtworkOnPrepare();
+
+      const reached = reachReadyPayment(fetchMock);
+      const status = within(
+        screen.getByRole("region", { name: /Payment/ }),
+      ).getByRole("status");
+      await reached;
+
+      await waitFor(() =>
+        expect(status).toHaveTextContent(
+          "1 item in your order needs attention: Custom Banner (8″ × 10″)",
+        ),
+      );
+    });
+
+    it("moves focus to the refused item when Pay is pressed", async () => {
+      const fetchMock = refuseArtworkOnPrepare();
+
+      await reachReadyPayment(fetchMock);
+
+      const payment = screen.getByRole("region", { name: /Payment/ });
+      const edit = await within(payment).findByRole("link", {
+        name: "Edit this item",
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Pay/ }));
+
+      expect(edit).toHaveFocus();
+    });
+
     it("offers to remove an item that is no longer available", async () => {
       addAreaLine(quoteToken(Date.now() + 30 * 60 * 1000));
       const lineId = readCart().lines[1]?.lineId;
