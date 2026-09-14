@@ -1,14 +1,17 @@
 import {
+  absoluteUrl,
   accountAddressesHref,
   accountHref,
   authLoginHref,
   authLogoutHref,
   categoryHref,
   checkoutHref,
+  disallowRules,
   productHref,
   sanitizeDesignReturnTo,
   sanitizeReturnTo,
   signInHref,
+  siteOrigin,
   siteUrl,
 } from "@/lib/routes";
 
@@ -77,6 +80,17 @@ describe("authLoginHref", () => {
 describe("authLogoutHref", () => {
   it("points at /auth/logout", () => {
     expect(authLogoutHref()).toBe("/auth/logout");
+  });
+});
+
+describe("disallowRules", () => {
+  it("disallows a reserved route, its subpaths and its query strings without disallowing handles that only start with it", () => {
+    const rules = disallowRules();
+
+    expect(rules).toEqual(
+      expect.arrayContaining(["/design$", "/design/", "/sign-in?"]),
+    );
+    expect(rules).not.toContain("/design");
   });
 });
 
@@ -154,6 +168,55 @@ describe("siteUrl", () => {
 
     expect(siteUrl("http://localhost:8000/auth/callback?code=abc")).toBe(
       "http://localhost:8000",
+    );
+  });
+
+  it("falls back to the request's origin when the site URL is blank", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "";
+
+    expect(siteUrl("http://localhost:8000/auth/callback?code=abc")).toBe(
+      "http://localhost:8000",
+    );
+  });
+});
+
+describe("siteOrigin", () => {
+  const original = process.env.NEXT_PUBLIC_SITE_URL;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = original;
+  });
+
+  it("uses the configured site URL's origin", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "https://thecraftynp.org/";
+
+    expect(siteOrigin()).toBe("https://thecraftynp.org");
+  });
+
+  it.each(["", "   ", "thecraftynp.org", "localhost:8000"])(
+    "falls back to the local storefront when the site URL is %p",
+    (value) => {
+      process.env.NEXT_PUBLIC_SITE_URL = value;
+
+      expect(siteOrigin()).toBe("http://localhost:8000");
+    },
+  );
+});
+
+describe("absoluteUrl", () => {
+  const original = process.env.NEXT_PUBLIC_SITE_URL;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = original;
+  });
+
+  it("puts a path on the configured site origin by default", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "https://thecraftynp.org";
+
+    expect(absoluteUrl("/sitemap.xml")).toBe(
+      "https://thecraftynp.org/sitemap.xml",
     );
   });
 });

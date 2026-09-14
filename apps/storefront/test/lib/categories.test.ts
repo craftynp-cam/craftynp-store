@@ -307,6 +307,42 @@ describe("toSidebarCategories", () => {
     ]);
   });
 
+  it("carries a category's description and image, naming the image after the category when it has no alt text", () => {
+    const categories: ShowcaseCategorySource[] = [
+      {
+        id: "pcat_1",
+        name: "Glitter",
+        handle: "glitter",
+        description: "  Fine and chunky cosmetic glitter.  ",
+        metadata: { image_url: "https://media.thecraftynp.com/glitter.png" },
+      },
+    ];
+
+    expect(toSidebarCategories(categories, []).categories[0]).toMatchObject({
+      description: "Fine and chunky cosmetic glitter.",
+      image: {
+        url: "https://media.thecraftynp.com/glitter.png",
+        alt: "Glitter",
+      },
+    });
+  });
+
+  it.each(["", "   "])(
+    "leaves out a blank category description (%p) so the page generates one",
+    (value) => {
+      const source: ShowcaseCategorySource = {
+        id: "pcat_1",
+        name: "Glitter",
+        handle: "glitter",
+        description: value,
+      };
+
+      expect(
+        toSidebarCategories([source], []).categories[0],
+      ).not.toHaveProperty("description");
+    },
+  );
+
   it("ignores a product with no category", () => {
     const categories: ShowcaseCategorySource[] = [
       { id: "pcat_1", name: "Shirts", handle: "shirts" },

@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { CatalogView, Container, StoreUnavailable } from "@/components";
 import { fetchCatalogSidebar } from "@/lib/categories";
 import { MedusaUnavailableError } from "@/lib/medusa-error";
+import { pageMetadata } from "@/lib/page-metadata";
 import { fetchCatalogProducts } from "@/lib/product-list";
 import { fetchRegion } from "@/lib/region";
 import { categoryHref } from "@/lib/routes";
+import { SITE_NAME } from "@/lib/site";
 import { parseSort } from "@/lib/sort";
 
 type CategoryPageProps = {
@@ -27,7 +29,13 @@ export async function generateMetadata({
   const loaded = await loadCategory(handle).catch(() => null);
   if (!loaded) return {};
 
-  return { title: loaded.category.name };
+  const { category } = loaded;
+  return {
+    title: category.name,
+    description:
+      category.description ?? `Shop ${category.name} from ${SITE_NAME}.`,
+    ...pageMetadata(categoryHref(category.handle), category.image),
+  };
 }
 
 export default async function CategoryPage({

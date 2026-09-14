@@ -69,8 +69,50 @@ export function authLogoutHref(): string {
   return "/auth/logout";
 }
 
+const LOCAL_SITE_ORIGIN = "http://localhost:8000";
+
+function configuredSiteOrigin(): string | null {
+  const value = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.origin
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function siteOrigin(): string {
+  return configuredSiteOrigin() ?? LOCAL_SITE_ORIGIN;
+}
+
+export function absoluteUrl(
+  path: string,
+  origin: string = siteOrigin(),
+): string {
+  return new URL(path, origin).toString();
+}
+
 export function siteUrl(requestUrl: string): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? new URL(requestUrl).origin;
+  return configuredSiteOrigin() ?? new URL(requestUrl).origin;
+}
+
+export const DISALLOWED_PATHS = [
+  "/account",
+  "/checkout",
+  "/sign-in",
+  "/auth",
+  "/design",
+] as const;
+
+export function disallowRules(): string[] {
+  return DISALLOWED_PATHS.flatMap((path) => [
+    `${path}$`,
+    `${path}/`,
+    `${path}?`,
+  ]);
 }
 
 export function sanitizeReturnTo(value: string | null | undefined): string {
