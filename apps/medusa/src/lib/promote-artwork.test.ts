@@ -212,11 +212,38 @@ describe("promoteArtworkClaim", () => {
     ]);
     expect(log.warn).toHaveBeenCalledWith(
       expect.stringContaining(
-        "[artwork:changed-after-inspect] claim=claim_B asset=asset_1 order=order_B",
+        "[artwork:changed-after-inspect] claim=claim_B asset=asset_1 order=order_B resolution=retired",
       ),
     );
     expect(log.warn).not.toHaveBeenCalledWith(
       expect.stringContaining("[artwork:promote-failed]"),
+    );
+  });
+
+  it("files a line whose staging bytes changed after inspect from a sibling already filed under the check", async () => {
+    const objects = bucket({
+      [STAGING_KEY]: '"etag-swapped"',
+      "artwork/order_A/li_A/up_1.png": INSPECTED_ETAG,
+    });
+    const { rows, service, artwork } = ledger([filedSibling, claim()]);
+    const log = logger();
+
+    const outcome = await promoteArtworkClaim(claim(), artwork, log);
+
+    expect(outcome).toBe("promoted");
+    expect(copy).toHaveBeenLastCalledWith(
+      "artwork/order_A/li_A/up_1.png",
+      "artwork/order_B/li_B/up_1.png",
+    );
+    expect(objects.get("artwork/order_B/li_B/up_1.png")).toBe(INSPECTED_ETAG);
+    expect(rows.find((row) => row.id === "claim_B")?.storage_key).toBe(
+      "artwork/order_B/li_B/up_1.png",
+    );
+    expect(service.markClaimPurged).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "[artwork:changed-after-inspect] claim=claim_B asset=asset_1 order=order_B resolution=sibling",
+      ),
     );
   });
 

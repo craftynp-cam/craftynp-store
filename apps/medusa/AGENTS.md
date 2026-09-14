@@ -840,9 +840,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   a filed, unpurged sibling claim's object instead. There is no HEAD first: a
   conditional copy reports a missing source as `NoSuchKey` before it evaluates
   its condition (verified on MinIO), so a HEAD would add a request and a race
-  and nothing else. Only `isMissingObject` (`NotFound`, `NoSuchKey` or a 404)
-  counts as gone; any other storage failure is retried and never falls back. A
-  second order on an already-claimed upload is promoted too, and logged
+  and nothing else; a store that answered 412 for a missing source would still
+  reach a filed sibling, through the changed-after-inspect path below. Only
+  `isMissingObject` (`NotFound`, `NoSuchKey` or a 404) and that 412 fall back;
+  any other storage failure is retried. A second order on an already-claimed
+  upload is promoted too, and logged
   `[artwork:promote-shared] asset= order= other_orders=` so the owner can spot
   a possible duplicate purchase: `prepare-cart` already accepted that order,
   and the key is never shown to anyone but the admin. With
@@ -853,7 +855,15 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   the order query or `findByStagingKey` threw — has no claim, so the sweeper
   cannot see it. It is logged `[artwork:promote-failed] order=`, and the widget
   shows it as not picked up for filing, which, unlike a pending claim, nothing
-  retries.
+  retries. A deploy that changes the artwork tables is a certain trigger:
+  between medusa-server's pre-deploy `db:migrate` and medusa-worker running the
+  matching code, `findByStagingKey` throws on whichever side does not match the
+  schema, so an artwork order paid in that window has no claim. To recover one,
+  run a temporary `medusa exec` script that calls the default export of
+  `src/subscribers/promote-artwork.ts` with
+  `{ event: { name: "order.placed", data: { id } }, container }` for the order.
+  That is safe to repeat, because `claimLine` is insert-first and
+  `promoteArtworkClaim` returns early for a filed claim.
 - **Promotion files only the bytes the inspect route measured (CNP-96).** The
   staging copy is a `CopyObject` with `x-amz-copy-source-if-match` set to the
   upload's `inspected_etag`, an atomic compare-and-copy with no HEAD-then-copy
@@ -861,12 +871,16 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   `ArtworkChangedAfterInspectError`: MinIO names it `PreconditionFailed` and the
   SDK has no modelled class for it, so it is matched by name or status, never
   by `instanceof`. Promotion then logs
-  `[artwork:changed-after-inspect] claim= asset= order= key= inspected_etag=`,
-  files nothing, leaves the staging object to the lifecycle rule, and marks
+  `[artwork:changed-after-inspect] claim= asset= order= resolution= …` and
+  looks for a filed, unpurged sibling claim on the same upload. That object was
+  copied under the check, so its bytes are the inspected ones: the line is
+  copied from it and marked promoted (`resolution=sibling`). Only when there is
+  no such sibling does promotion file nothing (`resolution=retired`) and mark
   every still-pending claim on that upload `changed_after_inspect`, so the
   sweeper stops retrying a copy that can never succeed and the widget shows
-  those lines as replaced after they were checked. If that marking fails it
-  logs `[artwork:promote-failed] … outcome=changed_not_retired` and the sweeper
+  those lines as replaced after they were checked. Either way the staging
+  object is left to the lifecycle rule. If that marking fails it logs
+  `[artwork:promote-failed] … outcome=changed_not_retired` and the sweeper
   meets the same 412 on its next run. A copy from a filed sibling carries no
   condition, because that object was itself copied under the check; a row
   inspected before `inspected_etag` existed copies unconditionally and is

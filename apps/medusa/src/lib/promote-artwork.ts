@@ -65,6 +65,8 @@ async function copyToClaim(
   claim: ArtworkClaimRow,
   destination: string,
   artwork: ArtworkModuleService,
+  logger: Logger,
+  context: string,
 ): Promise<PromotionSource> {
   const { asset } = claim;
 
@@ -74,16 +76,28 @@ async function copyToClaim(
     });
     return { kind: "staging", key: asset.staging_key };
   } catch (error) {
-    if (!isMissingObject(error)) throw error;
+    const changed = error instanceof ArtworkChangedAfterInspectError;
+    if (!changed && !isMissingObject(error)) throw error;
+
+    const source = selectSiblingSource(
+      claim.id,
+      await artwork.listClaimsForAsset(claim.asset_id),
+    );
+    if (source.kind !== "sibling") {
+      if (changed) throw error;
+      return source;
+    }
+
+    await copyArtwork(source.key, destination);
+
+    if (changed) {
+      logger.warn(
+        `${ARTWORK_CHANGED_AFTER_INSPECT_LOG_TAG} ${context} resolution=sibling sibling=${source.claimId} key=${asset.staging_key} inspected_etag=${asset.inspected_etag}`,
+      );
+    }
+
+    return source;
   }
-
-  const source = selectSiblingSource(
-    claim.id,
-    await artwork.listClaimsForAsset(claim.asset_id),
-  );
-  if (source.kind === "sibling") await copyArtwork(source.key, destination);
-
-  return source;
 }
 
 async function retireChangedUpload(
@@ -127,7 +141,7 @@ export async function promoteArtworkClaim(
       keyExtension(asset.staging_key),
     );
 
-    source = await copyToClaim(claim, destination, artwork);
+    source = await copyToClaim(claim, destination, artwork, logger, context);
     if (source.kind === "missing") {
       logger.warn(
         `${ARTWORK_PROMOTE_FAILED_LOG_TAG} ${context} key=${asset.staging_key} error=source_missing`,
@@ -139,7 +153,7 @@ export async function promoteArtworkClaim(
   } catch (error) {
     if (error instanceof ArtworkChangedAfterInspectError) {
       logger.warn(
-        `${ARTWORK_CHANGED_AFTER_INSPECT_LOG_TAG} ${context} key=${asset.staging_key} inspected_etag=${asset.inspected_etag}`,
+        `${ARTWORK_CHANGED_AFTER_INSPECT_LOG_TAG} ${context} resolution=retired key=${asset.staging_key} inspected_etag=${asset.inspected_etag}`,
       );
       await retireChangedUpload(claim, artwork, logger, context);
       return "changed_after_inspect";
