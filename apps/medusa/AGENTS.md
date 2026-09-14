@@ -884,7 +884,10 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   under the same key with `409 invalid_idempotent_request`. **It goes in
   `provider_data`, never `data`** — `GET /admin/notifications` returns `data` by
   default and not `provider_data`, and the body holds the shipping address and a
-  90-day bearer order link. The copy is short-lived: the retry job writes
+  90-day bearer order link. Default fields are not access control: any admin
+  credential — a session or a secret API key — gets the stored body back by
+  asking for `fields=+provider_data`, so what keeps it private is that the copy
+  is short-lived. The retry job writes
   `replay_content: null` once a row is sent, refused, or past the retry window
   — whether it failed there or was left `pending` by a send that never recorded
   an outcome — so a sent email's copy normally goes within 15 minutes and any
