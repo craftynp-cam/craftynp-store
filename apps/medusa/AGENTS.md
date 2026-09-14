@@ -937,11 +937,12 @@ provider in `src/modules/notification-resend`, fired by subscribers on
 - **`[email:retry-exhausted]` is logged once per row, with a `reason`, and the
   row is never replayed after it:** `no_idempotency_key`; `no_stored_content`,
   a row from before the body was stored, which needs a manual resend;
-  `rejected status=<n>`, Resend refusing the send itself; `window_expired`, a
-  failure still undelivered after 24 hours; and `stuck_pending`, a row still
-  `pending` after 24 hours. That is a send that never recorded an outcome — the
-  worker died mid-send, or Medusa's status write after it failed — so it may or
-  may not have reached the customer and needs checking in Resend. A `pending`
+  `rejected status=<n>`, Resend refusing the send itself with a 4xx other than
+  401 or 403; `window_expired`, a failure still undelivered after 24 hours; and
+  `stuck_pending`, a row still `pending` after 24 hours. That is a send that
+  never recorded an outcome — the worker died mid-send, or Medusa's status write
+  after it failed — so it may or may not have reached the customer and needs
+  checking in Resend. A `pending`
   row inside the window is left alone, since it may still be in flight. "Once"
   is recorded on the row as `provider_data.replay_exhausted` rather than in a
   column, so it needed no migration. Until one of those happens,
@@ -951,13 +952,16 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   message.** A 5xx, a plain 429, a network error and a 409
   `concurrent_idempotent_requests` (another request holding the key is still
   in flight) are retried in-process and then left for the next run, and so is
-  a daily-quota 429. Every other 4xx throws `ResendRejectedError`, logs
-  `[email:send-failed]`, and ends the replay — including a 409
-  `invalid_idempotent_request`, which means the payload changed under the key,
-  normally because `RESEND_FROM_EMAIL` or `RESEND_REPLY_TO` changed between
-  attempts, and including a 401 or 403, so fixing the API key or the sending
-  domain does not resend what they refused. Medusa rethrows a provider error as
-  a new one that keeps only its message, so `permanentRejectionStatus` in
+  a daily-quota 429. A 401 or 403 — a deleted or deactivated API key, or a
+  sending domain that lost verification — is logged under `[email:send-failed]`
+  and not retried in-process, but carries no marker, so the job replays it
+  every run (`[email:retry] outcome=still_failing`) until it is sent or reaches
+  `window_expired`: fixing the key or the domain within 24 hours delivers it.
+  Every other 4xx throws `ResendRejectedError`, logs `[email:send-failed]`, and
+  ends the replay — including a 409 `invalid_idempotent_request`, which means
+  the payload changed under the key, normally because `RESEND_FROM_EMAIL` or
+  `RESEND_REPLY_TO` changed between attempts. Medusa rethrows a provider error
+  as a new one that keeps only its message, so `permanentRejectionStatus` in
   `notification-resend/lib.ts` parses the `(<status>, will not retry)` marker
   `ResendRejectedError` writes. The two sit side by side and must change
   together.

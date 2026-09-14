@@ -241,6 +241,35 @@ describe("ResendNotificationProviderService.send", () => {
     );
   });
 
+  it.each([
+    [
+      401,
+      '{"statusCode":401,"name":"missing_api_key","message":"Missing API key in the authorization header."}',
+    ],
+    [
+      403,
+      '{"statusCode":403,"name":"validation_error","message":"The domain is not verified."}',
+    ],
+  ])(
+    "leaves a %i replayable, since it is an account problem the owner can fix",
+    async (status, body) => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValue(new Response(body, { status }));
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      const { service, logger } = buildService();
+      const error: Error = await service.send(NOTIFICATION).catch((e) => e);
+
+      expect(error).toBeInstanceOf(ResendSendError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(permanentRejectionStatus(error.message)).toBeNull();
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining("[email:send-failed]"),
+      );
+    },
+  );
+
   it("retries a 409 concurrent_idempotent_requests, since the request holding that key is still in flight", async () => {
     const fetchMock = jest
       .fn()

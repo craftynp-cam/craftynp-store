@@ -119,6 +119,10 @@ export function isIdempotencyPayloadMismatch(
   return status === 409 && /invalid_idempotent_request/.test(body);
 }
 
+export function isAccountRejection(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
 export function isRetryableRejection(status: number, body: string): boolean {
   return (
     status >= 500 ||

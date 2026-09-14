@@ -6,6 +6,7 @@ import type {
 } from "@medusajs/framework/types";
 
 import {
+  isAccountRejection,
   isQuotaExceeded,
   isRetryableRejection,
   readQuotaHeaders,
@@ -131,6 +132,17 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
         throw new ResendQuotaExceededError(
           `Resend daily quota exhausted: ${text}`,
         );
+      }
+
+      if (isAccountRejection(response.status)) {
+        const refusal = new ResendSendError(
+          `Resend refused the send (${response.status}): ${text}`,
+          response.status,
+        );
+        this.logger_.error(
+          `${RESEND_SEND_FAILED_LOG_TAG} error=${refusal.message}`,
+        );
+        throw refusal;
       }
 
       if (!isRetryableRejection(response.status, text)) {

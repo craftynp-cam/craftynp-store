@@ -258,6 +258,13 @@ function unavailable() {
   return new Response('{"name":"service_unavailable"}', { status: 503 });
 }
 
+function domainNotVerified() {
+  return new Response(
+    '{"statusCode":403,"name":"validation_error","message":"The domain is not verified."}',
+    { status: 403 },
+  );
+}
+
 function mockFetch(...responses: Response[]) {
   const fetchMock = jest.fn();
   for (const response of responses) fetchMock.mockResolvedValueOnce(response);
@@ -448,6 +455,31 @@ describe("retryFailedNotifications", () => {
     ]);
     expect(harness.onlyRow()).toMatchObject({ status: "failure" });
     expect(harness.onlyRow().provider_data?.replay_content).toBeNull();
+  });
+
+  it("re-sends an email Resend refused with 403 once the account is fixed", async () => {
+    const fetchMock = mockFetch(
+      domainNotVerified(),
+      domainNotVerified(),
+      jsonResponse({ id: "re_9" }),
+    );
+    const harness = buildHarness();
+
+    await harness.placeOrder();
+    const row = harness.onlyRow();
+
+    await retryFailedNotifications(harness.container);
+    await retryFailedNotifications(harness.container);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(harness.onlyRow()).toMatchObject({
+      id: row.id,
+      status: "success",
+      external_id: "re_9",
+    });
+    expect(
+      linesContaining(harness.logger.warn, "[email:retry-exhausted]"),
+    ).toEqual([]);
   });
 
   it("never replays an email that was sent first time, and drops its stored copy", async () => {
