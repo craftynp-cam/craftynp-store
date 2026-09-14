@@ -7,15 +7,17 @@ import type {
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
 import {
+  PRODUCT_OPTION_FIELDS,
+  assertCustomSizeOption,
   assertDeclaredCustomization,
-  type ProductCustomizationInput,
+  type ProductWithOptionsInput,
 } from "../../../lib/product-customization";
 import {
   assertPublishableProducts,
   type ProductShippingDimensionsInput,
 } from "../../../lib/product-shipping-dimensions";
 
-type ValidatedProduct = ProductCustomizationInput &
+type ValidatedProduct = ProductWithOptionsInput &
   ProductShippingDimensionsInput;
 
 const GUARDED_KEYS = [
@@ -28,7 +30,11 @@ const GUARDED_KEYS = [
   "height",
 ] as const;
 
-export const PRODUCT_VALIDATION_FIELDS = ["id", ...GUARDED_KEYS];
+export const PRODUCT_VALIDATION_FIELDS = [
+  "id",
+  ...GUARDED_KEYS,
+  ...PRODUCT_OPTION_FIELDS,
+];
 
 export function touchesGuardedFields(body: Record<string, unknown>): boolean {
   return GUARDED_KEYS.some((key) => key in body);
@@ -60,6 +66,7 @@ export function mergedProductUpdate(
             ...((body.metadata as Record<string, unknown> | null) ?? {}),
           }
         : current.metadata,
+    product_options: current.product_options,
     weight: pickNumber(body, "weight", current),
     length: pickNumber(body, "length", current),
     width: pickNumber(body, "width", current),
@@ -90,6 +97,7 @@ export function validateProductUpdate() {
       const merged = mergedProductUpdate(current, body);
       assertPublishableProducts([merged]);
       assertDeclaredCustomization([merged]);
+      assertCustomSizeOption([merged]);
 
       return next();
     } catch (error) {

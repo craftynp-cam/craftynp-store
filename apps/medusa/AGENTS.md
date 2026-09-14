@@ -82,12 +82,55 @@ tax provider), `notification-resend`, `auth-auth0`, and
   A product whose own options do not carry the named value counts as naming
   none, as it does for the storefront's `resolveCustomSizeOption`, so the
   dimensions mode alone decides rather than every variant refusing a size.
+  Publishing refuses that state (next bullet), so a live product reaches it
+  only through an option edit neither publish guard sees, or by having been
+  published before CNP-94 shipped.
   Options that did not load are not options that lack it: every Medusa
   product has at least one, so a missing or empty `product_options` means the
   relation never arrived, and the variant alone decides — the rule fails
   closed rather than letting a size onto a cheaper preset.
   Only a line that sent a customization has one stored — an empty one would
   change `customizationSignature` and supersede a cart the shopper could reuse.
+- **A published custom size must name its Custom option, and the product must
+  carry it (CNP-94).** `validateProductCustomization` refuses to publish a
+  product whose `customization_size` is `optional` or `required` unless both
+  `customization_size_option` and `customization_size_option_value` are set,
+  and `validateCustomSizeOption` refuses one whose own `product_options` have
+  no option with that title carrying that value, naming whichever is missing.
+  Both match exactly, as `isCustomSizeVariant` and the storefront's
+  `resolveCustomSizeOption` do. Without them the Custom-variant rule above is
+  null, a size is accepted on any variant and priced against that variant's
+  base — a custom size at a cheaper preset's price — and the storefront sends
+  exactly that without any tampering, because it cannot find a Custom value to
+  select. A `required` product with no preset sizes is held to it too: it
+  needs a one-value `Size: Custom` option to name. The second check needs the
+  product's options, which `validateProductCustomization` never sees, so the
+  admin product middleware and the product hook each query `product_options`
+  themselves (see [Migrations and seeds](#migrations-and-seeds)) — the same
+  relation `src/lib/customization-rules.ts` reads, rather than
+  `options.values`. In 2.18 an option's values are shared at the model level.
+  The product module narrows `options.values` to this product's own values
+  only on product-rooted reads (`listProducts`, `retrieveProduct` and
+  `listAndCountProducts` run `filterOptionValues`), not on variant-rooted ones
+  such as prepare-cart's, so `product_options` is the relation that is right
+  from every entry point. Both checks are publish-only, like the bounds, so a
+  draft may name a value its options do not carry yet.
+  **Option and value edits bypass both guards.** The
+  `/admin/product-options/:id`, `/admin/product-options/:id/values/:value_id`
+  and `/admin/products/:id/options/batch` routes neither reach the middleware
+  nor fire `productsUpdated`, and `option_ids` on a product update is not a
+  guarded key, so only the hook sees it, after `updateProductsStep` has run.
+  Renaming or removing a published product's Custom value therefore still
+  silently brings the null rule back; from then on every save of that product
+  through `updateProductsWorkflow` is refused, naming the missing value,
+  because the hook checks `product_options` on every run. On
+  `POST /admin/products/:id` a body touching a guarded key is refused by the
+  middleware before the write; any other body (images, tags, categories,
+  collection, sales channels, variants, handle) reaches the hook only after
+  `updateProductsStep` has run. It saves normally again once the value is
+  restored under Options, the names are corrected in the widget, custom size
+  is switched off, or the product is unpublished. That is why the runtime
+  tolerance above stays.
 - **The custom size carries two more keys again, and they are money:**
   `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
   written by the same widget and patch. They are what `areaUnitPrice` in
@@ -1002,10 +1045,12 @@ CNP-79.
   `updateProductsWorkflow`, not route middleware — a status-only publish,
   `/admin/products/batch`, CSV import, and custom workflows all bypass HTTP.
   Add any similar guard to `src/workflows/hooks/validate-products.ts`, which is
-  where the shipping-dimension and customization guards both run. **It has to be
-  that one file:** Medusa throws on a second handler for a hook it has already
-  registered, so a new guard is a call added inside the existing handler, never
-  a new hook file.
+  where the shipping-dimension, customization and Custom-option guards all
+  run. The hook's `products` payload carries no reliable options, so the
+  Custom-option guard queries `product_options` for those products through
+  the handler's `{ container }`. **It has to be that one file:** Medusa throws
+  on a second handler for a hook it has already registered, so a new guard is
+  a call added inside the existing handler, never a new hook file.
 - **That hook rejects the save but cannot undo it, which is why
   `src/api/admin/products/middlewares.ts` exists as well.** The only hooks
   core exposes are `productsCreated` / `productsUpdated`, both of which run
@@ -1017,12 +1062,22 @@ CNP-79.
   a product then wedged: the stored value failed the guard on every later save,
   so it could not be corrected from the UI. Verified against a real container
   in both shapes; the batch shape does roll back.
-  The middleware therefore re-runs **the same two `assert*` functions** on the
-  incoming update merged over the stored product, before the route reaches the
-  workflow. **It duplicates no rules** — the rules stay in `@craftynp/types`
-  and the `src/lib` guards — and it must keep merging rather than validating
-  the body alone, because Medusa merges product metadata (a patch of one key
-  leaves the rest in place). Deleting it does not fail a test that mocks the
+  The middleware therefore re-runs **the same three `assert*` functions** on
+  the incoming update merged over the stored product, before the route reaches
+  the workflow. It loads the stored product with its `product_options`
+  (`PRODUCT_OPTION_FIELDS`, shared with the hook) and the merge carries them
+  through untouched. The body's `option_ids` can relink the product's options,
+  but it is not a guarded key and the middleware does not resolve a new option
+  set from it, so such a save is checked only by the hook, after
+  `updateProductsStep` (see the Custom-option bullet in
+  [Layout and config](#layout-and-config)). Both the middleware and hook
+  queries must stay unpaginated: with `skip` or `cursor`, `query.graph` calls
+  `listAndCountProducts`, which, like `retrieveProduct`, strips
+  `product_options`, and the publish check then refuses the product as having
+  no such option. **It duplicates no rules** — the rules stay in
+  `@craftynp/types` and the `src/lib` guards — and it must keep merging rather
+  than validating the body alone, because Medusa merges product metadata (a
+  patch of one key leaves the rest in place). Deleting it does not fail a test that mocks the
   workflow; it fails only against a real save, which is how this was found.
   The hook stays as the catch-all for every path that never touches HTTP.
 - **A malformed customization declaration is rejected at any status; an
@@ -1030,7 +1085,8 @@ CNP-79.
   an input still on — or a value outside the registry's vocabulary is wrong
   whatever the status. A product that is customizable but asks for nothing is a
   draft mid-setup, and is refused only when it is published, the same line the
-  shipping-dimension guard draws.
+  shipping-dimension guard draws. A custom size whose Custom option is unnamed,
+  or named but not on the product, is incomplete in the same way.
 
 ## Testing
 
