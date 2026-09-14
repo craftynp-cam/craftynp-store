@@ -327,6 +327,22 @@ describe("toSidebarCategories", () => {
     });
   });
 
+  it.each(["", "   "])(
+    "leaves out a blank category description (%p) so the page generates one",
+    (value) => {
+      const source: ShowcaseCategorySource = {
+        id: "pcat_1",
+        name: "Glitter",
+        handle: "glitter",
+        description: value,
+      };
+
+      expect(
+        toSidebarCategories([source], []).categories[0],
+      ).not.toHaveProperty("description");
+    },
+  );
+
   it("ignores a product with no category", () => {
     const categories: ShowcaseCategorySource[] = [
       { id: "pcat_1", name: "Shirts", handle: "shirts" },

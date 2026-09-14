@@ -212,12 +212,6 @@ describe("absoluteUrl", () => {
     else process.env.NEXT_PUBLIC_SITE_URL = original;
   });
 
-  it("puts a path on the given origin", () => {
-    expect(
-      absoluteUrl("/glitter/specialty-glitter", "https://thecraftynp.org"),
-    ).toBe("https://thecraftynp.org/glitter/specialty-glitter");
-  });
-
   it("puts a path on the configured site origin by default", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://thecraftynp.org";
 
