@@ -70,9 +70,12 @@ tax provider), `notification-resend`, `auth-auth0`, and
   gate.** `prepare-cart` validates every line, including one that sent no
   customization, because a required input is exactly what a line can leave
   out. A `required` input that is missing, or an `off` one that is present,
-  throws `CustomizationRejection`, answered as `400 invalid_customization`
-  with `reason` `missing_required` or `input_off` and the message
-  `invalid_customization:<reason>:<input>`. Blank order notes count as absent.
+  throws `CustomizationRejection`, answered as a line refusal —
+  `400 invalid_customization` with `reason` `missing_required` or `input_off`,
+  the input key on that line's entry in `lines`, and the message head
+  `invalid_customization:<reason>:<input>@<line>` (see the error-body bullet
+  under [Cart, payments, and order placement](#cart-payments-and-order-placement)).
+  Blank order notes count as absent.
   The size is held to the server's copy of the storefront's `usesCustomSize`:
   on a product that names its Custom option, a line on the variant carrying
   that value must send `customization.dimensions` and a line on any other
@@ -471,9 +474,19 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   `metadata.dimensions` are taken from it, and it is what gets made. There is
   no second, top-level size to price from — `checkoutLineItemSchema` has none,
   so zod strips one an old client still sends. A line that records a size with
-  no token is refused `400 invalid_price_quote:missing`, and a token quoted for
-  any other size is `line_mismatch`. Pricing one size while recording another
-  was the under-payment CNP-85 closed.
+  no token is refused `400 invalid_price_quote` with reason `missing`, and a
+  token quoted for any other size is `line_mismatch`, each naming its line.
+  Pricing one size while recording another was the under-payment CNP-85
+  closed. The storefront re-quotes a stale token before it prepares, so an
+  honest cart meets these only through clock skew or a token it could not read.
+- **A `/store/price-quote` error's `message` starts with a fixed head**,
+  `invalid_line:<reason>` on a 400 (`unknown_variant`, `bad_dimensions`) and
+  `price_unavailable:<reason>` on a 502 (`unpriced`, `unconfigured`,
+  `misconfigured`). `resolveLinePrice`'s own text follows a space;
+  `misconfigured` carries none.
+  `sdk.client.fetch` keeps only the status and `message`, so the head is how
+  the storefront's checkout tells a line Medusa refuses to price from a
+  transient failure. Keep the heads' wording; the storefront reads them.
 - **`/store/tax-quote` must keep passing the quantity and the dimensions.**
   Without the quantity it taxes every line at the single-unit tier; without the
   dimensions it taxes a custom size at its variant's price rather than its own.
@@ -562,6 +575,23 @@ customization? }`, and the server writes every key.** `details` is the
 - **Error bodies from these store routes must carry a `message` alongside
   `error`/`reason`.** `@medusajs/js-sdk`'s `FetchError` discards everything
   else, so the storefront proxy otherwise sees only a status.
+- **`prepare-cart` names every refused cart line in one answer.** Each
+  per-line `invalid_customization` or `invalid_price_quote` refusal is
+  collected across all the lines and answered once, before any cart is read or
+  written, as `400 { error, reason, line, lines, message }`: `line` is the
+  first refused request index and `lines` lists every one. **The index must
+  ride in `message` as well**, for the `FetchError` reason above, so
+  `formatCheckoutLineRefusals` in `@craftynp/types` writes a fixed head,
+  `<error>:<reason>[:<input>]@<line>` comma-joined, with free-text detail after
+  it — a `rejected` line's DPI, text or size message, an unknown variant's id.
+  The storefront reads only the head, through `parseCheckoutLineRefusals`, so
+  the two cannot word a refusal differently; a reason missing from
+  `CHECKOUT_LINE_REFUSAL_REASONS` does not parse and the shopper gets the
+  generic error. Shipping and tax token refusals stay whole-checkout 400s with
+  no line. A pricing throw on one line skips the pricing of later lines and is
+  a `502 pricing_failed` only when nothing was refused, so a transient failure
+  cannot hide a line the shopper can fix. An older storefront proxy wraps all
+  of these in a 502, as it always did.
 - **`/checkout/complete`'s catch block must re-run the order lookup before
   reporting a failure.** Stripe's webhook can place the order mid-request,
   making `completeCartWorkflow` throw on an already-completed cart — otherwise a
@@ -697,9 +727,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   (`checkoutWindowClosedBefore` — a day before its staging object expires, so
   payment and promotion still have time; the sweepers keep the exact window) is
   `artwork_not_found`; a row never stamped `inspected_at`, or a raster row
-  without pixels, is `artwork_not_inspected`. Both answer
-  `400 invalid_customization` with that `reason` and the message
-  `invalid_customization:<reason>`, and a lookup that throws answers
+  without pixels, is `artwork_not_inspected`. Both are line refusals,
+  `400 invalid_customization` with that `reason` and the message head
+  `invalid_customization:<reason>@<line>`, and a lookup that throws answers
   `502 checkout_unavailable:misconfigured`. The same upload on two lines of one
   request is legal. `artworkReferenceSchema` caps `storageKey` at 128
   characters, which bounds what a request can put into that query, and

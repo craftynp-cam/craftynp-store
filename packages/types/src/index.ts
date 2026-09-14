@@ -98,6 +98,7 @@ export {
   priceQuoteResponseSchema,
 } from "./price-quote.js";
 export {
+  CHECKOUT_LINE_REFUSAL_REASONS,
   checkoutAddressSchema,
   checkoutCompleteRequestSchema,
   checkoutCompleteResponseSchema,
@@ -106,6 +107,9 @@ export {
   checkoutPrepareRequestSchema,
   checkoutPrepareResponseSchema,
   checkoutTotalsSchema,
+  formatCheckoutLineRefusals,
+  isCheckoutLineRefusal,
+  parseCheckoutLineRefusals,
 } from "./checkout.js";
 export {
   orderAddressSchema,
@@ -220,6 +224,9 @@ export type {
   CheckoutCompleteRequest,
   CheckoutCompleteResponse,
   CheckoutLineItem,
+  CheckoutLineRefusal,
+  CheckoutLineRefusalError,
+  CheckoutLineRefusalReason,
   CheckoutLineItemDetail,
   CheckoutPrepareRequest,
   CheckoutPrepareResponse,

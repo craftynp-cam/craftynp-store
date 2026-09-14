@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { PriceQuoteResponse } from "@craftynp/types";
 
 import { sdk } from "@/lib/medusa";
+import { priceQuoteFailureResponse } from "@/lib/upstream-error";
 
 type PriceQuotePayload = {
   variantId: string;
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error("Could not price the configured line", error);
-    return NextResponse.json({ error: "price_unavailable" }, { status: 502 });
+    const failure = priceQuoteFailureResponse(error);
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 }

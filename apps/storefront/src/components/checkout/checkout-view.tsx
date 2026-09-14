@@ -2,6 +2,7 @@
 
 import { flushSync } from "react-dom";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -28,12 +29,15 @@ import {
   subscribeToCheckoutDraft,
 } from "@/lib/checkout-draft";
 import {
+  cartLineKey,
   clearCart,
   readCart,
   readServerCart,
+  removeCartLine,
   subscribeToCart,
 } from "@/lib/cart";
 import { openCartDrawer } from "@/lib/cart-drawer";
+import type { CheckoutLineProblem } from "@/lib/checkout-refusal";
 import { shippingRateDraftPatch } from "@/lib/shipping-rates";
 import { checkoutConfirmationHref, checkoutHref } from "@/lib/routes";
 import { formatMoney } from "@/lib/money";
@@ -61,6 +65,14 @@ function summaryMessage(errors: CheckoutErrors): string | null {
   const count = Object.keys(errors).length;
   if (count === 0) return null;
   return count === 1 ? "Check 1 field below." : `Check ${count} fields below.`;
+}
+
+function refusalAnnouncement(refusals: readonly CheckoutLineProblem[]): string {
+  if (refusals.length === 0) return "";
+  const names = refusals.map((problem) => problem.itemName).join(", ");
+  return refusals.length === 1
+    ? `1 item in your order needs attention: ${names}`
+    : `${refusals.length} items in your order need attention: ${names}`;
 }
 
 const SAVED_ADDRESS_FIELDS = [
@@ -111,6 +123,7 @@ export function CheckoutView({
     clientSecret: string | null;
   } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const refusalListRef = useRef<HTMLUListElement>(null);
   const paymentSubmitRef = useRef<PaymentSubmitHandle>(null);
   const submittingRef = useRef(false);
   const displayedPayError =
@@ -236,6 +249,11 @@ export function CheckoutView({
       return;
     }
 
+    if (paymentSession.refusals.length > 0) {
+      refusalListRef.current?.querySelector<HTMLElement>("a, button")?.focus();
+      return;
+    }
+
     if (paymentSession.status !== "ready" || !values.cartId) {
       return;
     }
@@ -284,6 +302,11 @@ export function CheckoutView({
       submittingRef.current = false;
       setSubmitting(false);
     }
+  }
+
+  function removeRefusedLine(lineId: string) {
+    const line = cart.lines.find((candidate) => candidate.lineId === lineId);
+    if (line) removeCartLine(cartLineKey(line));
   }
 
   const isUsingExistingAddress = savedAddresses.some(
@@ -414,6 +437,9 @@ export function CheckoutView({
           ) : null}
 
           <CheckoutSection step={4} title="Payment">
+            <p role="status" className="sr-only">
+              {refusalAnnouncement(paymentSession.refusals)}
+            </p>
             {paymentSession.status === "ready" &&
             paymentSession.clientSecret ? (
               <PaymentFields
@@ -421,6 +447,39 @@ export function CheckoutView({
                 submitRef={paymentSubmitRef}
                 onLoadError={showPayError}
               />
+            ) : paymentSession.refusals.length > 0 ? (
+              <ul ref={refusalListRef} className="space-y-4">
+                {paymentSession.refusals.map((problem) => (
+                  <li key={problem.lineId} className="space-y-1 text-sm">
+                    <p
+                      id={`payment-problem-${problem.lineId}`}
+                      className="font-medium text-foreground"
+                    >
+                      {problem.itemName}
+                    </p>
+                    <p className="text-danger-foreground">{problem.message}</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {problem.action === "remove" ? (
+                        <button
+                          type="button"
+                          onClick={() => removeRefusedLine(problem.lineId)}
+                          aria-describedby={`payment-problem-${problem.lineId}`}
+                          className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          Remove this item
+                        </button>
+                      ) : null}
+                      <Link
+                        href={problem.editHref}
+                        aria-describedby={`payment-problem-${problem.lineId}`}
+                        className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        Edit this item
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             ) : paymentSession.status === "error" ? (
               <div aria-live="polite" className="space-y-3">
                 <p className="text-sm text-danger-foreground">
@@ -473,7 +532,10 @@ export function CheckoutView({
           </Button>
         </form>
 
-        <CheckoutSummary onEditCart={openCartDrawer} />
+        <CheckoutSummary
+          onEditCart={openCartDrawer}
+          lineProblems={paymentSession.refusals}
+        />
       </div>
     </>
   );

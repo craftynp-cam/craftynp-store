@@ -18,6 +18,7 @@ export type CartCardData = {
   onRemove: (id: string) => void;
   editHref?: string;
   onEdit?: () => void;
+  problem?: string;
 };
 
 export type CartCardProps = { isLoading: true } | CartCardData;
@@ -43,7 +44,7 @@ export function CartCard(props: CartCardProps) {
     );
   }
 
-  const { line, onQuantityChange, onRemove, editHref, onEdit } = props;
+  const { line, onQuantityChange, onRemove, editHref, onEdit, problem } = props;
   const {
     href,
     title,
@@ -83,7 +84,7 @@ export function CartCard(props: CartCardProps) {
               </Link>
             </h3>
             <div className="flex shrink-0 items-center gap-1">
-              {editHref && isCustomizable ? (
+              {editHref && (isCustomizable || problem) ? (
                 <Link
                   href={editHref}
                   aria-label={`Edit ${title}`}
@@ -123,6 +124,10 @@ export function CartCard(props: CartCardProps) {
           )}
         </div>
       </div>
+
+      {problem ? (
+        <p className="mt-3 text-sm text-danger-foreground">{problem}</p>
+      ) : null}
 
       {details && details.length > 0 ? (
         <dl className="mt-3 space-y-1 rounded-lg bg-surface-soft p-3 text-sm">
