@@ -59,7 +59,9 @@ typecheck` — `next-env.d.ts` is build-generated.
 placeholders are enough, so CI can `cp apps/storefront/.env.example
 apps/storefront/.env.local` first. It needs no backend, database, or Redis —
 the storefront's fetch helpers degrade and Medusa's build falls back to a fake
-Redis.
+Redis. The build's cache hash includes each package's `.env*` files, gitignored
+ones too, because Next inlines their values at build time; without that an
+edited `.env.local` replays a cached `.next`.
 
 `db:migrate` runs the seed scripts as well as the migrations, and it needs a
 fully filled `apps/medusa/.env` — read

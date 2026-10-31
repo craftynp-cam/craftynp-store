@@ -626,7 +626,11 @@ Dockerfile.** Next inlines them at build time, and Railway passes a service
 variable into a Docker build only when an `ARG` names it. A missing one still
 builds green and ships `undefined` — and `next.config.ts` reads the backend and
 media URLs at build time to allow image hosts, so missing those 400s every
-product image from the optimizer.
+product image from the optimizer. It also reads the backend and
+`NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN` into the Content-Security-Policy. The one
+that fails loudly is `NEXT_PUBLIC_SITE_URL`: a production build refuses to run
+without an absolute value, because canonical links and the sitemap are built on
+it (CNP-100).
 
 **The admin is not proxied through the storefront in production.** The `/api`
 and `/app` rewrites in `next.config.ts` are development-only: they exist so the
@@ -639,11 +643,12 @@ which is what makes `ADMIN_CORS=https://api.thecraftynp.com` the whole answer.
 **The storefront and API are now cross-origin** (CNP-17), because they sit on
 different domains by design. Production values:
 
-| Variable                                               | Value                         |
-| ------------------------------------------------------ | ----------------------------- |
-| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com` |
-| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`     |
-| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`     |
+| Variable                                               | Value                                                       |
+| ------------------------------------------------------ | ----------------------------------------------------------- |
+| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com`                               |
+| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`                                   |
+| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`                                   |
+| `NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN`                    | the origin of `ARTWORK_STORAGE_ENDPOINT` on `medusa-server` |
 
 `ADMIN_CORS` is `https://api.thecraftynp.com` — the origin the admin is actually
 served from, and nothing else. With the `/app` rewrite dev-only and

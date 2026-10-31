@@ -9,6 +9,7 @@ import {
   removeCartLine,
   renderableImageUrl,
   setCartLineQuantity,
+  setCartLineQuote,
   updateCartLine,
 } from "@/lib/cart";
 
@@ -50,6 +51,14 @@ describe("cart", () => {
     const cart = readCart();
     expect(cart.lines).toHaveLength(1);
     expect(cart.lines[0]?.quantity).toBe(5);
+  });
+
+  it("drops the price quote token on a merge, because the merged quantity was never quoted", () => {
+    addCartLine(makeLine({ quantity: 2, priceQuoteToken: "quote-for-2" }));
+    addCartLine(makeLine({ quantity: 3, priceQuoteToken: "quote-for-3" }));
+
+    expect(readCart().lines[0]?.quantity).toBe(5);
+    expect(readCart().lines[0]?.priceQuoteToken).toBeUndefined();
   });
 
   it("mints a distinct lineId for every line it adds", () => {
@@ -378,4 +387,72 @@ describe("updateCartLine", () => {
 
     expect(restored?.lineId).toEqual(expect.any(String));
   });
+});
+
+describe("setCartLineQuote", () => {
+  const dimensions = { widthInches: 8, heightInches: 10 };
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    clearCart();
+  });
+
+  function seed() {
+    addCartLine(
+      makeLine({
+        id: "custom",
+        quantity: 2,
+        unitPrice: 5,
+        priceQuoteToken: "stale",
+        customization: { dimensions },
+      }),
+    );
+    addCartLine(makeLine({ id: "other", priceQuoteToken: "untouched" }));
+    return readCart().lines.map((line) => line.lineId);
+  }
+
+  it("writes the fresh token and price onto the quoted line only", () => {
+    const [customId] = seed();
+
+    expect(
+      setCartLineQuote(
+        customId!,
+        { quantity: 2, dimensions },
+        { priceQuoteToken: "fresh", unitPrice: 6.5 },
+      ),
+    ).toBe(true);
+
+    const [custom, other] = readCart().lines;
+    expect(custom).toMatchObject({
+      priceQuoteToken: "fresh",
+      unitPrice: 6.5,
+      quantity: 2,
+    });
+    expect(other).toMatchObject({
+      priceQuoteToken: "untouched",
+      unitPrice: 0.75,
+    });
+  });
+
+  it.each([
+    ["its quantity", { quantity: 3, dimensions }],
+    [
+      "its size",
+      { quantity: 2, dimensions: { widthInches: 8, heightInches: 12 } },
+    ],
+  ])(
+    "writes nothing once %s has moved since the quote was asked for",
+    (_case, quoted) => {
+      const [customId] = seed();
+      const before = readCart();
+
+      expect(
+        setCartLineQuote(customId!, quoted, {
+          priceQuoteToken: "fresh",
+          unitPrice: 6.5,
+        }),
+      ).toBe(false);
+      expect(readCart()).toEqual(before);
+    },
+  );
 });

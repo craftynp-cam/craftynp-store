@@ -70,6 +70,7 @@ export {
   resolveProductCustomization,
   unmeasuredOptionValues,
   validateCategoryArtwork,
+  validateCustomSizeOption,
   validateProductCustomization,
 } from "./product-customization.js";
 export { SITE_NAME, SITE_TAGLINE } from "./site.js";
@@ -77,6 +78,7 @@ export {
   SITE_CONTENT_FIELDS,
   SITE_CONTENT_KEYS,
   resolveSiteContent,
+  siteContentDefault,
   siteContentEntrySchema,
   siteContentKeySchema,
   siteContentUpdateSchema,
@@ -99,6 +101,7 @@ export {
   priceQuoteResponseSchema,
 } from "./price-quote.js";
 export {
+  CHECKOUT_LINE_REFUSAL_REASONS,
   checkoutAddressSchema,
   checkoutCompleteRequestSchema,
   checkoutCompleteResponseSchema,
@@ -107,6 +110,9 @@ export {
   checkoutPrepareRequestSchema,
   checkoutPrepareResponseSchema,
   checkoutTotalsSchema,
+  formatCheckoutLineRefusals,
+  isCheckoutLineRefusal,
+  parseCheckoutLineRefusals,
 } from "./checkout.js";
 export {
   orderAddressSchema,
@@ -197,6 +203,7 @@ export type {
   CustomizationInputMode,
   ProductCustomization,
   ProductCustomizationProblem,
+  ProductOwnOptionLike,
 } from "./product-customization.js";
 export type {
   SiteContent,
@@ -222,6 +229,9 @@ export type {
   CheckoutCompleteRequest,
   CheckoutCompleteResponse,
   CheckoutLineItem,
+  CheckoutLineRefusal,
+  CheckoutLineRefusalError,
+  CheckoutLineRefusalReason,
   CheckoutLineItemDetail,
   CheckoutPrepareRequest,
   CheckoutPrepareResponse,

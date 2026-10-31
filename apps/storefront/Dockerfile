@@ -21,17 +21,21 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 # Next inlines NEXT_PUBLIC_* into the bundle at build time, and next.config.ts
-# reads the backend and media URLs to allow image hosts. Railway only passes a
-# service variable into the build when an ARG names it; miss one and the build
-# stays green while the value is silently undefined in production.
+# reads the backend, media and artwork upload URLs to allow image hosts and to
+# write the Content-Security-Policy. Railway only passes a service variable into
+# the build when an ARG names it; miss one and the build stays green while the
+# value is silently undefined in production. NEXT_PUBLIC_SITE_URL is the
+# exception: the build fails without it.
 ARG NEXT_PUBLIC_MEDUSA_BACKEND_URL
 ARG NEXT_PUBLIC_MEDIA_BASE_URL
+ARG NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN
 ARG NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_DEFAULT_REGION
 ARG NEXT_PUBLIC_SITE_URL
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_MEDUSA_BACKEND_URL=$NEXT_PUBLIC_MEDUSA_BACKEND_URL \
     NEXT_PUBLIC_MEDIA_BASE_URL=$NEXT_PUBLIC_MEDIA_BASE_URL \
+    NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN=$NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN \
     NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=$NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY \
     NEXT_PUBLIC_DEFAULT_REGION=$NEXT_PUBLIC_DEFAULT_REGION \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \

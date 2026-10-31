@@ -264,7 +264,7 @@ describe("CartCard", () => {
     });
   });
 
-  it("offers the edit link only on a line there is something to configure", () => {
+  it("offers the edit link on a line there is something to configure, or one checkout refused", () => {
     const { rerender } = render(
       <CartCard
         line={makeLine({ isCustomizable: true })}
@@ -290,6 +290,20 @@ describe("CartCard", () => {
     expect(
       screen.queryByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
     ).not.toBeInTheDocument();
+
+    rerender(
+      <CartCard
+        line={makeLine({ isCustomizable: false })}
+        editHref="/products/sticker?edit=line-sticker"
+        problem="This item needs a change before we can make it."
+        onQuantityChange={jest.fn()}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Edit Custom Die-Cut Stickers" }),
+    ).toHaveAttribute("href", "/products/sticker?edit=line-sticker");
   });
 
   it("tells its host the edit link was followed, so the drawer can close behind it", () => {

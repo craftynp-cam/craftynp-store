@@ -70,9 +70,12 @@ tax provider), `notification-resend`, `auth-auth0`, and
   gate.** `prepare-cart` validates every line, including one that sent no
   customization, because a required input is exactly what a line can leave
   out. A `required` input that is missing, or an `off` one that is present,
-  throws `CustomizationRejection`, answered as `400 invalid_customization`
-  with `reason` `missing_required` or `input_off` and the message
-  `invalid_customization:<reason>:<input>`. Blank order notes count as absent.
+  throws `CustomizationRejection`, answered as a line refusal —
+  `400 invalid_customization` with `reason` `missing_required` or `input_off`,
+  the input key on that line's entry in `lines`, and the message head
+  `invalid_customization:<reason>:<input>@<line>` (see the error-body bullet
+  under [Cart, payments, and order placement](#cart-payments-and-order-placement)).
+  Blank order notes count as absent.
   The size is held to the server's copy of the storefront's `usesCustomSize`:
   on a product that names its Custom option, a line on the variant carrying
   that value must send `customization.dimensions` and a line on any other
@@ -82,12 +85,55 @@ tax provider), `notification-resend`, `auth-auth0`, and
   A product whose own options do not carry the named value counts as naming
   none, as it does for the storefront's `resolveCustomSizeOption`, so the
   dimensions mode alone decides rather than every variant refusing a size.
+  Publishing refuses that state (next bullet), so a live product reaches it
+  only through an option edit neither publish guard sees, or by having been
+  published before CNP-94 shipped.
   Options that did not load are not options that lack it: every Medusa
   product has at least one, so a missing or empty `product_options` means the
   relation never arrived, and the variant alone decides — the rule fails
   closed rather than letting a size onto a cheaper preset.
   Only a line that sent a customization has one stored — an empty one would
   change `customizationSignature` and supersede a cart the shopper could reuse.
+- **A published custom size must name its Custom option, and the product must
+  carry it (CNP-94).** `validateProductCustomization` refuses to publish a
+  product whose `customization_size` is `optional` or `required` unless both
+  `customization_size_option` and `customization_size_option_value` are set,
+  and `validateCustomSizeOption` refuses one whose own `product_options` have
+  no option with that title carrying that value, naming whichever is missing.
+  Both match exactly, as `isCustomSizeVariant` and the storefront's
+  `resolveCustomSizeOption` do. Without them the Custom-variant rule above is
+  null, a size is accepted on any variant and priced against that variant's
+  base — a custom size at a cheaper preset's price — and the storefront sends
+  exactly that without any tampering, because it cannot find a Custom value to
+  select. A `required` product with no preset sizes is held to it too: it
+  needs a one-value `Size: Custom` option to name. The second check needs the
+  product's options, which `validateProductCustomization` never sees, so the
+  admin product middleware and the product hook each query `product_options`
+  themselves (see [Migrations and seeds](#migrations-and-seeds)) — the same
+  relation `src/lib/customization-rules.ts` reads, rather than
+  `options.values`. In 2.18 an option's values are shared at the model level.
+  The product module narrows `options.values` to this product's own values
+  only on product-rooted reads (`listProducts`, `retrieveProduct` and
+  `listAndCountProducts` run `filterOptionValues`), not on variant-rooted ones
+  such as prepare-cart's, so `product_options` is the relation that is right
+  from every entry point. Both checks are publish-only, like the bounds, so a
+  draft may name a value its options do not carry yet.
+  **Option and value edits bypass both guards.** The
+  `/admin/product-options/:id`, `/admin/product-options/:id/values/:value_id`
+  and `/admin/products/:id/options/batch` routes neither reach the middleware
+  nor fire `productsUpdated`, and `option_ids` on a product update is not a
+  guarded key, so only the hook sees it, after `updateProductsStep` has run.
+  Renaming or removing a published product's Custom value therefore still
+  silently brings the null rule back; from then on every save of that product
+  through `updateProductsWorkflow` is refused, naming the missing value,
+  because the hook checks `product_options` on every run. On
+  `POST /admin/products/:id` a body touching a guarded key is refused by the
+  middleware before the write; any other body (images, tags, categories,
+  collection, sales channels, variants, handle) reaches the hook only after
+  `updateProductsStep` has run. It saves normally again once the value is
+  restored under Options, the names are corrected in the widget, custom size
+  is switched off, or the product is unpublished. That is why the runtime
+  tolerance above stays.
 - **The custom size carries two more keys again, and they are money:**
   `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
   written by the same widget and patch. They are what `areaUnitPrice` in
@@ -142,7 +188,10 @@ tax provider), `notification-resend`, `auth-auth0`, and
 - **`src/admin` typechecks separately.** It is the only `.tsx` here and needs
   DOM lib types the Node-only backend doesn't carry, so `tsconfig.json` excludes
   it and `typecheck` runs a second `tsc -p src/admin --noEmit`. Put a file that
-  needs DOM types under `src/admin`, and nothing else there.
+  needs DOM types under `src/admin`, and nothing else there. Its React 18 component
+  libraries find `@types/react` only through the `packageExtensions` peers in
+  `pnpm-workspace.yaml`; a new admin dependency whose JSX fails with TS2786 on
+  some installs and not others belongs in that list.
 - **Admin extensions use `@medusajs/ui`, `@medusajs/admin-sdk`, and
   `@tanstack/react-query`.** Never import storefront components — they are
   HeroUI on React 19 and will not run in the React 18 admin bundle.
@@ -471,9 +520,19 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   `metadata.dimensions` are taken from it, and it is what gets made. There is
   no second, top-level size to price from — `checkoutLineItemSchema` has none,
   so zod strips one an old client still sends. A line that records a size with
-  no token is refused `400 invalid_price_quote:missing`, and a token quoted for
-  any other size is `line_mismatch`. Pricing one size while recording another
-  was the under-payment CNP-85 closed.
+  no token is refused `400 invalid_price_quote` with reason `missing`, and a
+  token quoted for any other size is `line_mismatch`, each naming its line.
+  Pricing one size while recording another was the under-payment CNP-85
+  closed. The storefront re-quotes a stale token before it prepares, so an
+  honest cart meets these only through clock skew or a token it could not read.
+- **A `/store/price-quote` error's `message` starts with a fixed head**,
+  `invalid_line:<reason>` on a 400 (`unknown_variant`, `bad_dimensions`) and
+  `price_unavailable:<reason>` on a 502 (`unpriced`, `unconfigured`,
+  `misconfigured`). `resolveLinePrice`'s own text follows a space;
+  `misconfigured` carries none.
+  `sdk.client.fetch` keeps only the status and `message`, so the head is how
+  the storefront's checkout tells a line Medusa refuses to price from a
+  transient failure. Keep the heads' wording; the storefront reads them.
 - **`/store/tax-quote` must keep passing the quantity and the dimensions.**
   Without the quantity it taxes every line at the single-unit tier; without the
   dimensions it taxes a custom size at its variant's price rather than its own.
@@ -562,6 +621,23 @@ customization? }`, and the server writes every key.** `details` is the
 - **Error bodies from these store routes must carry a `message` alongside
   `error`/`reason`.** `@medusajs/js-sdk`'s `FetchError` discards everything
   else, so the storefront proxy otherwise sees only a status.
+- **`prepare-cart` names every refused cart line in one answer.** Each
+  per-line `invalid_customization` or `invalid_price_quote` refusal is
+  collected across all the lines and answered once, before any cart is read or
+  written, as `400 { error, reason, line, lines, message }`: `line` is the
+  first refused request index and `lines` lists every one. **The index must
+  ride in `message` as well**, for the `FetchError` reason above, so
+  `formatCheckoutLineRefusals` in `@craftynp/types` writes a fixed head,
+  `<error>:<reason>[:<input>]@<line>` comma-joined, with free-text detail after
+  it — a `rejected` line's DPI, text or size message, an unknown variant's id.
+  The storefront reads only the head, through `parseCheckoutLineRefusals`, so
+  the two cannot word a refusal differently; a reason missing from
+  `CHECKOUT_LINE_REFUSAL_REASONS` does not parse and the shopper gets the
+  generic error. Shipping and tax token refusals stay whole-checkout 400s with
+  no line. A pricing throw on one line skips the pricing of later lines and is
+  a `502 pricing_failed` only when nothing was refused, so a transient failure
+  cannot hide a line the shopper can fix. An older storefront proxy wraps all
+  of these in a 502, as it always did.
 - **`/checkout/complete`'s catch block must re-run the order lookup before
   reporting a failure.** Stripe's webhook can place the order mid-request,
   making `completeCartWorkflow` throw on an already-completed cart — otherwise a
@@ -731,9 +807,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   (`checkoutWindowClosedBefore` — a day before its staging object expires, so
   payment and promotion still have time; the sweepers keep the exact window) is
   `artwork_not_found`; a row never stamped `inspected_at`, or a raster row
-  without pixels, is `artwork_not_inspected`. Both answer
-  `400 invalid_customization` with that `reason` and the message
-  `invalid_customization:<reason>`, and a lookup that throws answers
+  without pixels, is `artwork_not_inspected`. Both are line refusals,
+  `400 invalid_customization` with that `reason` and the message head
+  `invalid_customization:<reason>@<line>`, and a lookup that throws answers
   `502 checkout_unavailable:misconfigured`. The same upload on two lines of one
   request is legal. `artworkReferenceSchema` caps `storageKey` at 128
   characters, which bounds what a request can put into that query, and
@@ -1004,10 +1080,29 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   fallback path with anything that has a variable — it is the broken one.
 - **A notification _provider_, not a bespoke service.** `INotificationProvider`
   is already the swappable seam, and the module's `notification` table records
-  `status`, `external_id` and `idempotency_key` per send — the send log and the
-  retry ledger without a migration of our own. It talks to Resend over raw
-  `fetch`, like `shipstation`, so the mock-at-the-module-boundary testing rule
-  applies unchanged.
+  `status`, `external_id` and `idempotency_key` per send — the send log without
+  a migration of our own. It talks to Resend over raw `fetch`, like
+  `shipstation`, so the mock-at-the-module-boundary testing rule applies
+  unchanged.
+- **That table stores no email body, so both subscribers store their own copy
+  in `provider_data.replay_content`** (`replayableEmail` in
+  `src/lib/notification-replay.ts`), beside the `content` they send. Medusa's
+  `notification` model has no content column, and rebuilding the body later
+  cannot work: the order link's token is signed with `Date.now()`, so a rebuilt
+  email never matches the first attempt, and Resend answers a changed payload
+  under the same key with `409 invalid_idempotent_request`. **It goes in
+  `provider_data`, never `data`** — `GET /admin/notifications` returns `data` by
+  default and not `provider_data`, and the body holds the shipping address and a
+  90-day bearer order link. Default fields are not access control: any admin
+  credential — a session or a secret API key — gets the stored body back by
+  asking for `fields=+provider_data`, so what keeps it private is that the copy
+  is short-lived. The retry job writes
+  `replay_content: null` once a row is sent, refused, or past the retry window
+  — whether it failed there or was left `pending` by a send that never recorded
+  an outcome — so a sent email's copy normally goes within 15 minutes and any
+  other's within 24 hours and one run. The job looks back only seven days, so a
+  worker down for longer leaves those copies in place, and account deletion
+  (`purgeCustomerIdentity`) never touches this table.
 - **`order-email-render.ts` still truncates a long order to a "+N more items"
   row**, now purely to keep one email a sane size — the original reason
   (Resend's 2,000-character template-variable cap) no longer applies, since
@@ -1034,10 +1129,54 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   that fails is caught and swallowed by the subscriber (see below), so the bus
   never sees a failure to retry. Without `REDIS_URL` the bus is in-memory and
   does not retry at all, which is the local and CI case. Either way the job is
-  the only retry there is. It replays a failure under its original
-  `idempotency_key` — which the module reprocesses only while the row is
-  `FAILURE` — inside Resend's own 24-hour idempotency window. Retrying past
-  that window would start duplicating rather than resuming.
+  the only retry there is — **and it retries only a send that reached
+  `createNotifications`.** A subscriber that fails earlier, loading the order
+  or the site content, logs `[email:order-failed]` and leaves no row behind.
+- **How the job replays.** Every 15 minutes it lists `failure` rows created in
+  the last 24 hours and calls `createNotifications` again with the row's own
+  `id`, its original `idempotency_key` and the stored `replay_content`
+  verbatim. The module reprocesses a key only while its row is `FAILURE`, and
+  the `id` is what lands that reprocess on the original row (see
+  [Medusa runtime traps](#medusa-runtime-traps)). The body must be
+  byte-identical to the first attempt: if that attempt reached Resend, the same
+  key with the same payload returns the original response instead of sending
+  twice. The 24 hours are Resend's own key retention, and `created_at` precedes
+  the first send, so the job's window always closes first — retrying past it
+  would start duplicating rather than resuming. A reprocess returns nothing, so
+  the outcome is read back with `retrieveNotification`. A second pass over the
+  last seven days then nulls `replay_content` on sent rows, and retires any row
+  past the window that is still `failure` or `pending`.
+- **`[email:retry-exhausted]` is logged once per row, with a `reason`, and the
+  row is never replayed after it:** `no_idempotency_key`; `no_stored_content`,
+  a row from before the body was stored, which needs a manual resend;
+  `rejected status=<n>`, Resend refusing the send itself with a 4xx other than
+  401 or 403; `window_expired`, a failure still undelivered after 24 hours; and
+  `stuck_pending`, a row still `pending` after 24 hours. That is a send that
+  never recorded an outcome — the worker died mid-send, or Medusa's status write
+  after it failed — so it may or may not have reached the customer and needs
+  checking in Resend. A `pending`
+  row inside the window is left alone, since it may still be in flight. "Once"
+  is recorded on the row as `provider_data.replay_exhausted` rather than in a
+  column, so it needed no migration. Until one of those happens,
+  `[email:retry] outcome=still_failing` repeats every run and carries Resend's
+  own error.
+- **The provider decides what is permanent, and the job reads it from the
+  message.** A 5xx, a plain 429, a network error and a 409
+  `concurrent_idempotent_requests` (another request holding the key is still
+  in flight) are retried in-process and then left for the next run, and so is
+  a daily-quota 429. A 401 or 403 — a deleted or deactivated API key, or a
+  sending domain that lost verification — is logged under `[email:send-failed]`
+  and not retried in-process, but carries no marker, so the job replays it
+  every run (`[email:retry] outcome=still_failing`) until it is sent or reaches
+  `window_expired`: fixing the key or the domain within 24 hours delivers it.
+  Every other 4xx throws `ResendRejectedError`, logs `[email:send-failed]`, and
+  ends the replay — including a 409 `invalid_idempotent_request`, which means
+  the payload changed under the key, normally because `RESEND_FROM_EMAIL` or
+  `RESEND_REPLY_TO` changed between attempts. Medusa rethrows a provider error
+  as a new one that keeps only its message, so `permanentRejectionStatus` in
+  `notification-resend/lib.ts` parses the `(<status>, will not retry)` marker
+  `ResendRejectedError` writes. The two sit side by side and must change
+  together.
 - **A send failure never rolls back a paid order.** Both subscribers log and
   swallow, like the tax subscriber.
 - **Monitoring here means stable warn-level log tags**, because nothing is
@@ -1106,6 +1245,27 @@ against a real container, schema, or workflow.
   land. Anything that must have one winner — a claim, money — needs a unique
   index and insert-first (the `claimLine` / `recordWebhookEvent` pattern), not
   a narrowed selector.
+- **Replaying a notification must pass the row's own `id` to
+  `createNotifications`.** Medusa 2.18's `createNotifications_`
+  (`@medusajs/notification`, `dist/services/notification-module-service.js`)
+  re-admits an `idempotency_key` whose row is `FAILURE`, builds
+  `{ id: generateEntityId(), ...entry }`, skips the insert because the key
+  exists, calls the provider, and then updates by that id in a `finally`.
+  Without an `id` in the entry that update targets a row that was never
+  written, and `MedusaInternalService.update` throws
+  `Notification with id "noti_…" not found` — from `finally`, so it replaces
+  both a successful send and the provider's real error, and the `FAILURE` row
+  is never touched. A different id on every run is the tell. Passing `id` works
+  only because the spread follows the generated id;
+  `retry-failed-notifications.test.ts` runs the real module class over an
+  in-memory table whose `update` copies that NOT_FOUND branch, so an upgrade
+  that reorders the spread fails there — one that changes
+  `MedusaInternalService.update` itself would not. A reprocess also returns no
+  row, since only inserted rows are returned.
+- **A module service's generated `update` merges a jsonb column instead of
+  replacing it** (`manager.assign(…, { mergeObjectProperties: true })`), so a
+  key left out of the update survives. To drop one, write it as `null`, which
+  is what `withoutReplayContent` does for `provider_data.replay_content`.
 
 Verify provider, seed, and checkout-route changes with `pnpm run db:migrate` and
 a real `pnpm run dev` checkout, not `tsc`/`jest` alone.
@@ -1148,10 +1308,12 @@ CNP-79.
   `updateProductsWorkflow`, not route middleware — a status-only publish,
   `/admin/products/batch`, CSV import, and custom workflows all bypass HTTP.
   Add any similar guard to `src/workflows/hooks/validate-products.ts`, which is
-  where the shipping-dimension and customization guards both run. **It has to be
-  that one file:** Medusa throws on a second handler for a hook it has already
-  registered, so a new guard is a call added inside the existing handler, never
-  a new hook file.
+  where the shipping-dimension, customization and Custom-option guards all
+  run. The hook's `products` payload carries no reliable options, so the
+  Custom-option guard queries `product_options` for those products through
+  the handler's `{ container }`. **It has to be that one file:** Medusa throws
+  on a second handler for a hook it has already registered, so a new guard is
+  a call added inside the existing handler, never a new hook file.
 - **That hook rejects the save but cannot undo it, which is why
   `src/api/admin/products/middlewares.ts` exists as well.** The only hooks
   core exposes are `productsCreated` / `productsUpdated`, both of which run
@@ -1163,12 +1325,22 @@ CNP-79.
   a product then wedged: the stored value failed the guard on every later save,
   so it could not be corrected from the UI. Verified against a real container
   in both shapes; the batch shape does roll back.
-  The middleware therefore re-runs **the same two `assert*` functions** on the
-  incoming update merged over the stored product, before the route reaches the
-  workflow. **It duplicates no rules** — the rules stay in `@craftynp/types`
-  and the `src/lib` guards — and it must keep merging rather than validating
-  the body alone, because Medusa merges product metadata (a patch of one key
-  leaves the rest in place). Deleting it does not fail a test that mocks the
+  The middleware therefore re-runs **the same three `assert*` functions** on
+  the incoming update merged over the stored product, before the route reaches
+  the workflow. It loads the stored product with its `product_options`
+  (`PRODUCT_OPTION_FIELDS`, shared with the hook) and the merge carries them
+  through untouched. The body's `option_ids` can relink the product's options,
+  but it is not a guarded key and the middleware does not resolve a new option
+  set from it, so such a save is checked only by the hook, after
+  `updateProductsStep` (see the Custom-option bullet in
+  [Layout and config](#layout-and-config)). Both the middleware and hook
+  queries must stay unpaginated: with `skip` or `cursor`, `query.graph` calls
+  `listAndCountProducts`, which, like `retrieveProduct`, strips
+  `product_options`, and the publish check then refuses the product as having
+  no such option. **It duplicates no rules** — the rules stay in
+  `@craftynp/types` and the `src/lib` guards — and it must keep merging rather
+  than validating the body alone, because Medusa merges product metadata (a
+  patch of one key leaves the rest in place). Deleting it does not fail a test that mocks the
   workflow; it fails only against a real save, which is how this was found.
   The hook stays as the catch-all for every path that never touches HTTP.
 - **A malformed customization declaration is rejected at any status; an
@@ -1176,7 +1348,8 @@ CNP-79.
   an input still on — or a value outside the registry's vocabulary is wrong
   whatever the status. A product that is customizable but asks for nothing is a
   draft mid-setup, and is refused only when it is published, the same line the
-  shipping-dimension guard draws.
+  shipping-dimension guard draws. A custom size whose Custom option is unnamed,
+  or named but not on the product, is incomplete in the same way.
 
 ## Testing
 

@@ -30,8 +30,10 @@ import {
   resolveMinOrderQuantity,
   resolveProductCustomization,
   unmeasuredOptionValues,
+  validateCustomSizeOption,
   type CustomizationInputMode,
   type ProductCustomization,
+  type ProductOwnOptionLike,
 } from "@craftynp/types";
 
 import { sdk } from "../lib/client";
@@ -65,12 +67,12 @@ const SIZE_FIELDS = [
   {
     key: "optionTitle",
     label: "Preset size option",
-    hint: "The option group the custom size replaces, exactly as it is titled — leave blank and the presets are untouched.",
+    hint: "The option group the custom size replaces, titled exactly as it is under Options. Required before a custom-size product can be published: without it the backend cannot tell a custom order from a preset, and a shopper's own size could be charged at a cheaper preset's price. A product with no preset sizes still needs one — give it a Size option whose only value is Custom.",
   },
   {
     key: "optionValue",
     label: "Custom option value",
-    hint: "The value on that group the storefront selects while the shopper is entering their own size.",
+    hint: "The value on that option that means a custom size, spelled exactly as it is under Options. The storefront selects it while the shopper enters their own size. Required before a custom-size product can be published.",
   },
   {
     key: "ratePerSquareInch",
@@ -133,7 +135,7 @@ const ProductCustomizationWidget = ({
     queryFn: () =>
       sdk.admin.product.retrieve(data.id, {
         fields:
-          "id,metadata,options.title,options.values.value,*options.values",
+          "id,metadata,options.title,options.values.value,*options.values,product_options.product_option.title,product_options.values.value",
       }),
   });
 
@@ -174,6 +176,22 @@ const ProductCustomizationWidget = ({
     );
   }, [product]);
 
+  const draft: ProductCustomization = {
+    ...customization,
+    size: {
+      minInches: Number(size.minInches),
+      maxInches: Number(size.maxInches),
+      optionTitle: size.optionTitle.trim() || null,
+      optionValue: size.optionValue.trim() || null,
+      ratePerSquareInch: readRateDraft(size.ratePerSquareInch),
+      priceFloor: readRateDraft(size.priceFloor),
+    },
+    text: {
+      maxLength:
+        readTextLimitDraft(textMaxLength) ?? CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
+    },
+  };
+
   const save = useMutation({
     // Re-read immediately before writing rather than spreading this widget's
     // own cached copy. Medusa replaces the metadata column wholesale, and the
@@ -188,22 +206,7 @@ const ProductCustomizationWidget = ({
       return sdk.admin.product.update(data.id, {
         metadata: {
           ...(fresh.product.metadata ?? {}),
-          ...customizationMetadataPatch({
-            ...customization,
-            size: {
-              minInches: Number(size.minInches),
-              maxInches: Number(size.maxInches),
-              optionTitle: size.optionTitle.trim() || null,
-              optionValue: size.optionValue.trim() || null,
-              ratePerSquareInch: readRateDraft(size.ratePerSquareInch),
-              priceFloor: readRateDraft(size.priceFloor),
-            },
-            text: {
-              maxLength:
-                readTextLimitDraft(textMaxLength) ??
-                CUSTOM_TEXT_FALLBACK_MAX_LENGTH,
-            },
-          }),
+          ...customizationMetadataPatch(draft),
           [MIN_ORDER_QUANTITY_METADATA_KEY]: orderMinimum.trim(),
         },
       });
@@ -235,6 +238,16 @@ const ProductCustomizationWidget = ({
 
   const boundsAreSet = [size.minInches, size.maxInches].every(
     (bound) => Number(bound) > 0,
+  );
+
+  const optionIsNamed =
+    draft.size.optionTitle !== null && draft.size.optionValue !== null;
+
+  const customSizeOption = validateCustomSizeOption(
+    customizationMetadataPatch(draft),
+    (product.product as { product_options?: ProductOwnOptionLike[] | null })
+      .product_options,
+    { published: true },
   );
 
   const pricingIsSet =
@@ -392,6 +405,22 @@ const ProductCustomizationWidget = ({
           <Hint variant="error">
             A custom size needs both bounds. Publishing it like this is
             rejected.
+          </Hint>
+        ) : null}
+
+        {asksForSize && !optionIsNamed ? (
+          <Hint variant="error">
+            A custom size needs its preset size option and Custom value named,
+            or a shopper's own size could be charged at a cheaper preset's
+            price. Publishing it like this is rejected.
+          </Hint>
+        ) : null}
+
+        {asksForSize && !customSizeOption.ok ? (
+          <Hint variant="error">
+            The named Custom option does not match this product:{" "}
+            {customSizeOption.message}. Check the spelling under Options —
+            publishing it like this is rejected.
           </Hint>
         ) : null}
 
