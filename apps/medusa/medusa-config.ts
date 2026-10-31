@@ -6,7 +6,7 @@ import {
 } from "@medusajs/framework/utils";
 
 import { parseCallbackUrlList } from "./src/lib/callback-url";
-import { SHIPSTATION_MODULE } from "./src/modules/shipstation";
+import { SITE_CONTENT_MODULE } from "./src/modules/site-content";
 
 loadEnv(process.env.NODE_ENV || "development", process.cwd());
 
@@ -166,7 +166,7 @@ module.exports = defineConfig({
     },
     {
       resolve: "@medusajs/medusa/fulfillment",
-      dependencies: [SHIPSTATION_MODULE, ContainerRegistrationKeys.QUERY],
+      dependencies: [SITE_CONTENT_MODULE],
       options: {
         providers: [
           { resolve: "@medusajs/medusa/fulfillment-manual", id: "manual" },

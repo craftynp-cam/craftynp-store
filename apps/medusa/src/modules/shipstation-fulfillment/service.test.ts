@@ -41,18 +41,22 @@ function makeContext(overrides: Partial<typeof address> = {}) {
   } as never;
 }
 
-function makeProvider(graphResult: unknown[] = []) {
-  const graph = jest.fn().mockResolvedValue({ data: graphResult });
-  const getUspsRates = jest.fn();
+function makeProvider(storedFlatRate?: string) {
+  const listSiteContentEntries = jest
+    .fn()
+    .mockResolvedValue(
+      storedFlatRate == null
+        ? []
+        : [{ key: "shipping_flat_rate", value: storedFlatRate }],
+    );
   const logger = { warn: jest.fn(), error: jest.fn() };
 
   const provider = new ShipStationFulfillmentProviderService({
     logger: logger as never,
-    query: { graph } as never,
-    shipstation: { getUspsRates } as never,
+    siteContent: { listSiteContentEntries } as never,
   } as never);
 
-  return { provider, graph, getUspsRates, logger };
+  return { provider, listSiteContentEntries, logger };
 }
 
 describe("ShipStationFulfillmentProviderService", () => {
@@ -67,7 +71,7 @@ describe("ShipStationFulfillmentProviderService", () => {
   });
 
   it("charges the signed amount directly when the quote token is valid", async () => {
-    const { provider, graph, getUspsRates } = makeProvider();
+    const { provider, listSiteContentEntries } = makeProvider("12.00");
 
     const result = await provider.calculatePrice(
       {},
@@ -84,144 +88,65 @@ describe("ShipStationFulfillmentProviderService", () => {
       calculated_amount: 7.42,
       is_calculated_price_tax_inclusive: false,
     });
-    expect(graph).not.toHaveBeenCalled();
-    expect(getUspsRates).not.toHaveBeenCalled();
+    expect(listSiteContentEntries).not.toHaveBeenCalled();
   });
 
-  it("re-estimates using the product's dimensions when the variant has none of its own", async () => {
-    // This is the exact shape that broke: Medusa's own cart-refresh context
-    // only ever fetches items.variant.{weight,length,width,height} and
-    // items.product.weight, never the product's length/width/height — so a
-    // variant relying on product-level dimensions always looked incomplete
-    // there. The provider must re-query authoritatively instead.
-    const { provider, graph, getUspsRates } = makeProvider([
-      {
-        id: "variant_1",
-        weight: null,
-        length: null,
-        width: null,
-        height: null,
-        product: { weight: 400, length: 20, width: 15, height: 10 },
-      },
-    ]);
-    getUspsRates.mockResolvedValue([
-      {
-        rateId: "se-2",
-        carrierName: "USPS",
-        serviceName: "USPS Ground Advantage",
-        serviceCode: "usps_ground_advantage",
-        amount: 7.6,
-        currencyCode: "usd",
-        deliveryDays: 4,
-        estimatedDeliveryDate: null,
-      },
-    ]);
+  it("re-prices an expired flat-rate quote at the current flat rate", async () => {
+    const { provider } = makeProvider("10.00");
 
     const result = await provider.calculatePrice(
       {},
       {
-        rateId: "se-1",
-        serviceCode: "usps_ground_advantage",
-        // A mismatched cart signature (wrong postal code) forces the
-        // re-estimate path even though the token is otherwise well-formed.
-        quoteToken: issueToken({
-          cs: cartSignature({ ...cart, postalCode: "00000" }),
-        }),
-        amount: 7.42,
+        rateId: "flat_rate",
+        serviceCode: "flat_rate",
+        quoteToken: issueToken({ svc: "flat_rate", amt: 10, exp: 1 }),
+        amount: 10,
       },
       makeContext(),
     );
 
-    expect(graph).toHaveBeenCalledWith(
-      expect.objectContaining({ entity: "variant" }),
-    );
-    expect(getUspsRates).toHaveBeenCalledWith(
-      expect.objectContaining({
-        parcel: { weight: 400, length: 20, width: 15, height: 10 },
-      }),
-    );
     expect(result).toEqual({
-      calculated_amount: 7.6,
+      calculated_amount: 10,
       is_calculated_price_tax_inclusive: false,
     });
   });
 
-  it("throws when neither the variant nor the product has dimensions", async () => {
-    const { provider } = makeProvider([
-      {
-        id: "variant_1",
-        weight: null,
-        length: null,
-        width: null,
-        height: null,
-        product: null,
-      },
-    ]);
+  it("uses the default flat rate when the owner has never set one", async () => {
+    const { provider } = makeProvider();
 
-    await expect(
-      provider.calculatePrice(
-        {},
-        {
-          rateId: "se-1",
-          serviceCode: "usps_ground_advantage",
-          quoteToken: issueToken({ cs: "wrong-signature" }),
-          amount: 7.42,
-        },
-        makeContext(),
-      ),
-    ).rejects.toThrow(/missing dimensions/);
+    const result = await provider.calculatePrice(
+      {},
+      {
+        rateId: "flat_rate",
+        serviceCode: "flat_rate",
+        quoteToken: issueToken({ cs: "wrong-signature" }),
+        amount: 10,
+      },
+      makeContext(),
+    );
+
+    expect(result.calculated_amount).toBe(10);
   });
 
-  it("throws when the fresh amount is outside tolerance of the client-claimed amount", async () => {
-    const { provider, getUspsRates } = makeProvider([
-      {
-        id: "variant_1",
-        weight: 400,
-        length: 20,
-        width: 15,
-        height: 10,
-        product: null,
-      },
-    ]);
-    getUspsRates.mockResolvedValue([
-      {
-        rateId: "se-2",
-        carrierName: "USPS",
-        serviceName: "USPS Ground Advantage",
-        serviceCode: "usps_ground_advantage",
-        amount: 25.0,
-        currencyCode: "usd",
-        deliveryDays: 4,
-        estimatedDeliveryDate: null,
-      },
-    ]);
+  it("throws when the flat rate has moved out of tolerance since the quote", async () => {
+    const { provider } = makeProvider("25.00");
 
     await expect(
       provider.calculatePrice(
         {},
         {
-          rateId: "se-1",
-          serviceCode: "usps_ground_advantage",
+          rateId: "flat_rate",
+          serviceCode: "flat_rate",
           quoteToken: issueToken({ cs: "wrong-signature" }),
-          amount: 7.42,
+          amount: 10,
         },
         makeContext(),
       ),
     ).rejects.toThrow(/out of tolerance/);
   });
 
-  it("throws when no live rate matches the requested service code", async () => {
-    const { provider, getUspsRates } = makeProvider([
-      {
-        id: "variant_1",
-        weight: 400,
-        length: 20,
-        width: 15,
-        height: 10,
-        product: null,
-      },
-    ]);
-    getUspsRates.mockResolvedValue([]);
+  it("refuses to re-price a quote for a service that is no longer offered", async () => {
+    const { provider } = makeProvider("7.42");
 
     await expect(
       provider.calculatePrice(

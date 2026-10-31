@@ -12,6 +12,7 @@ describe("toSitemapEntries", () => {
       "https://thecraftynp.org/",
       "https://thecraftynp.org/products",
       "https://thecraftynp.org/about",
+      "https://thecraftynp.org/custom-quote",
       "https://thecraftynp.org/glitter",
       "https://thecraftynp.org/glitter/specialty-glitter",
     ]);
@@ -24,6 +25,7 @@ describe("toSitemapEntries", () => {
       "https://thecraftynp.org/",
       "https://thecraftynp.org/products",
       "https://thecraftynp.org/about",
+      "https://thecraftynp.org/custom-quote",
       "https://thecraftynp.org/glitter/specialty-glitter",
     ]);
   });
@@ -43,6 +45,7 @@ describe("toSitemapEntries", () => {
       "https://thecraftynp.org/",
       "https://thecraftynp.org/products",
       "https://thecraftynp.org/about",
+      "https://thecraftynp.org/custom-quote",
       "https://thecraftynp.org/accounting-gifts",
       "https://thecraftynp.org/designs",
       "https://thecraftynp.org/glitter",
@@ -54,6 +57,7 @@ describe("toSitemapEntries", () => {
       "https://thecraftynp.org/",
       "https://thecraftynp.org/products",
       "https://thecraftynp.org/about",
+      "https://thecraftynp.org/custom-quote",
       "https://thecraftynp.org/glitter",
     ]);
   });

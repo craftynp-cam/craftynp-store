@@ -1,9 +1,4 @@
-import {
-  findRateByServiceCode,
-  parseShippingMethodData,
-  withinShippingTolerance,
-} from "./lib.js";
-import type { NormalizedRate } from "../shipstation/lib.js";
+import { parseShippingMethodData, withinShippingTolerance } from "./lib.js";
 
 describe("parseShippingMethodData", () => {
   it("accepts a valid payload", () => {
@@ -56,39 +51,5 @@ describe("withinShippingTolerance", () => {
 
   it("rejects a large increase", () => {
     expect(withinShippingTolerance(7.42, 25.0)).toBe(false);
-  });
-});
-
-describe("findRateByServiceCode", () => {
-  const rates: NormalizedRate[] = [
-    {
-      rateId: "se-1",
-      carrierName: "USPS",
-      serviceName: "USPS Ground Advantage",
-      serviceCode: "usps_ground_advantage",
-      amount: 7.42,
-      currencyCode: "usd",
-      deliveryDays: 4,
-      estimatedDeliveryDate: null,
-    },
-    {
-      rateId: "se-2",
-      carrierName: "USPS",
-      serviceName: "USPS Priority Mail",
-      serviceCode: "usps_priority_mail",
-      amount: 9.5,
-      currencyCode: "usd",
-      deliveryDays: 2,
-      estimatedDeliveryDate: null,
-    },
-  ];
-
-  it("finds a rate by service code", () => {
-    const found = findRateByServiceCode(rates, "usps_priority_mail");
-    expect(found?.rateId).toBe("se-2");
-  });
-
-  it("returns undefined when no rate matches", () => {
-    expect(findRateByServiceCode(rates, "ups_ground")).toBeUndefined();
   });
 });

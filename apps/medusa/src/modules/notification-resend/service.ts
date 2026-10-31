@@ -71,9 +71,11 @@ class ResendNotificationProviderService extends AbstractNotificationProviderServ
 
     const from = notification.from?.trim() || this.options_.from;
     const to = [notification.to];
-    const replyTo = this.options_.replyTo
-      ? { reply_to: this.options_.replyTo }
-      : {};
+    const replyToAddress =
+      typeof notification.data?.reply_to === "string"
+        ? notification.data.reply_to
+        : this.options_.replyTo;
+    const replyTo = replyToAddress ? { reply_to: replyToAddress } : {};
 
     const body = JSON.stringify(
       notification.content?.html

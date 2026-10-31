@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { absoluteUrl, DISALLOWED_PATHS, siteOrigin } from "./routes";
 
-const STATIC_PATHS = ["/", "/products", "/about"];
+const STATIC_PATHS = ["/", "/products", "/about", "/custom-quote"];
 
 function isListable(path: string): boolean {
   const segments = path.slice(1).split("/");

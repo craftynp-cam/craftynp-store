@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export type SiteContentFieldType = "text" | "longText" | "boolean" | "image";
+export type SiteContentFieldType =
+  "text" | "longText" | "boolean" | "image" | "money" | "email";
 
 export type SiteContentField = {
   key: string;
@@ -366,6 +367,26 @@ export const SITE_CONTENT_FIELDS = [
     defaultValue: "hello@thecraftynp.com",
     maxLength: 120,
   },
+  {
+    key: "shipping_flat_rate",
+    type: "money",
+    group: "Shipping",
+    label: "Flat shipping rate (USD)",
+    description:
+      "What every order pays for shipping at checkout, in dollars — for example 10.00. Changes apply to new checkouts straight away.",
+    defaultValue: "10.00",
+    maxLength: 8,
+  },
+  {
+    key: "custom_quote_email",
+    type: "email",
+    group: "Custom quotes",
+    label: "Send quote requests to",
+    description:
+      "Where the Request a custom quote form is emailed. Reply to the email to answer the customer directly.",
+    defaultValue: "info@thecraftynp.org",
+    maxLength: 254,
+  },
 ] as const satisfies readonly SiteContentField[];
 
 export type SiteContentKey = (typeof SITE_CONTENT_FIELDS)[number]["key"];
@@ -408,6 +429,16 @@ export function siteContentDefault(key: SiteContentKey): string {
   return findField(key).defaultValue;
 }
 
+const MONEY_PATTERN = /^\d{1,4}(\.\d{1,2})?$/;
+
+export function flatShippingAmount(value: string): number {
+  const trimmed = value.trim();
+  const source = MONEY_PATTERN.test(trimmed)
+    ? trimmed
+    : siteContentDefault("shipping_flat_rate");
+  return Number(source);
+}
+
 function isAllowedImageUrl(value: string): boolean {
   return value.startsWith("/") || /^https?:\/\//i.test(value);
 }
@@ -440,6 +471,23 @@ export function validateSiteContentValue(
     return {
       success: false,
       message: `${key} must be an image URL`,
+    };
+  }
+
+  if (
+    field.type === "email" &&
+    !z.string().email().safeParse(trimmed).success
+  ) {
+    return {
+      success: false,
+      message: `${key} must be an email address`,
+    };
+  }
+
+  if (field.type === "money" && !MONEY_PATTERN.test(trimmed)) {
+    return {
+      success: false,
+      message: `${key} must be a dollar amount such as 10.00`,
     };
   }
 

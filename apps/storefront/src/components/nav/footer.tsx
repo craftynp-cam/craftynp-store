@@ -33,6 +33,8 @@ const socialIcons = {
 const linkClassName =
   "text-off-white/80 transition-colors hover:text-off-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-off-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink rounded-sm";
 
+const shopItemClassName = "mb-3 break-inside-avoid";
+
 const headingClassName =
   "font-display text-sm font-bold tracking-widest text-gold uppercase";
 
@@ -40,8 +42,8 @@ export function Footer({ categories, contact }: FooterProps) {
   return (
     <footer className="bg-ink text-off-white">
       <Container className="py-14 lg:py-16">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="lg:col-span-2">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-12">
+          <div className="md:col-span-2 lg:col-span-4">
             <BrandLockup />
             <p className="mt-4 max-w-sm text-off-white/80">{SITE_TAGLINE}</p>
             <ul className="mt-6 flex items-center gap-3">
@@ -65,16 +67,16 @@ export function Footer({ categories, contact }: FooterProps) {
             </ul>
           </div>
 
-          <nav aria-label="Shop links">
+          <nav aria-label="Shop links" className="lg:col-span-5">
             <h2 className={headingClassName}>Shop</h2>
-            <ul className="mt-4 space-y-3">
-              <li>
+            <ul className="mt-4 columns-2 gap-x-6 sm:columns-3 md:columns-2 lg:columns-3">
+              <li className={shopItemClassName}>
                 <Link href="/products" className={linkClassName}>
                   All Products
                 </Link>
               </li>
               {categories.map((category) => (
-                <li key={category.href}>
+                <li key={category.href} className={shopItemClassName}>
                   <Link href={category.href} className={linkClassName}>
                     {category.name}
                   </Link>
@@ -83,7 +85,7 @@ export function Footer({ categories, contact }: FooterProps) {
             </ul>
           </nav>
 
-          <nav aria-label="Get in touch links">
+          <nav aria-label="Get in touch links" className="lg:col-span-3">
             <h2 className={headingClassName}>Get in touch</h2>
             <ul className="mt-4 space-y-3">
               {[contact.phone, contact.email].map(

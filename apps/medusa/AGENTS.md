@@ -312,12 +312,22 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
 
 ## Abuse and rate limiting
 
-Seven store routes are reachable with no session at all, and two of them spend
-money on every call: `/store/tax-quote` bills a Stripe Tax calculation and
-`/store/shipping-rates` burns the ShipStation limit. Because there is
-deliberately no flat-rate fallback, exhausting ShipStation returns
-`502 shipping_unavailable` and **blocks checkout for genuine customers** — so
-this is a denial-of-checkout vector, not only a cost one.
+Eight store routes are reachable with no session at all. `/store/tax-quote`
+bills a Stripe Tax calculation on every call, `/store/custom-quotes` emails the
+owner on every call, and `/store/shipping-rates` no longer calls ShipStation
+but still signs a quote checkout depends on.
+
+- **`/store/custom-quotes` is called straight from the browser**, like the
+  artwork presign, so its limit (`RATE_LIMIT_CUSTOM_QUOTES_PER_MINUTE`,
+  default 3) is per shopper rather than shared by everyone behind the
+  storefront's egress IP. A filled-in `company` field is the honeypot: the
+  route answers `202` and sends nothing. The email goes to the
+  `custom_quote_email` site-content field with `data.reply_to` set to the
+  shopper, which the Resend provider sends as `reply_to` in place of
+  `RESEND_REPLY_TO`. It stores no replay content, so the retry job exhausts a
+  failed one instead of resending it: the route answers `502` and the shopper
+  is told to try again, which would otherwise risk the owner getting it
+  twice.
 
 - **`rateLimit()` from `src/lib/rate-limit.ts` goes on every new anonymous store
   route that costs money or sends mail.** It is wired in the route's
@@ -400,17 +410,30 @@ plan, so those paths share one counter per client (see
   always priced by ShipStation and the amount actually charged is what gets
   recorded. The destination is still resolved from the order server-side on
   both routes.
-- **There is no flat-rate shipping fallback, deliberately.** A missing-dimension
-  parcel or any ShipStation error returns `502 shipping_unavailable` and blocks
-  checkout, because a wrong shipping charge is worse than a shopper hitting
-  Retry. `SHIPPING_OPTION_DEFAULT_AMOUNT` / `_LABEL` is a seeded catalogue
-  price, not a checkout-time fallback. Do not add one.
-- **ShipStation's `/v2/rates/estimate` response is not purchasable** and
-  excludes surcharges, so its `rate_id` cannot be looked up again later.
-  Re-verify a quote by re-estimating and comparing the fresh amount within a
-  tolerance, never by replaying the `rate_id`. `/v2/rates` is the separate,
-  authoritative call the fulfilment workspace uses, and unlike the estimate it
-  is **deliberately uncached** — the owner is choosing what to spend.
+- **Checkout charges one flat shipping rate, set by the owner.**
+  `/store/shipping-rates` answers a single `flat_rate` rate priced from the
+  `shipping_flat_rate` site-content field (a `money` field, validated as a
+  dollar amount on save and read through `flatShippingAmount` in
+  `@craftynp/types`), signed into the same quote token as before, so
+  `prepare-cart`, the tax quote and the storefront's shipping step are
+  unchanged. It calls ShipStation not at all and needs no product weight or
+  size, which is why products publish without them. `src/lib/flat-shipping.ts`
+  holds the rate and the shipping option's name, which
+  `update-shipping-option-flat-rate.ts` renamed from `Live USPS Rate` because
+  it is what the confirmation page and email print.
+  `SHIPPING_OPTION_DEFAULT_AMOUNT` / `_LABEL` is still only a seeded catalogue
+  price, not what checkout charges.
+- **An unverifiable quote is re-priced at the current flat rate, within
+  tolerance.** `calculatePrice` charges a valid token's signed amount; for an
+  expired or mismatched one it reads the flat rate again and accepts it only
+  within `withinShippingTolerance` of the quoted amount, so an owner raising
+  the rate mid-checkout blocks that cart rather than silently overcharging it.
+  A token for any other service code is refused.
+- **`ShipStationModuleService.getUspsRates` (the `/v2/rates/estimate` call) is
+  unused while checkout is flat-rate**, kept so live rates can return. Its
+  response is not purchasable and excludes surcharges; `/v2/rates` is the
+  separate, authoritative call the fulfilment workspace uses, and it is
+  **deliberately uncached** — the owner is choosing what to spend.
 - **`purchaseLabel` must never retry a timeout or a network error.** ShipStation
   documents no idempotency key on `POST /v2/labels`, so a retry can buy a second
   label and spend real money twice. Only a 429 — refused before any label
@@ -548,7 +571,7 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   payment collection's amount, i.e. `cart.total`, and `calculatePrice`
   recomputes the cart signature from the provider-context cart, never from
   client-supplied `data`. `calculatePrice` throws and blocks the cart refresh
-  when a quote can't be verified or re-estimated within tolerance.
+  when a quote can't be verified or re-priced within tolerance.
 - **In `prepare-cart`, every read that feeds the payment response must happen
   after all writes that can change `cart.total`.** A cart refresh deletes
   payment sessions, which cancels the PaymentIntent, so a pre-write snapshot
@@ -1227,10 +1250,10 @@ against a real container, schema, or workflow.
   (`Omit<StripeTaxOptions, "cacheTtlSeconds">`) with its own validator.** Do not
   merge the two option shapes — the provider is never given `cacheTtlSeconds`,
   so full-shape validation throws the first time a cart needs tax lines.
-- **`calculatePrice` must re-query variant and product dimensions itself**
-  rather than trusting `context.items[].variant`. Medusa's cart-refresh context
-  never fetches product-level length/width/height, so a variant relying on them
-  always looks incomplete.
+- **Anything that needs a product's weight or size must re-query variant and
+  product dimensions itself** rather than trusting `context.items[].variant`.
+  Medusa's cart-refresh context never fetches product-level
+  length/width/height, so a variant relying on them always looks incomplete.
 - **`createShippingOptionsWorkflow` validates a fulfillment provider against the
   stock locations actually linked to the service zone's fulfillment set**, not
   against `medusa-config.ts` — `link.create` the provider onto the stock
@@ -1308,8 +1331,9 @@ CNP-79.
   `updateProductsWorkflow`, not route middleware — a status-only publish,
   `/admin/products/batch`, CSV import, and custom workflows all bypass HTTP.
   Add any similar guard to `src/workflows/hooks/validate-products.ts`, which is
-  where the shipping-dimension, customization and Custom-option guards all
-  run. The hook's `products` payload carries no reliable options, so the
+  where the customization and Custom-option guards run. There is no longer a
+  weight-and-size guard: checkout is flat-rate, and the fulfilment workspace
+  asks for the parcel when a product has none saved. The hook's `products` payload carries no reliable options, so the
   Custom-option guard queries `product_options` for those products through
   the handler's `{ container }`. **It has to be that one file:** Medusa throws
   on a second handler for a hook it has already registered, so a new guard is
@@ -1325,7 +1349,7 @@ CNP-79.
   a product then wedged: the stored value failed the guard on every later save,
   so it could not be corrected from the UI. Verified against a real container
   in both shapes; the batch shape does roll back.
-  The middleware therefore re-runs **the same three `assert*` functions** on
+  The middleware therefore re-runs **the same two `assert*` functions** on
   the incoming update merged over the stored product, before the route reaches
   the workflow. It loads the stored product with its `product_options`
   (`PRODUCT_OPTION_FIELDS`, shared with the hook) and the merge carries them
@@ -1347,8 +1371,7 @@ CNP-79.
   incomplete one only on publish.** A contradictory record — the flag off with
   an input still on — or a value outside the registry's vocabulary is wrong
   whatever the status. A product that is customizable but asks for nothing is a
-  draft mid-setup, and is refused only when it is published, the same line the
-  shipping-dimension guard draws. A custom size whose Custom option is unnamed,
+  draft mid-setup, and is refused only when it is published. A custom size whose Custom option is unnamed,
   or named but not on the product, is incomplete in the same way.
 
 ## Testing

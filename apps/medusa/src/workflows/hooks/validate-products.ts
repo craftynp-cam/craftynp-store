@@ -12,19 +12,10 @@ import {
   type ProductCustomizationInput,
   type ProductWithOptionsInput,
 } from "../../lib/product-customization";
-import {
-  assertPublishableProducts,
-  type ProductShippingDimensionsInput,
-} from "../../lib/product-shipping-dimensions";
-
-type ValidatedProduct = ProductShippingDimensionsInput &
-  ProductCustomizationInput;
-
 async function assertProducts(
-  products: readonly ValidatedProduct[],
+  products: readonly ProductCustomizationInput[],
   container: MedusaContainer,
 ): Promise<void> {
-  assertPublishableProducts(products);
   assertDeclaredCustomization(products);
 
   if (products.length === 0) return;

@@ -15,7 +15,7 @@ export function shippingRateToOption(rate: ShippingRate): RadioCardOption {
   return {
     value: rate.rateId,
     label: displayLabel(rate),
-    description: formatDeliveryWindow(rate),
+    description: formatDeliveryWindow(rate) ?? undefined,
     trailing: formatMoney(rate.amount, rate.currencyCode),
   };
 }

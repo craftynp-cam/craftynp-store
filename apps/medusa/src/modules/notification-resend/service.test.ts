@@ -104,6 +104,20 @@ describe("ResendNotificationProviderService.send", () => {
     expect(body).not.toHaveProperty("variables");
   });
 
+  it("replies to the address the notification names over the configured one", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse({ id: "re_1" }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { service } = buildService();
+    await service.send({
+      ...CONTENT_NOTIFICATION,
+      data: { reply_to: "shopper@example.com" },
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(init.body).reply_to).toBe("shopper@example.com");
+  });
+
   it("falls back to template.id + variables when no content is provided", async () => {
     const fetchMock = jest.fn().mockResolvedValue(jsonResponse({ id: "re_1" }));
     global.fetch = fetchMock as unknown as typeof fetch;
