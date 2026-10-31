@@ -9,7 +9,7 @@ import {
 
 import { Container } from "../ui";
 
-const PIXELS_PER_SECOND = 60;
+const PIXELS_PER_SECOND = 40;
 const MIN_DURATION_SECONDS = 8;
 
 type AnnouncementBarProps = { text: string };
