@@ -6,6 +6,7 @@ import type {
 } from "@medusajs/framework/types";
 import { resolveSiteContent } from "@craftynp/types";
 
+import { replayableEmail } from "../lib/notification-replay";
 import { loadOrderConfirmation } from "../lib/order-confirmation";
 import {
   ORDER_EMAIL_FAILED_LOG_TAG,
@@ -41,10 +42,12 @@ export default async function sendOrderConfirmationEmail({
       resource_id: loaded.order.orderId,
       resource_type: "order",
       idempotency_key: `order-confirmation:${loaded.order.orderId}`,
-      content: orderConfirmationContent(loaded.order, {
-        turnaroundNote: content.order_turnaround_note,
-        shippingWindowNote: content.order_shipping_window_note,
-      }),
+      ...replayableEmail(
+        orderConfirmationContent(loaded.order, {
+          turnaroundNote: content.order_turnaround_note,
+          shippingWindowNote: content.order_shipping_window_note,
+        }),
+      ),
     });
   } catch (error) {
     logger.error(
