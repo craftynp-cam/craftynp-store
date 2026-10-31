@@ -128,6 +128,7 @@ export {
   TRACKING_STATUSES,
   allowedTransitions,
   canTransition,
+  carrierDisplayName,
   carrierTrackingUrl,
   orderStatusActorSchema,
   orderStatusDetailResponseSchema,

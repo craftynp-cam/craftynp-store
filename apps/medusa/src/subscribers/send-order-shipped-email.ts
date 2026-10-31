@@ -8,7 +8,10 @@ import type {
   Logger,
   INotificationModuleService,
 } from "@medusajs/framework/types";
+import { carrierDisplayName } from "@craftynp/types";
 
+import { ORDER_STATUS_MODULE } from "../modules/order-status";
+import type OrderStatusModuleService from "../modules/order-status/service";
 import { replayableEmail } from "../lib/notification-replay";
 import { loadOrderConfirmation } from "../lib/order-confirmation";
 import {
@@ -25,7 +28,6 @@ type FulfillmentRow = {
     tracking_number: string | null;
     tracking_url: string | null;
   }[];
-  shipping_option?: { name: string | null } | null;
 };
 
 export default async function sendOrderShippedEmail({
@@ -55,14 +57,16 @@ export default async function sendOrderShippedEmail({
 
     const { data: fulfillments } = await query.graph({
       entity: "fulfillment",
-      fields: [
-        "shipped_at",
-        "labels.tracking_number",
-        "labels.tracking_url",
-        "shipping_option.name",
-      ],
+      fields: ["shipped_at", "labels.tracking_number", "labels.tracking_url"],
       filters: { id: fulfillmentId },
     });
+
+    const orderStatus =
+      container.resolve<OrderStatusModuleService>(ORDER_STATUS_MODULE);
+    const [tracking] = await orderStatus.listShipmentTrackings({
+      fulfillment_id: fulfillmentId,
+    });
+    const carrierCode = tracking?.carrier_code;
 
     const fulfillment = fulfillments[0] as FulfillmentRow | undefined;
     const label = fulfillment?.labels?.[0];
@@ -80,10 +84,7 @@ export default async function sendOrderShippedEmail({
       idempotency_key: `order-shipped:${fulfillmentId}`,
       ...replayableEmail(
         orderShippedContent(loaded.order, {
-          carrierName:
-            fulfillment?.shipping_option?.name ??
-            loaded.order.shippingMethodName ??
-            "the carrier",
+          carrierName: carrierDisplayName(carrierCode) ?? "the carrier",
           trackingNumber: label?.tracking_number ?? "",
           trackingUrl: label?.tracking_url ?? "",
           shipDate: formatOrderDate(fulfillment?.shipped_at ?? ""),
