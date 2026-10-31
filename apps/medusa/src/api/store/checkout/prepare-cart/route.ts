@@ -8,10 +8,11 @@ import {
   createPaymentSessionsWorkflow,
   updateCartWorkflow,
 } from "@medusajs/medusa/core-flows";
-import { lineItemDetails } from "@craftynp/types";
+import { formatCheckoutLineRefusals, lineItemDetails } from "@craftynp/types";
 import type {
   CheckoutAddress,
   CheckoutLineItemDetail,
+  CheckoutLineRefusal,
   CheckoutPrepareRequest,
   LineItemCustomization,
 } from "@craftynp/types";
@@ -310,6 +311,7 @@ export async function POST(
   }
 
   const now = new Date();
+  const refusals: (CheckoutLineRefusal & { detail?: string })[] = [];
 
   for (const [index, item] of items.entries()) {
     const variant = byId.get(item.variantId);
@@ -317,11 +319,13 @@ export async function POST(
     // A customization we cannot resolve rules for is one we cannot check, and
     // storing an unchecked one is the hole this closes.
     if (!variant) {
-      return res.status(400).json({
+      refusals.push({
         error: "invalid_customization",
         reason: "unknown_variant",
-        message: `invalid_customization:unknown_variant:${item.variantId}`,
+        line: index,
+        detail: item.variantId,
       });
+      continue;
     }
 
     let requested = item.customization;
@@ -334,11 +338,12 @@ export async function POST(
       );
 
       if (!resolved.ok) {
-        return res.status(400).json({
+        refusals.push({
           error: "invalid_customization",
           reason: resolved.reason,
-          message: `invalid_customization:${resolved.reason}`,
+          line: index,
         });
+        continue;
       }
 
       requested = { ...requested, artwork: resolved.artwork };
@@ -352,19 +357,22 @@ export async function POST(
         customizationRulesForVariant(variant),
       );
     } catch (error) {
-      if (error instanceof CustomizationRejection) {
-        return res.status(400).json({
-          error: "invalid_customization",
-          reason: error.reason,
-          message: error.message,
-        });
-      }
-
-      return res.status(400).json({
-        error: "invalid_customization",
-        reason: "rejected",
-        message: describeError(error),
-      });
+      refusals.push(
+        error instanceof CustomizationRejection
+          ? {
+              error: "invalid_customization",
+              reason: error.reason,
+              input: error.input,
+              line: index,
+            }
+          : {
+              error: "invalid_customization",
+              reason: "rejected",
+              line: index,
+              detail: describeError(error),
+            },
+      );
+      continue;
     }
 
     if (item.customization != null) validated.set(index, customization);
@@ -385,17 +393,19 @@ export async function POST(
   // token proves which line the shopper was quoted for; the amount is re-derived
   // here rather than read off the request, so a tampered quote buys nothing.
   const unitPrices = new Map<number, number>();
+  let pricingFailed = false;
 
   for (const [index, item] of items.entries()) {
     const dimensions = validated.get(index)?.dimensions;
     if (dimensions == null) continue;
 
     if (item.priceQuoteToken == null) {
-      return res.status(400).json({
+      refusals.push({
         error: "invalid_price_quote",
         reason: "missing",
-        message: "invalid_price_quote:missing",
+        line: index,
       });
+      continue;
     }
 
     const expected = priceSignature({
@@ -411,12 +421,15 @@ export async function POST(
     );
 
     if (!quoteResult.valid) {
-      return res.status(400).json({
+      refusals.push({
         error: "invalid_price_quote",
         reason: quoteResult.reason,
-        message: `invalid_price_quote:${quoteResult.reason}`,
+        line: index,
       });
+      continue;
     }
+
+    if (pricingFailed) continue;
 
     let priced: Awaited<ReturnType<typeof resolveLinePrice>>;
 
@@ -430,22 +443,41 @@ export async function POST(
       logger.error(
         `[checkout:unavailable] reason=pricing_failed variant=${item.variantId} error=${describeError(error)}`,
       );
-      return res.status(502).json({
-        error: "checkout_unavailable",
-        reason: "pricing_failed",
-        message: "checkout_unavailable:pricing_failed",
-      });
+      pricingFailed = true;
+      continue;
     }
 
     if (!priced.ok) {
-      return res.status(400).json({
+      refusals.push({
         error: "invalid_price_quote",
         reason: priced.reason,
-        message: `invalid_price_quote:${priced.reason}`,
+        line: index,
       });
+      continue;
     }
 
     unitPrices.set(index, priced.price.unitAmount);
+  }
+
+  refusals.sort((a, b) => a.line - b.line);
+  const [firstRefusal] = refusals;
+
+  if (firstRefusal) {
+    return res.status(400).json({
+      error: firstRefusal.error,
+      reason: firstRefusal.reason,
+      line: firstRefusal.line,
+      lines: refusals.map(({ detail: _detail, ...refusal }) => refusal),
+      message: formatCheckoutLineRefusals(refusals),
+    });
+  }
+
+  if (pricingFailed) {
+    return res.status(502).json({
+      error: "checkout_unavailable",
+      reason: "pricing_failed",
+      message: "checkout_unavailable:pricing_failed",
+    });
   }
 
   const requestedItems = itemsSignature(

@@ -5,6 +5,9 @@ import {
   checkoutLineItemSchema,
   checkoutPrepareRequestSchema,
   checkoutPrepareResponseSchema,
+  formatCheckoutLineRefusals,
+  parseCheckoutLineRefusals,
+  type CheckoutLineRefusal,
 } from "./checkout.js";
 
 const validAddress = {
@@ -215,5 +218,97 @@ describe("checkoutCompleteResponseSchema", () => {
       orderToken: "payload.signature",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("checkout line refusals", () => {
+  const refusals: CheckoutLineRefusal[] = [
+    { error: "invalid_customization", reason: "artwork_not_found", line: 0 },
+    {
+      error: "invalid_customization",
+      reason: "missing_required",
+      input: "dimensions",
+      line: 2,
+    },
+    { error: "invalid_price_quote", reason: "expired", line: 3 },
+  ];
+
+  it("reads back every refused line it wrote, with its input key", () => {
+    const message = formatCheckoutLineRefusals(refusals);
+
+    expect(message).toBe(
+      "invalid_customization:artwork_not_found@0,invalid_customization:missing_required:dimensions@2,invalid_price_quote:expired@3",
+    );
+    expect(parseCheckoutLineRefusals(message)).toEqual(refusals);
+  });
+
+  it("reads an input key the registry spells in camelCase", () => {
+    expect(
+      parseCheckoutLineRefusals(
+        "invalid_customization:missing_required:customText@0,invalid_customization:input_off:orderNotes@1",
+      ),
+    ).toEqual([
+      {
+        error: "invalid_customization",
+        reason: "missing_required",
+        input: "customText",
+        line: 0,
+      },
+      {
+        error: "invalid_customization",
+        reason: "input_off",
+        input: "orderNotes",
+        line: 1,
+      },
+    ]);
+  });
+
+  it("carries free-text detail after the head without disturbing the parse", () => {
+    const message = formatCheckoutLineRefusals([
+      {
+        error: "invalid_customization",
+        reason: "rejected",
+        line: 1,
+        detail:
+          "Invalid line item customization — artwork: needs 300 DPI; got 12",
+      },
+    ]);
+
+    expect(message).toContain("300 DPI");
+    expect(parseCheckoutLineRefusals(message)).toEqual([
+      { error: "invalid_customization", reason: "rejected", line: 1 },
+    ]);
+  });
+
+  it.each([
+    ["an older Medusa's message with no line", "invalid_price_quote:expired"],
+    ["a refusal that is not about a line", "invalid_tax_quote:expired@0"],
+    [
+      "a reason the storefront has no words for",
+      "invalid_price_quote:haggled@0",
+    ],
+    [
+      "an input on a reason that names none",
+      "invalid_customization:artwork_not_found:artwork@0",
+    ],
+    [
+      "a required-input refusal that names no input",
+      "invalid_customization:missing_required@0",
+    ],
+    [
+      "an input key the registry does not declare",
+      "invalid_customization:input_off:engraving@0",
+    ],
+    [
+      "one malformed entry among good ones",
+      "invalid_price_quote:expired@0,oops",
+    ],
+    [
+      "a validator's free text",
+      "Invalid request: Expected type: 'string' for field 'items, 0, customization'",
+    ],
+    ["an empty message", ""],
+  ])("does not read %s as a line refusal", (_case, message) => {
+    expect(parseCheckoutLineRefusals(message)).toBeNull();
   });
 });
