@@ -22,8 +22,7 @@ export function artworkFromLedger(
   if (
     !row ||
     row.purged_at !== null ||
-    row.order_id !== null ||
-    row.promoted_at !== null ||
+    row.claimed ||
     row.uploaded_at.getTime() < checkoutWindowClosedBefore(now).getTime() ||
     !isArtworkMimeType(row.mime_type)
   ) {

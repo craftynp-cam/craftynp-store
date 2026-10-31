@@ -2,9 +2,11 @@ import {
   ARTWORK_ACCEPT,
   MAX_ARTWORK_BYTES,
   artworkExtension,
+  artworkLineState,
   artworkUploadRequestSchema,
   isVectorArtwork,
   resolveArtworkMimeType,
+  type ArtworkOrderAsset,
 } from "./artwork.js";
 
 const validRequest = {
@@ -122,5 +124,56 @@ describe("ARTWORK_ACCEPT", () => {
     expect(ARTWORK_ACCEPT).toContain(".ai");
     expect(ARTWORK_ACCEPT).toContain(".jpeg");
     expect(ARTWORK_ACCEPT).toContain("image/webp");
+  });
+});
+
+describe("artworkLineState", () => {
+  const entry = (
+    overrides: Partial<ArtworkOrderAsset> = {},
+  ): ArtworkOrderAsset => ({
+    id: "claim_2",
+    fileName: "logo.png",
+    mimeType: "image/png",
+    sizeBytes: 51_200,
+    lineItemId: "li_2",
+    uploadedAt: "2026-09-10T12:00:00.000Z",
+    promotedAt: "2026-09-11T12:00:00.000Z",
+    purgedAt: null,
+    purgeReason: null,
+    ...overrides,
+  });
+
+  it("offers the line's own filed copy for download", () => {
+    expect(artworkLineState(entry())).toEqual({
+      kind: "download",
+      claimId: "claim_2",
+    });
+  });
+
+  it("keeps a claimed line that is not yet filed waiting, rather than offering a download that cannot work", () => {
+    expect(artworkLineState(entry({ promotedAt: null }))).toEqual({
+      kind: "filing",
+    });
+  });
+
+  it("tells a line nothing has claimed apart from one waiting for its copy", () => {
+    expect(artworkLineState(undefined)).toEqual({ kind: "unclaimed" });
+  });
+
+  it.each([
+    ["staging_expired", "never_filed", null],
+    ["changed_after_inspect", "replaced", null],
+    ["delivered", "deleted", "2026-09-11T12:00:00.000Z"],
+    ["undelivered", "deleted", "2026-09-11T12:00:00.000Z"],
+  ])("reads a line purged as %s as %s", (purgeReason, kind, promotedAt) => {
+    expect(
+      artworkLineState(
+        entry({
+          promotedAt,
+          purgedAt: "2026-10-11T12:00:00.000Z",
+          purgeReason,
+        }),
+      ),
+    ).toEqual({ kind });
   });
 });

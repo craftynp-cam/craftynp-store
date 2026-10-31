@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 import { S3Client } from "@aws-sdk/client-s3";
-import type { GetObjectCommand } from "@aws-sdk/client-s3";
+import type { CopyObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 
 import {
+  ArtworkChangedAfterInspectError,
   ArtworkStorageNotConfiguredError,
   DEFAULT_SIGNED_URL_SECONDS,
   MAX_SIGNED_URL_SECONDS,
@@ -13,6 +14,8 @@ import {
   artworkObjectKey,
   clampExpiry,
   contentDisposition,
+  copyArtwork,
+  isMissingObject,
   readArtworkHead,
   readArtworkStorageOptions,
   readUploadUrlTtlSeconds,
@@ -32,6 +35,9 @@ const COMPLETE = {
   ARTWORK_STORAGE_ACCESS_KEY_ID: "craftynp",
   ARTWORK_STORAGE_SECRET_ACCESS_KEY: "craftynp-local-secret",
 } as NodeJS.ProcessEnv;
+
+const s3Error = (name: string, httpStatusCode: number) =>
+  Object.assign(new Error(name), { name, $metadata: { httpStatusCode } });
 
 describe("readArtworkStorageOptions", () => {
   it("defaults the region to auto, which is what R2 expects", () => {
@@ -170,8 +176,10 @@ describe("readArtworkHead", () => {
     );
 
     expect(send.mock.calls[0]?.[0].input.Range).toBe("bytes=0-4194303");
-    expect(head.length).toBe(4 * MIB);
-    expect(Buffer.from(head).equals(object.subarray(0, 4 * MIB))).toBe(true);
+    expect(head.bytes.length).toBe(4 * MIB);
+    expect(Buffer.from(head.bytes).equals(object.subarray(0, 4 * MIB))).toBe(
+      true,
+    );
     expect(body.destroyed).toBe(true);
     expect(body.readableEnded).toBe(false);
     expect(body.served.bytes).toBeLessThanOrEqual(4 * MIB + 1_000_000);
@@ -193,10 +201,87 @@ describe("readArtworkHead", () => {
         readArtworkStorageOptions(COMPLETE),
       );
 
-      expect(Buffer.from(head).equals(object)).toBe(true);
+      expect(Buffer.from(head.bytes).equals(object)).toBe(true);
       expect(body.readableEnded).toBe(true);
     },
   );
+
+  it("reports the ETag of the response its bytes came from, and holds a read to an ETag it is given", async () => {
+    const object = randomBytes(1024);
+    send.mockResolvedValue({ Body: storedBody(object), ETag: '"etag-1"' });
+
+    const head = await readArtworkHead(
+      "staging/upl_1.jpg",
+      object.length,
+      readArtworkStorageOptions(COMPLETE),
+      { ifMatch: '"etag-1"' },
+    );
+
+    expect(send.mock.calls[0]?.[0].input.IfMatch).toBe('"etag-1"');
+    expect(head.etag).toBe('"etag-1"');
+  });
+});
+
+describe("copyArtwork", () => {
+  const send = jest.fn<Promise<unknown>, [CopyObjectCommand]>();
+  const FROM = "staging/upl_1.png";
+  const TO = "artwork/order_1/li_1/upl_1.png";
+
+  beforeEach(() => {
+    __resetForTests();
+    send.mockReset();
+    (S3Client as unknown as jest.Mock).mockImplementation(() => ({ send }));
+  });
+
+  it("copies only while the source still carries the ETag inspect recorded", async () => {
+    send.mockResolvedValue({});
+
+    await copyArtwork(FROM, TO, readArtworkStorageOptions(COMPLETE), {
+      sourceEtag: '"etag-1"',
+    });
+
+    expect(send.mock.calls[0]?.[0].input.CopySourceIfMatch).toBe('"etag-1"');
+  });
+
+  it("copies an upload inspected before ETags were recorded without a condition", async () => {
+    send.mockResolvedValue({});
+
+    await copyArtwork(FROM, TO, readArtworkStorageOptions(COMPLETE), {
+      sourceEtag: null,
+    });
+
+    expect(send.mock.calls[0]?.[0].input.CopySourceIfMatch).toBeUndefined();
+  });
+
+  it.each([
+    [
+      "the PreconditionFailed MinIO answers",
+      s3Error("PreconditionFailed", 412),
+    ],
+    ["a 412 under any other name", s3Error("Unknown", 412)],
+  ])(
+    "reports %s as the upload having changed after inspect",
+    async (_label, error) => {
+      send.mockRejectedValue(error);
+
+      await expect(
+        copyArtwork(FROM, TO, readArtworkStorageOptions(COMPLETE), {
+          sourceEtag: '"etag-1"',
+        }),
+      ).rejects.toBeInstanceOf(ArtworkChangedAfterInspectError);
+    },
+  );
+
+  it("passes a missing source through unchanged, so promotion can still fall back to a filed copy", async () => {
+    const error = s3Error("NoSuchKey", 404);
+    send.mockRejectedValue(error);
+
+    await expect(
+      copyArtwork(FROM, TO, readArtworkStorageOptions(COMPLETE), {
+        sourceEtag: '"etag-1"',
+      }),
+    ).rejects.toBe(error);
+  });
 });
 
 describe("contentDisposition", () => {
@@ -212,4 +297,25 @@ describe("contentDisposition", () => {
       "filename*=UTF-8''Kid%27s%20drawing.png",
     );
   });
+});
+
+describe("isMissingObject", () => {
+  it.each([
+    ["a HEAD of a missing key", s3Error("NotFound", 404)],
+    ["a copy from a missing key", s3Error("NoSuchKey", 404)],
+  ])("reads %s as missing", (_label, error) => {
+    expect(isMissingObject(error)).toBe(true);
+  });
+
+  it.each([
+    ["a storage outage", s3Error("InternalError", 500)],
+    ["refused credentials", s3Error("AccessDenied", 403)],
+    ["a dropped connection", new Error("socket hang up")],
+    ["a non-error rejection", "timeout"],
+  ])(
+    "does not read %s as missing, so a transient failure never abandons a paid line",
+    (_label, error) => {
+      expect(isMissingObject(error)).toBe(false);
+    },
+  );
 });

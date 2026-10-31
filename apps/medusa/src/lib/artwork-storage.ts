@@ -3,7 +3,6 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
-  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -27,6 +26,11 @@ export type ArtworkStorageOptions = {
   forcePathStyle: boolean;
 };
 
+export type ArtworkHead = {
+  bytes: Uint8Array;
+  etag: string | null;
+};
+
 export class ArtworkStorageNotConfiguredError extends Error {
   constructor(missing: readonly string[]) {
     super(`Artwork storage is not configured: missing ${missing.join(", ")}`);
@@ -38,6 +42,13 @@ export class UnsafeArtworkKeyPartError extends Error {
   constructor(part: string) {
     super(`Refusing to build an artwork key from ${JSON.stringify(part)}`);
     this.name = "UnsafeArtworkKeyPartError";
+  }
+}
+
+export class ArtworkChangedAfterInspectError extends Error {
+  constructor(key: string) {
+    super(`Artwork at ${key} changed after it was inspected`);
+    this.name = "ArtworkChangedAfterInspectError";
   }
 }
 
@@ -207,17 +218,6 @@ export function contentDisposition(fileName: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${extended}`;
 }
 
-export async function headArtwork(
-  key: string,
-  options: ArtworkStorageOptions = readArtworkStorageOptions(),
-): Promise<{ sizeBytes: number }> {
-  const result = await s3(options).send(
-    new HeadObjectCommand({ Bucket: options.bucket, Key: key }),
-  );
-
-  return { sizeBytes: result.ContentLength ?? 0 };
-}
-
 // The head of the object is all any of the supported formats needs to name its
 // dimensions, so this reads a slice rather than pulling a 25 MB print file
 // through Medusa. R2 and the local MinIO container both serve Range.
@@ -225,19 +225,22 @@ export async function readArtworkHead(
   key: string,
   byteCount: number,
   options: ArtworkStorageOptions = readArtworkStorageOptions(),
-): Promise<Uint8Array> {
+  condition: { ifMatch?: string } = {},
+): Promise<ArtworkHead> {
   const limit = Math.min(byteCount, ARTWORK_FALLBACK_READ_BYTES);
   const result = await s3(options).send(
     new GetObjectCommand({
       Bucket: options.bucket,
       Key: key,
       Range: `bytes=0-${limit - 1}`,
+      IfMatch: condition.ifMatch,
     }),
   );
 
-  if (!result.Body) return new Uint8Array();
+  const etag = result.ETag ?? null;
+  if (!result.Body) return { bytes: new Uint8Array(), etag };
 
-  return readAtMost(result.Body as Readable, limit);
+  return { bytes: await readAtMost(result.Body as Readable, limit), etag };
 }
 
 async function readAtMost(body: Readable, limit: number): Promise<Uint8Array> {
@@ -262,17 +265,26 @@ export async function copyArtwork(
   fromKey: string,
   toKey: string,
   options: ArtworkStorageOptions = readArtworkStorageOptions(),
+  condition: { sourceEtag?: string | null } = {},
 ): Promise<void> {
-  await s3(options).send(
-    new CopyObjectCommand({
-      Bucket: options.bucket,
-      Key: toKey,
-      CopySource: `${options.bucket}/${fromKey}`
-        .split("/")
-        .map(encodeURIComponent)
-        .join("/"),
-    }),
-  );
+  try {
+    await s3(options).send(
+      new CopyObjectCommand({
+        Bucket: options.bucket,
+        Key: toKey,
+        CopySource: `${options.bucket}/${fromKey}`
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/"),
+        CopySourceIfMatch: condition.sourceEtag ?? undefined,
+      }),
+    );
+  } catch (error) {
+    if (isPreconditionFailed(error)) {
+      throw new ArtworkChangedAfterInspectError(fromKey);
+    }
+    throw error;
+  }
 }
 
 export async function deleteArtwork(
@@ -282,6 +294,29 @@ export async function deleteArtwork(
   await s3(options).send(
     new DeleteObjectCommand({ Bucket: options.bucket, Key: key }),
   );
+}
+
+function storageFailure(error: unknown): { name?: unknown; status?: unknown } {
+  if (error == null || typeof error !== "object") return {};
+
+  const { name, $metadata } = error as {
+    name?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+
+  return { name, status: $metadata?.httpStatusCode };
+}
+
+export function isMissingObject(error: unknown): boolean {
+  const { name, status } = storageFailure(error);
+
+  return name === "NotFound" || name === "NoSuchKey" || status === 404;
+}
+
+function isPreconditionFailed(error: unknown): boolean {
+  const { name, status } = storageFailure(error);
+
+  return name === "PreconditionFailed" || status === 412;
 }
 
 export function __resetForTests(): void {

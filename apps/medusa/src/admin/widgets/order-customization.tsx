@@ -4,8 +4,10 @@ import { defineWidgetConfig } from "@medusajs/admin-sdk";
 import { Spinner } from "@medusajs/icons";
 import { Button, Container, Heading, Hint, Text, toast } from "@medusajs/ui";
 import type { AdminOrder, DetailWidgetProps } from "@medusajs/framework/types";
+import { artworkLineState } from "@craftynp/types";
 import type {
   ArtworkDownloadResponse,
+  ArtworkLineState,
   ArtworkOrderAsset,
   ArtworkOrderListResponse,
   CheckoutLineItemDetail,
@@ -76,14 +78,30 @@ function formatBytes(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-const DownloadArtworkButton = ({ assetId }: { assetId: string }) => {
+const ARTWORK_HINTS = {
+  unclaimed:
+    "Not picked up for filing yet. If this still shows a few minutes after the order was placed, nothing will retry it — look for [artwork:promote-failed] on this order, or ask the customer to send the file again.",
+  filing:
+    "Still being filed. The file is safe in staging and is retried every 15 minutes — reload shortly.",
+  never_filed:
+    "This file was never filed: its upload expired before it could be copied onto the order. Ask the customer to send it again.",
+  replaced:
+    "This file was changed after it was checked, so it was not filed. Ask the customer to send it again.",
+  deleted:
+    "This file passed its retention window and was deleted. The order keeps every other detail.",
+} as const satisfies Record<
+  Exclude<ArtworkLineState["kind"], "download">,
+  string
+>;
+
+const DownloadArtworkButton = ({ claimId }: { claimId: string }) => {
   const [isPending, setIsPending] = useState(false);
 
   async function download() {
     setIsPending(true);
     try {
       const { url } = await sdk.client.fetch<ArtworkDownloadResponse>(
-        `/admin/artwork/${assetId}`,
+        `/admin/artwork/${claimId}`,
       );
       window.open(url, "_blank", "noopener,noreferrer");
     } catch {
@@ -107,47 +125,62 @@ const DownloadArtworkButton = ({ assetId }: { assetId: string }) => {
 
 const ArtworkBlock = ({
   artwork,
-  asset,
+  stored,
   isLoading,
+  isError,
 }: {
   artwork: NonNullable<LineItemCustomization["artwork"]>;
-  asset: ArtworkOrderAsset | undefined;
+  stored: ArtworkOrderAsset | undefined;
   isLoading: boolean;
-}) => (
-  <div className="flex flex-col gap-2">
-    <Text size="small" weight="plus">
-      Artwork
-    </Text>
-    <Text size="small">
-      {artwork.fileName}
-      {artwork.widthPx && artwork.heightPx
-        ? ` · ${artwork.widthPx} × ${artwork.heightPx} px`
-        : ""}
-      {` · ${formatBytes(artwork.sizeBytes)}`}
-    </Text>
+  isError: boolean;
+}) => {
+  const state = artworkLineState(stored);
 
-    {isLoading ? (
-      <Spinner className="animate-spin" />
-    ) : asset?.purgedAt ? (
-      <Hint variant="error">
-        This file passed its retention window and was deleted. The order keeps
-        every other detail.
-      </Hint>
-    ) : asset ? (
-      <DownloadArtworkButton assetId={asset.id} />
-    ) : (
-      <Hint>
-        Still being filed. The file is safe in staging and is retried every 15
-        minutes — reload shortly.
-      </Hint>
-    )}
-  </div>
-);
+  return (
+    <div className="flex flex-col gap-2">
+      <Text size="small" weight="plus">
+        Artwork
+      </Text>
+      <Text size="small">
+        {artwork.fileName}
+        {artwork.widthPx && artwork.heightPx
+          ? ` · ${artwork.widthPx} × ${artwork.heightPx} px`
+          : ""}
+        {` · ${formatBytes(artwork.sizeBytes)}`}
+      </Text>
+
+      {isLoading ? (
+        <Spinner className="animate-spin" />
+      ) : isError ? (
+        <Hint variant="error">
+          Could not load this order&apos;s artwork. Reload the page to try
+          again.
+        </Hint>
+      ) : state.kind === "download" ? (
+        <DownloadArtworkButton claimId={state.claimId} />
+      ) : (
+        <Hint
+          variant={
+            state.kind === "filing" || state.kind === "unclaimed"
+              ? "info"
+              : "error"
+          }
+        >
+          {ARTWORK_HINTS[state.kind]}
+        </Hint>
+      )}
+    </div>
+  );
+};
 
 const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
   const lines = customizedLines(data);
 
-  const { data: stored, isLoading } = useQuery({
+  const {
+    data: stored,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["order-artwork", data.id],
     queryFn: () =>
       sdk.client.fetch<ArtworkOrderListResponse>("/admin/artwork", {
@@ -158,10 +191,8 @@ const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
 
   if (lines.length === 0) return null;
 
-  const assetByLine = new Map(
-    (stored?.artwork ?? []).flatMap((asset) =>
-      asset.lineItemId ? [[asset.lineItemId, asset] as const] : [],
-    ),
+  const storedByLine = new Map(
+    (stored?.artwork ?? []).map((entry) => [entry.lineItemId, entry] as const),
   );
 
   return (
@@ -201,8 +232,9 @@ const OrderCustomizationWidget = ({ data }: DetailWidgetProps<AdminOrder>) => {
             {line.customization?.artwork ? (
               <ArtworkBlock
                 artwork={line.customization.artwork}
-                asset={assetByLine.get(line.id)}
+                stored={storedByLine.get(line.id)}
                 isLoading={isLoading}
+                isError={isError}
               />
             ) : null}
           </div>

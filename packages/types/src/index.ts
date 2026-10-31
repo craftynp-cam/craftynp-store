@@ -13,6 +13,7 @@ export {
   artworkExtension,
   artworkInspectResponseSchema,
   artworkKindSchema,
+  artworkLineState,
   artworkMimeTypeSchema,
   artworkUploadRequestSchema,
   artworkUploadResponseSchema,
@@ -166,6 +167,7 @@ export {
 
 export type {
   ArtworkDownloadResponse,
+  ArtworkLineState,
   ArtworkOrderAsset,
   ArtworkOrderListResponse,
   ArtworkInspectResponse,

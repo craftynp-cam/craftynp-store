@@ -9,7 +9,7 @@ import {
   STAGING_WINDOW_DAYS,
   stagingWindowClosedBefore,
 } from "../lib/artwork-retention";
-import { promoteArtworkAsset } from "../lib/promote-artwork";
+import { promoteArtworkClaim } from "../lib/promote-artwork";
 import { describeError } from "../lib/describe-error";
 
 // The subscriber swallows its failures so a paid order is never rolled back,
@@ -21,29 +21,25 @@ export async function promotePendingArtwork(container: MedusaContainer) {
 
   const cutoff = stagingWindowClosedBefore(new Date());
 
-  for (const asset of await artwork.listPendingPromotion()) {
-    if (!asset.order_id || !asset.line_item_id) continue;
-
-    // Past the staging window the source object is gone, so retrying can only
-    // fail. Give up once, loudly, rather than emitting a warn every 15 minutes
-    // forever on a tag that is an alerting target.
-    if (asset.uploaded_at.getTime() < cutoff.getTime()) {
-      logger.warn(
-        `${ARTWORK_PROMOTE_ABANDONED_LOG_TAG} asset=${asset.id} order=${asset.order_id} key=${asset.staging_key} age_days=${STAGING_WINDOW_DAYS}+ reason=staging_expired`,
-      );
-      await artwork.markPurged(asset.id, "staging_expired");
-      continue;
-    }
-
+  for (const claim of await artwork.listPendingClaims()) {
     try {
-      await promoteArtworkAsset(
-        { asset, orderId: asset.order_id, lineItemId: asset.line_item_id },
-        artwork,
-        logger,
-      );
+      const outcome = await promoteArtworkClaim(claim, artwork, logger);
+
+      // Past the staging window with no filed sibling to copy from, retrying
+      // can only fail. Give up once, loudly, rather than emitting a warn every
+      // 15 minutes forever on a tag that is an alerting target.
+      if (
+        outcome === "source_missing" &&
+        claim.asset.uploaded_at.getTime() < cutoff.getTime()
+      ) {
+        logger.warn(
+          `${ARTWORK_PROMOTE_ABANDONED_LOG_TAG} claim=${claim.id} asset=${claim.asset_id} order=${claim.order_id} key=${claim.asset.staging_key} age_days=${STAGING_WINDOW_DAYS}+ reason=staging_expired`,
+        );
+        await artwork.markClaimPurged(claim.id, "staging_expired");
+      }
     } catch (error) {
       logger.warn(
-        `${ARTWORK_PROMOTE_FAILED_LOG_TAG} asset=${asset.id} error=${describeError(error)}`,
+        `${ARTWORK_PROMOTE_FAILED_LOG_TAG} claim=${claim.id} error=${describeError(error)}`,
       );
     }
   }
