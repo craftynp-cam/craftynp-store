@@ -6,7 +6,10 @@ import type {
 } from "@craftynp/types";
 
 import { sdk } from "@/lib/medusa";
-import { describeUpstreamError } from "@/lib/upstream-error";
+import {
+  describeUpstreamError,
+  prepareFailureResponse,
+} from "@/lib/upstream-error";
 
 type CheckoutAddressPayload = {
   firstName: string;
@@ -99,14 +102,11 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json(response);
   } catch (error) {
-    const detail = describeUpstreamError(error);
     console.error(
-      `Could not prepare checkout (upstream ${detail.upstreamStatus})`,
+      `Could not prepare checkout (upstream ${describeUpstreamError(error).upstreamStatus})`,
       error,
     );
-    return NextResponse.json(
-      { error: "checkout_unavailable", ...detail },
-      { status: 502 },
-    );
+    const failure = prepareFailureResponse(error);
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 }

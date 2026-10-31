@@ -1,6 +1,7 @@
 import {
   allowedTransitions,
   canTransition,
+  carrierDisplayName,
   carrierTrackingUrl,
   trackingStatusFromShipStation,
   transitionRejection,
@@ -79,6 +80,17 @@ describe("allowedTransitions", () => {
 
   it("offers nothing once delivered", () => {
     expect([...allowedTransitions("delivered")]).toEqual([]);
+  });
+});
+
+describe("carrierDisplayName", () => {
+  it("names a Stamps.com label as USPS, whatever its case", () => {
+    expect(carrierDisplayName(" Stamps_com ")).toBe("USPS");
+  });
+
+  it("returns null for a carrier it does not know", () => {
+    expect(carrierDisplayName("ontrac")).toBeNull();
+    expect(carrierDisplayName(null)).toBeNull();
   });
 });
 

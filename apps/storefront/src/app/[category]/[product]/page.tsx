@@ -8,6 +8,7 @@ import {
   StoreUnavailable,
 } from "@/components";
 import { MedusaUnavailableError } from "@/lib/medusa-error";
+import { pageMetadata } from "@/lib/page-metadata";
 import { fetchProductByHandle } from "@/lib/product";
 import { fetchRegion } from "@/lib/region";
 import { fetchSiteContent } from "@/lib/site-content";
@@ -36,6 +37,7 @@ export async function generateMetadata({
   return {
     title: product.title,
     description: product.description || undefined,
+    ...pageMetadata(product.href, product.images[0]),
   };
 }
 
@@ -67,8 +69,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           <ProductDetailView
             product={product}
-            turnaroundNote={content.order_turnaround_note}
-            shippingWindowNote={content.order_shipping_window_note}
+            processContent={{
+              turnaroundNote: content.order_turnaround_note,
+              shippingWindowNote: content.order_shipping_window_note,
+              readyToShipHeading: content.ready_to_ship_heading,
+              readyToShipStepTitle: content.ready_to_ship_step_title,
+              readyToShipStepBody: content.ready_to_ship_step_body,
+              readyToShipDispatchNote: content.ready_to_ship_dispatch_note,
+            }}
           />
         </Container>
       </main>

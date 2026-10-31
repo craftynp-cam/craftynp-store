@@ -160,6 +160,9 @@ const SiteContentPage = () => {
                         id={key}
                         value={values[key]}
                         maxLength={field.maxLength}
+                        inputMode={
+                          field.type === "money" ? "decimal" : undefined
+                        }
                         onChange={(event) =>
                           handleChange(key, event.target.value)
                         }

@@ -12,6 +12,7 @@ import {
   subscribeToCart,
 } from "@/lib/cart";
 import { checkoutTotals } from "@/lib/checkout";
+import type { CheckoutLineProblem } from "@/lib/checkout-refusal";
 import {
   readCheckoutDraft,
   readServerCheckoutDraft,
@@ -23,9 +24,13 @@ import { CartCard } from "../cards";
 
 export type CheckoutSummaryProps = {
   onEditCart: () => void;
+  lineProblems?: readonly CheckoutLineProblem[];
 };
 
-export function CheckoutSummary({ onEditCart }: CheckoutSummaryProps) {
+export function CheckoutSummary({
+  onEditCart,
+  lineProblems,
+}: CheckoutSummaryProps) {
   const cart = useSyncExternalStore(subscribeToCart, readCart, readServerCart);
   const draft = useSyncExternalStore(
     subscribeToCheckoutDraft,
@@ -56,14 +61,22 @@ export function CheckoutSummary({ onEditCart }: CheckoutSummaryProps) {
 
       <div className="bg-surface-soft px-6 py-6">
         <ul className="space-y-4">
-          {cart.lines.map((line) => (
-            <CartCard
-              key={cartLineKey(line)}
-              line={line}
-              onQuantityChange={setCartLineQuantity}
-              onRemove={removeCartLine}
-            />
-          ))}
+          {cart.lines.map((line) => {
+            const problem = lineProblems?.find(
+              (candidate) => candidate.lineId === line.lineId,
+            );
+
+            return (
+              <CartCard
+                key={cartLineKey(line)}
+                line={line}
+                onQuantityChange={setCartLineQuantity}
+                onRemove={removeCartLine}
+                editHref={problem?.editHref}
+                problem={problem?.message}
+              />
+            );
+          })}
         </ul>
       </div>
 

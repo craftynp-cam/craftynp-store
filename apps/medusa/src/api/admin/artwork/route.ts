@@ -15,18 +15,19 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     });
   }
 
-  const assets = await artwork.listForOrder(orderId);
+  const claims = await artwork.listClaimsForOrder(orderId);
 
   const payload: ArtworkOrderListResponse = {
-    artwork: assets.map((asset) => ({
-      id: asset.id,
-      fileName: asset.file_name,
-      mimeType: asset.mime_type,
-      sizeBytes: asset.size_bytes,
-      lineItemId: asset.line_item_id,
-      uploadedAt: asset.uploaded_at.toISOString(),
-      promotedAt: asset.promoted_at?.toISOString() ?? null,
-      purgedAt: asset.purged_at?.toISOString() ?? null,
+    artwork: claims.map((claim) => ({
+      id: claim.id,
+      fileName: claim.asset.file_name,
+      mimeType: claim.asset.mime_type,
+      sizeBytes: claim.asset.size_bytes,
+      lineItemId: claim.line_item_id,
+      uploadedAt: claim.asset.uploaded_at.toISOString(),
+      promotedAt: claim.promoted_at?.toISOString() ?? null,
+      purgedAt: claim.purged_at?.toISOString() ?? null,
+      purgeReason: claim.purge_reason,
     })),
   };
 

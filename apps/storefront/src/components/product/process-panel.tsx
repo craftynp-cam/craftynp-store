@@ -1,14 +1,23 @@
-import type { ProductCustomization } from "@craftynp/types";
+import { siteContentDefault } from "@craftynp/types";
+import type { ProductCustomization, SiteContentKey } from "@craftynp/types";
 
 import { joinLabels, offeredInputLabels } from "@/lib/product-customization";
 import type { OfferedInputLabels } from "@/lib/product-customization";
 
 const HEADING_ID = "product-process-heading";
 
-export type ProcessPanelProps = {
-  customization: ProductCustomization;
+export type ProcessPanelContent = {
   turnaroundNote: string;
   shippingWindowNote: string;
+  readyToShipHeading: string;
+  readyToShipStepTitle: string;
+  readyToShipStepBody: string;
+  readyToShipDispatchNote: string;
+};
+
+export type ProcessPanelProps = {
+  customization: ProductCustomization;
+  content: ProcessPanelContent;
 };
 
 type ProcessStep = {
@@ -29,10 +38,13 @@ function customizationBody({ required, optional }: OfferedInputLabels): string {
   return instruction ? `${instruction} ${invitation}` : invitation;
 }
 
+function ownerCopy(value: string, key: SiteContentKey): string {
+  return value.trim() || siteContentDefault(key);
+}
+
 function processSteps({
   customization,
-  turnaroundNote,
-  shippingWindowNote,
+  content,
 }: ProcessPanelProps): ProcessStep[] {
   const steps: ProcessStep[] = [];
 
@@ -49,16 +61,27 @@ function processSteps({
     });
   }
 
-  steps.push({
-    title: "We make it by hand",
-    body: "Your piece is made to order in the workshop — nothing is pulled off a shelf.",
-    note: turnaroundNote,
-  });
+  if (customization.isCustomizable) {
+    steps.push({
+      title: "We make it by hand",
+      body: "Your piece is made to order in the workshop — nothing is pulled off a shelf.",
+      note: content.turnaroundNote,
+    });
+  } else {
+    steps.push({
+      title: ownerCopy(
+        content.readyToShipStepTitle,
+        "ready_to_ship_step_title",
+      ),
+      body: ownerCopy(content.readyToShipStepBody, "ready_to_ship_step_body"),
+      note: content.readyToShipDispatchNote,
+    });
+  }
 
   steps.push({
     title: "It ships to you",
     body: "We pack it by hand and email you tracking the moment it leaves.",
-    note: shippingWindowNote,
+    note: content.shippingWindowNote,
   });
 
   return steps;
@@ -66,6 +89,9 @@ function processSteps({
 
 export function ProcessPanel(props: ProcessPanelProps) {
   const steps = processSteps(props);
+  const heading = props.customization.isCustomizable
+    ? "How your order is made"
+    : ownerCopy(props.content.readyToShipHeading, "ready_to_ship_heading");
 
   return (
     <section
@@ -73,12 +99,12 @@ export function ProcessPanel(props: ProcessPanelProps) {
       className="rounded-xl border border-border bg-surface p-6"
     >
       <h2 id={HEADING_ID} className="font-display text-2xl">
-        How your order is made
+        {heading}
       </h2>
 
       <ol className="mt-5 space-y-5">
         {steps.map((step, index) => (
-          <li key={step.title} className="flex gap-4">
+          <li key={index} className="flex gap-4">
             <span
               aria-hidden="true"
               className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-soft font-display text-sm"

@@ -35,6 +35,28 @@ export class ResendQuotaExceededError extends ResendSendError {
   }
 }
 
+export class ResendRejectedError extends ResendSendError {
+  constructor(status: number, body: string) {
+    super(
+      `Resend rejected the send (${status}, will not retry): ${
+        isIdempotencyPayloadMismatch(status, body)
+          ? "this idempotency key was already used with a different payload: "
+          : ""
+      }${body}`,
+      status,
+    );
+    this.name = "ResendRejectedError";
+  }
+}
+
+const PERMANENT_REJECTION =
+  /Resend rejected the send \((\d{3}), will not retry\)/;
+
+export function permanentRejectionStatus(message: string): number | null {
+  const status = PERMANENT_REJECTION.exec(message)?.[1];
+  return status ? Number(status) : null;
+}
+
 function requireString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new ResendConfigError(`${name} is required to send email via Resend`);
@@ -81,4 +103,30 @@ export function readQuotaHeaders(headers: Headers): ResendQuota {
 
 export function isQuotaExceeded(status: number, body: string): boolean {
   return status === 429 && /daily[_ -]?quota/i.test(body);
+}
+
+export function isConcurrentIdempotentRequest(
+  status: number,
+  body: string,
+): boolean {
+  return status === 409 && /concurrent_idempotent_requests/.test(body);
+}
+
+export function isIdempotencyPayloadMismatch(
+  status: number,
+  body: string,
+): boolean {
+  return status === 409 && /invalid_idempotent_request/.test(body);
+}
+
+export function isAccountRejection(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
+export function isRetryableRejection(status: number, body: string): boolean {
+  return (
+    status >= 500 ||
+    status === 429 ||
+    isConcurrentIdempotentRequest(status, body)
+  );
 }

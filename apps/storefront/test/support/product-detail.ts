@@ -68,8 +68,14 @@ export function makeProduct(
 }
 
 export const processNotes = {
-  turnaroundNote: "Made to order in 3–5 business days.",
-  shippingWindowNote: "Delivery takes another 2–5 business days.",
+  processContent: {
+    turnaroundNote: "Made to order in 3–5 business days.",
+    shippingWindowNote: "Delivery takes another 2–5 business days.",
+    readyToShipHeading: "How your order gets to you",
+    readyToShipStepTitle: "Already finished",
+    readyToShipStepBody: "Finished in the workshop before you ordered.",
+    readyToShipDispatchNote: "Leaves within 2 business days.",
+  },
 };
 
 // Stands in for Medusa: the variant's own amount, and an area price when the

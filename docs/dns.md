@@ -76,15 +76,38 @@ its nameservers, takes that mail with it.
 
 ## Zone settings
 
-| Setting          | `.org`        | `.com`               |
-| ---------------- | ------------- | -------------------- |
-| SSL/TLS          | Full (strict) | Full (strict)        |
-| Always Use HTTPS | on            | on                   |
-| Bot Fight Mode   | **on**        | **off — deliberate** |
+| Setting           | `.org`                     | `.com`               |
+| ----------------- | -------------------------- | -------------------- |
+| SSL/TLS           | Full (strict)              | Full (strict)        |
+| Always Use HTTPS  | on                         | on                   |
+| Bot Fight Mode    | **on**                     | **off — deliberate** |
+| HSTS (edge)       | **off — the app sends it** | off                  |
+| Email Obfuscation | on                         | on                   |
+| Rocket Loader     | off                        | —                    |
 
 Bot Fight Mode being off on `.com` is load-bearing, not an oversight. See the
 README. Turning it on challenges the Stripe and ShipStation webhooks and the
 storefront's server-side fetches, all of which fail silently.
+
+**HSTS is sent by the storefront, not by Cloudflare** (CNP-100). Edge HSTS
+(SSL/TLS → Edge Certificates) was read through the API on 2026-09-13 and is off
+on both zones. `apps/storefront/next.config.ts` sends
+`max-age=31536000; includeSubDomains` from production builds, where it is
+versioned and reviewed with the other security headers. Do not turn the edge
+one on as well: two layers sending it can disagree. `includeSubDomains` covers
+`www` once a browser has seen the apex, and it cannot be quickly withdrawn — any
+future `.org` hostname has to serve HTTPS for a year after its last visit.
+`.com` sends none.
+
+**Cloudflare rewrites the storefront's HTML, and the Content-Security-Policy has
+to allow what it adds.** On `.org`, Email Obfuscation injects
+`/cdn-cgi/scripts/…/email-decode.min.js`; Bot Fight Mode's JavaScript detection
+injects an inline snippet that loads `/cdn-cgi/challenge-platform/scripts/jsd/main.js`
+inside a hidden `about:blank` iframe; and crawler protection (AI Labyrinth, on)
+adds a hidden `/cdn-cgi/content` link after `<body>`. All of it is same-origin,
+and the inline snippet is allowed only by `'unsafe-inline'`. Turning on Rocket
+Loader, Web Analytics or Zaraz adds hosts the policy does not list; see
+[apps/storefront/AGENTS.md](../apps/storefront/AGENTS.md).
 
 ## Rules
 
@@ -383,6 +406,15 @@ job stops running, and is deliberately far past any window the job can produce.
 
 The `staging/` rule is the one place a native rule genuinely fits — an
 abandoned upload ages purely on upload date and needs no scheduler.
+
+Promotion removes a staging object itself, but only once every order line
+claiming that upload has its own copy under `artwork/`. A later order on the
+same upload copies from one of those copies instead of from staging. The rule
+reaps what promotion never reaches: an upload nobody ordered, one whose bytes
+changed after the inspect route measured them, so its lines were filed from an
+earlier copy or not at all (`changed_after_inspect`), or a staging delete that
+failed. A re-PUT restarts an object's lifecycle clock, so a changed upload's
+staging object can outlive the 7 days counted from its first upload.
 
 The 7-day staging window must stay comfortably longer than the promotion retry
 horizon (`promote-pending-artwork`, every 15 minutes). Shortening it risks

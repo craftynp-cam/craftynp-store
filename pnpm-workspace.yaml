@@ -37,19 +37,22 @@ overrides:
 
 # Pins the *type* side of the React major split.
 #
-# HeroUI and React Aria Components declare `react` as a peer but say nothing
-# about `@types/react`, so pnpm links no type package into their subgraphs and
-# their .d.ts files resolve `react` by walking up to pnpm's private hoist
-# directory. Both React majors are present in this workspace (Next 16 wants
-# 19, the Medusa admin wants 18), and it is 18 that lands there — so HeroUI's
-# props end up typed against React 18 while the storefront is on 19, and
-# anything crossing that boundary fails to typecheck.
+# Both React majors are installed: Next 16 wants 19, the Medusa admin wants 18.
+# A package that declares `react` as a peer but says nothing about
+# `@types/react` gets no type package linked into its subgraph, so its .d.ts
+# files resolve `react` by walking up to pnpm's private hoist directory. Which
+# major lands there is not stable — separate installs of the same lockfile have
+# put 18 there in one checkout and 19 in the next — so any such package makes
+# typecheck pass or fail depending on the install, with TS2786 "cannot be used
+# as a JSX component" on the losing side.
 #
-# Declaring the peer explicitly makes pnpm resolve it from the importer, which
-# is the storefront, so these packages get 19. Do not "simplify" this by
-# hoisting or by adding @types/react to the root package.json: the first
-# removes the types entirely, the second makes React 19's types ambient for
-# apps/medusa, which runs React 18.
+# Declaring the peer explicitly makes pnpm resolve it from the importer, so
+# each package gets the major of the app that uses it: HeroUI and React Aria get
+# 19 from the storefront, and the admin's UI, icons, router, data and toast
+# packages get 18 from apps/medusa. Do not "simplify" this by hoisting or by
+# adding @types/react to the root package.json: the first removes the types
+# entirely, the second makes React 19's types ambient for apps/medusa, which
+# runs React 18.
 packageExtensions:
   react-aria-components:
     peerDependencies:
@@ -58,5 +61,38 @@ packageExtensions:
     peerDependencies:
       "@types/react": "*"
   "@heroui/react":
+    peerDependencies:
+      "@types/react": "*"
+  react-stately:
+    peerDependencies:
+      "@types/react": "*"
+  "@react-types/shared":
+    peerDependencies:
+      "@types/react": "*"
+  "@medusajs/admin-sdk":
+    peerDependencies:
+      "@types/react": "*"
+  "@medusajs/icons":
+    peerDependencies:
+      "@types/react": "*"
+  "@medusajs/ui":
+    peerDependencies:
+      "@types/react": "*"
+  "@tanstack/react-query":
+    peerDependencies:
+      "@types/react": "*"
+  "@tanstack/react-table":
+    peerDependencies:
+      "@types/react": "*"
+  react-currency-input-field:
+    peerDependencies:
+      "@types/react": "*"
+  react-router:
+    peerDependencies:
+      "@types/react": "*"
+  react-router-dom:
+    peerDependencies:
+      "@types/react": "*"
+  sonner:
     peerDependencies:
       "@types/react": "*"

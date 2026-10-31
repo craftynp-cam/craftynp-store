@@ -70,9 +70,12 @@ tax provider), `notification-resend`, `auth-auth0`, and
   gate.** `prepare-cart` validates every line, including one that sent no
   customization, because a required input is exactly what a line can leave
   out. A `required` input that is missing, or an `off` one that is present,
-  throws `CustomizationRejection`, answered as `400 invalid_customization`
-  with `reason` `missing_required` or `input_off` and the message
-  `invalid_customization:<reason>:<input>`. Blank order notes count as absent.
+  throws `CustomizationRejection`, answered as a line refusal —
+  `400 invalid_customization` with `reason` `missing_required` or `input_off`,
+  the input key on that line's entry in `lines`, and the message head
+  `invalid_customization:<reason>:<input>@<line>` (see the error-body bullet
+  under [Cart, payments, and order placement](#cart-payments-and-order-placement)).
+  Blank order notes count as absent.
   The size is held to the server's copy of the storefront's `usesCustomSize`:
   on a product that names its Custom option, a line on the variant carrying
   that value must send `customization.dimensions` and a line on any other
@@ -82,12 +85,55 @@ tax provider), `notification-resend`, `auth-auth0`, and
   A product whose own options do not carry the named value counts as naming
   none, as it does for the storefront's `resolveCustomSizeOption`, so the
   dimensions mode alone decides rather than every variant refusing a size.
+  Publishing refuses that state (next bullet), so a live product reaches it
+  only through an option edit neither publish guard sees, or by having been
+  published before CNP-94 shipped.
   Options that did not load are not options that lack it: every Medusa
   product has at least one, so a missing or empty `product_options` means the
   relation never arrived, and the variant alone decides — the rule fails
   closed rather than letting a size onto a cheaper preset.
   Only a line that sent a customization has one stored — an empty one would
   change `customizationSignature` and supersede a cart the shopper could reuse.
+- **A published custom size must name its Custom option, and the product must
+  carry it (CNP-94).** `validateProductCustomization` refuses to publish a
+  product whose `customization_size` is `optional` or `required` unless both
+  `customization_size_option` and `customization_size_option_value` are set,
+  and `validateCustomSizeOption` refuses one whose own `product_options` have
+  no option with that title carrying that value, naming whichever is missing.
+  Both match exactly, as `isCustomSizeVariant` and the storefront's
+  `resolveCustomSizeOption` do. Without them the Custom-variant rule above is
+  null, a size is accepted on any variant and priced against that variant's
+  base — a custom size at a cheaper preset's price — and the storefront sends
+  exactly that without any tampering, because it cannot find a Custom value to
+  select. A `required` product with no preset sizes is held to it too: it
+  needs a one-value `Size: Custom` option to name. The second check needs the
+  product's options, which `validateProductCustomization` never sees, so the
+  admin product middleware and the product hook each query `product_options`
+  themselves (see [Migrations and seeds](#migrations-and-seeds)) — the same
+  relation `src/lib/customization-rules.ts` reads, rather than
+  `options.values`. In 2.18 an option's values are shared at the model level.
+  The product module narrows `options.values` to this product's own values
+  only on product-rooted reads (`listProducts`, `retrieveProduct` and
+  `listAndCountProducts` run `filterOptionValues`), not on variant-rooted ones
+  such as prepare-cart's, so `product_options` is the relation that is right
+  from every entry point. Both checks are publish-only, like the bounds, so a
+  draft may name a value its options do not carry yet.
+  **Option and value edits bypass both guards.** The
+  `/admin/product-options/:id`, `/admin/product-options/:id/values/:value_id`
+  and `/admin/products/:id/options/batch` routes neither reach the middleware
+  nor fire `productsUpdated`, and `option_ids` on a product update is not a
+  guarded key, so only the hook sees it, after `updateProductsStep` has run.
+  Renaming or removing a published product's Custom value therefore still
+  silently brings the null rule back; from then on every save of that product
+  through `updateProductsWorkflow` is refused, naming the missing value,
+  because the hook checks `product_options` on every run. On
+  `POST /admin/products/:id` a body touching a guarded key is refused by the
+  middleware before the write; any other body (images, tags, categories,
+  collection, sales channels, variants, handle) reaches the hook only after
+  `updateProductsStep` has run. It saves normally again once the value is
+  restored under Options, the names are corrected in the widget, custom size
+  is switched off, or the product is unpublished. That is why the runtime
+  tolerance above stays.
 - **The custom size carries two more keys again, and they are money:**
   `customization_size_rate_per_sq_inch` and `customization_size_price_floor`,
   written by the same widget and patch. They are what `areaUnitPrice` in
@@ -142,7 +188,10 @@ tax provider), `notification-resend`, `auth-auth0`, and
 - **`src/admin` typechecks separately.** It is the only `.tsx` here and needs
   DOM lib types the Node-only backend doesn't carry, so `tsconfig.json` excludes
   it and `typecheck` runs a second `tsc -p src/admin --noEmit`. Put a file that
-  needs DOM types under `src/admin`, and nothing else there.
+  needs DOM types under `src/admin`, and nothing else there. Its React 18 component
+  libraries find `@types/react` only through the `packageExtensions` peers in
+  `pnpm-workspace.yaml`; a new admin dependency whose JSX fails with TS2786 on
+  some installs and not others belongs in that list.
 - **Admin extensions use `@medusajs/ui`, `@medusajs/admin-sdk`, and
   `@tanstack/react-query`.** Never import storefront components — they are
   HeroUI on React 19 and will not run in the React 18 admin bundle.
@@ -263,12 +312,22 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
 
 ## Abuse and rate limiting
 
-Seven store routes are reachable with no session at all, and two of them spend
-money on every call: `/store/tax-quote` bills a Stripe Tax calculation and
-`/store/shipping-rates` burns the ShipStation limit. Because there is
-deliberately no flat-rate fallback, exhausting ShipStation returns
-`502 shipping_unavailable` and **blocks checkout for genuine customers** — so
-this is a denial-of-checkout vector, not only a cost one.
+Eight store routes are reachable with no session at all. `/store/tax-quote`
+bills a Stripe Tax calculation on every call, `/store/custom-quotes` emails the
+owner on every call, and `/store/shipping-rates` no longer calls ShipStation
+but still signs a quote checkout depends on.
+
+- **`/store/custom-quotes` is called straight from the browser**, like the
+  artwork presign, so its limit (`RATE_LIMIT_CUSTOM_QUOTES_PER_MINUTE`,
+  default 3) is per shopper rather than shared by everyone behind the
+  storefront's egress IP. A filled-in `company` field is the honeypot: the
+  route answers `202` and sends nothing. The email goes to the
+  `custom_quote_email` site-content field with `data.reply_to` set to the
+  shopper, which the Resend provider sends as `reply_to` in place of
+  `RESEND_REPLY_TO`. It stores no replay content, so the retry job exhausts a
+  failed one instead of resending it: the route answers `502` and the shopper
+  is told to try again, which would otherwise risk the owner getting it
+  twice.
 
 - **`rateLimit()` from `src/lib/rate-limit.ts` goes on every new anonymous store
   route that costs money or sends mail.** It is wired in the route's
@@ -351,17 +410,30 @@ plan, so those paths share one counter per client (see
   always priced by ShipStation and the amount actually charged is what gets
   recorded. The destination is still resolved from the order server-side on
   both routes.
-- **There is no flat-rate shipping fallback, deliberately.** A missing-dimension
-  parcel or any ShipStation error returns `502 shipping_unavailable` and blocks
-  checkout, because a wrong shipping charge is worse than a shopper hitting
-  Retry. `SHIPPING_OPTION_DEFAULT_AMOUNT` / `_LABEL` is a seeded catalogue
-  price, not a checkout-time fallback. Do not add one.
-- **ShipStation's `/v2/rates/estimate` response is not purchasable** and
-  excludes surcharges, so its `rate_id` cannot be looked up again later.
-  Re-verify a quote by re-estimating and comparing the fresh amount within a
-  tolerance, never by replaying the `rate_id`. `/v2/rates` is the separate,
-  authoritative call the fulfilment workspace uses, and unlike the estimate it
-  is **deliberately uncached** — the owner is choosing what to spend.
+- **Checkout charges one flat shipping rate, set by the owner.**
+  `/store/shipping-rates` answers a single `flat_rate` rate priced from the
+  `shipping_flat_rate` site-content field (a `money` field, validated as a
+  dollar amount on save and read through `flatShippingAmount` in
+  `@craftynp/types`), signed into the same quote token as before, so
+  `prepare-cart`, the tax quote and the storefront's shipping step are
+  unchanged. It calls ShipStation not at all and needs no product weight or
+  size, which is why products publish without them. `src/lib/flat-shipping.ts`
+  holds the rate and the shipping option's name, which
+  `update-shipping-option-flat-rate.ts` renamed from `Live USPS Rate` because
+  it is what the confirmation page and email print.
+  `SHIPPING_OPTION_DEFAULT_AMOUNT` / `_LABEL` is still only a seeded catalogue
+  price, not what checkout charges.
+- **An unverifiable quote is re-priced at the current flat rate, within
+  tolerance.** `calculatePrice` charges a valid token's signed amount; for an
+  expired or mismatched one it reads the flat rate again and accepts it only
+  within `withinShippingTolerance` of the quoted amount, so an owner raising
+  the rate mid-checkout blocks that cart rather than silently overcharging it.
+  A token for any other service code is refused.
+- **`ShipStationModuleService.getUspsRates` (the `/v2/rates/estimate` call) is
+  unused while checkout is flat-rate**, kept so live rates can return. Its
+  response is not purchasable and excludes surcharges; `/v2/rates` is the
+  separate, authoritative call the fulfilment workspace uses, and it is
+  **deliberately uncached** — the owner is choosing what to spend.
 - **`purchaseLabel` must never retry a timeout or a network error.** ShipStation
   documents no idempotency key on `POST /v2/labels`, so a retry can buy a second
   label and spend real money twice. Only a 429 — refused before any label
@@ -471,9 +543,19 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   `metadata.dimensions` are taken from it, and it is what gets made. There is
   no second, top-level size to price from — `checkoutLineItemSchema` has none,
   so zod strips one an old client still sends. A line that records a size with
-  no token is refused `400 invalid_price_quote:missing`, and a token quoted for
-  any other size is `line_mismatch`. Pricing one size while recording another
-  was the under-payment CNP-85 closed.
+  no token is refused `400 invalid_price_quote` with reason `missing`, and a
+  token quoted for any other size is `line_mismatch`, each naming its line.
+  Pricing one size while recording another was the under-payment CNP-85
+  closed. The storefront re-quotes a stale token before it prepares, so an
+  honest cart meets these only through clock skew or a token it could not read.
+- **A `/store/price-quote` error's `message` starts with a fixed head**,
+  `invalid_line:<reason>` on a 400 (`unknown_variant`, `bad_dimensions`) and
+  `price_unavailable:<reason>` on a 502 (`unpriced`, `unconfigured`,
+  `misconfigured`). `resolveLinePrice`'s own text follows a space;
+  `misconfigured` carries none.
+  `sdk.client.fetch` keeps only the status and `message`, so the head is how
+  the storefront's checkout tells a line Medusa refuses to price from a
+  transient failure. Keep the heads' wording; the storefront reads them.
 - **`/store/tax-quote` must keep passing the quantity and the dimensions.**
   Without the quantity it taxes every line at the single-unit tier; without the
   dimensions it taxes a custom size at its variant's price rather than its own.
@@ -489,7 +571,7 @@ groups }` and `StoreGetProductsParams` has no `quantity`, so a product payload
   payment collection's amount, i.e. `cart.total`, and `calculatePrice`
   recomputes the cart signature from the provider-context cart, never from
   client-supplied `data`. `calculatePrice` throws and blocks the cart refresh
-  when a quote can't be verified or re-estimated within tolerance.
+  when a quote can't be verified or re-priced within tolerance.
 - **In `prepare-cart`, every read that feeds the payment response must happen
   after all writes that can change `cart.total`.** A cart refresh deletes
   payment sessions, which cancels the PaymentIntent, so a pre-write snapshot
@@ -562,6 +644,23 @@ customization? }`, and the server writes every key.** `details` is the
 - **Error bodies from these store routes must carry a `message` alongside
   `error`/`reason`.** `@medusajs/js-sdk`'s `FetchError` discards everything
   else, so the storefront proxy otherwise sees only a status.
+- **`prepare-cart` names every refused cart line in one answer.** Each
+  per-line `invalid_customization` or `invalid_price_quote` refusal is
+  collected across all the lines and answered once, before any cart is read or
+  written, as `400 { error, reason, line, lines, message }`: `line` is the
+  first refused request index and `lines` lists every one. **The index must
+  ride in `message` as well**, for the `FetchError` reason above, so
+  `formatCheckoutLineRefusals` in `@craftynp/types` writes a fixed head,
+  `<error>:<reason>[:<input>]@<line>` comma-joined, with free-text detail after
+  it — a `rejected` line's DPI, text or size message, an unknown variant's id.
+  The storefront reads only the head, through `parseCheckoutLineRefusals`, so
+  the two cannot word a refusal differently; a reason missing from
+  `CHECKOUT_LINE_REFUSAL_REASONS` does not parse and the shopper gets the
+  generic error. Shipping and tax token refusals stay whole-checkout 400s with
+  no line. A pricing throw on one line skips the pricing of later lines and is
+  a `502 pricing_failed` only when nothing was refused, so a transient failure
+  cannot hide a line the shopper can fix. An older storefront proxy wraps all
+  of these in a 502, as it always did.
 - **`/checkout/complete`'s catch block must re-run the order lookup before
   reporting a failure.** Stripe's webhook can place the order mid-request,
   making `completeCartWorkflow` throw on an already-completed cart — otherwise a
@@ -609,9 +708,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **Uploads are two-phase, and the key is the point.** A shopper uploads before
   a cart exists, so there is no order to key on: the object lands at
   `staging/{uploadId}.{ext}`, and the `order.placed` subscriber copies it to
-  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` and deletes the staging
-  copy. That is what makes every stored file traceable to its order without
-  consulting the database.
+  `artwork/{orderId}/{lineItemId}/{uploadId}.{ext}` once for every line that
+  carries it, deleting the staging copy once no line on that upload is still
+  waiting for its own. That is what makes every stored file traceable to its
+  order and line without consulting the database.
 - **`presignArtworkUpload` binds Content-Length and does not bind
   Content-Type.** The length is in the signature, so a URL can only ever write
   the number of bytes it was minted for — that is the ceiling on what one
@@ -621,6 +721,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   mislabelled file is that the bucket is private and every read is a signed URL
   forcing an attachment disposition — and the inspect route below, which is the
   only thing that ever reads the bytes.
+  **The length is the only thing the URL binds, and using it does not spend
+  it.** Until it expires (`ARTWORK_UPLOAD_URL_TTL_SECONDS`, an hour at most) the
+  same URL can PUT a different file of the same length over one the inspect
+  route has already measured. Nothing about the URL closes that; the ETag
+  binding below does (CNP-96).
 - **`POST /store/artwork/uploads/:uploadId/inspect` is the gate, and the
   storefront calls it straight after the PUT.** It reads the head of the
   staging object over `Range` (`readArtworkHead`), sniffs the real format from
@@ -636,9 +741,9 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   parser here. `.ai` is accepted as either a PDF or a PostScript header.
   The measurement is written to `artwork_asset`'s existing `width_px` /
   `height_px` columns before the response, so the resolution the shopper was
-  gated on is the one an order can be checked against later. `dpi` is not
-  stored: it is a function of the pixel width and the ordered size, and a
-  stored copy could disagree with both.
+  gated on is the one an order can be checked against later. There is no `dpi`
+  column (CNP-98 dropped one nothing ever wrote): DPI is a function of the
+  pixels and the ordered size, and a stored copy could disagree with both.
   **The same write stamps `inspected_at`, and only a success stamps it** — a
   422 or a 502 leaves the column null. The pixels cannot say whether the bytes
   were ever read: a vector file is recorded with null pixels, and so is an
@@ -646,7 +751,32 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   PNG and never inspected would be indistinguishable from a genuine SVG.
   `inspected_at` is the column that tells them apart, and `staging_key` is
   indexed so `listByStagingKeys` can resolve a request's storage keys in one
-  query.
+  query. The route answers 404 for an upload any order has claimed, filed or
+  not, so the measurement an order was checked against cannot be rewritten
+  after checkout.
+  **The same write stamps `inspected_etag`**, the ETag of the very `GetObject`
+  response the measured bytes came from — never a separate HEAD, which a PUT
+  could land between (CNP-96). Storage answering with no ETag is a 502 with
+  nothing stamped: a null ETag is what a row inspected before the column
+  existed looks like, and promotion copies those unconditionally.
+  **Inspection is write-once.** A repeat inspect whose ETag still matches
+  answers 200 and rewrites nothing; a different ETag answers
+  `409 artwork_changed` and keeps the first measurement. Re-measuring would let
+  a caller pass `prepare-cart` with one file, PUT a lower-resolution file of the
+  same length through the still-live URL, and inspect again, so that
+  promotion's ETag check matched the swap. The write's selector carries
+  `inspected_etag: null`, so an inspect that reads the row after another
+  inspect has committed writes nothing, re-reads the row and answers 409
+  unless the stored ETag is its own. It does not serialise two inspects that
+  overlap: a Medusa selector update lists the matching rows and then updates
+  each by primary key, so both writes can land and the later one wins. That is
+  tolerable because every write stores an ETag together with the measurement
+  taken under it, so the stored pair always agrees, and promotion's conditional
+  copy compares against whichever pair is stored. A row inspected before the
+  column existed still has a null ETag, so it can be re-measured once. The
+  storefront reads that 409 as its generic `inspect_failed`, which is
+  acceptable because its flow presigns, PUTs once and inspects once — an honest
+  shopper never re-inspects different bytes.
 - **The inspect route is anonymous, and that is the considered position, not an
   oversight.** A shopper uploads before any cart or session exists, so there is
   no identity to bind it to — the same reason the presign route is anonymous.
@@ -658,7 +788,10 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **The inspect route's second read stops at `ARTWORK_FALLBACK_READ_BYTES`
   (4 MiB), and a raster whose frame marker lies past it is `unreadable`.** The
   first read takes `ARTWORK_HEADER_BYTES`; only a raster it could not measure
-  is read again. That is a trade-off, not a guarantee: an ICC profile can span
+  is read again, with `If-Match` set to the first read's ETag so both reads
+  describe one version of the object — a PUT between them fails the second
+  read with a 412, which answers 502 with nothing recorded. The cap is a
+  trade-off, not a guarantee: an ICC profile can span
   many APP2 segments and Extended XMP many APP1, so nothing in the format bounds
   how far in the start-of-frame sits. Most exports put it a few hundred KiB in,
   and a file whose frame lies past 4 MiB is rejected on purpose, because the
@@ -691,20 +824,29 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   (`src/lib/artwork-ledger.ts`) then keeps the request's `storageKey` and takes
   the file name, MIME type, size and pixels from the row, so a file claimed as
   an SVG or at 99,999 pixels is held to what inspect actually measured. A key
-  with no row, or a row that is purged, already claimed (`order_id` or
-  `promoted_at` set), of a type the store refuses, or uploaded more than
+  with no row, or a row that is purged, already claimed by an order (it has an
+  `artwork_claim`, read as `claimed`), of a type the store refuses, or uploaded more than
   `STAGING_WINDOW_DAYS` less `CHECKOUT_ARTWORK_MARGIN_DAYS` ago
   (`checkoutWindowClosedBefore` — a day before its staging object expires, so
   payment and promotion still have time; the sweepers keep the exact window) is
   `artwork_not_found`; a row never stamped `inspected_at`, or a raster row
-  without pixels, is `artwork_not_inspected`. Both answer
-  `400 invalid_customization` with that `reason` and the message
-  `invalid_customization:<reason>`, and a lookup that throws answers
+  without pixels, is `artwork_not_inspected`. Both are line refusals,
+  `400 invalid_customization` with that `reason` and the message head
+  `invalid_customization:<reason>@<line>`, and a lookup that throws answers
   `502 checkout_unavailable:misconfigured`. The same upload on two lines of one
   request is legal. `artworkReferenceSchema` caps `storageKey` at 128
   characters, which bounds what a request can put into that query, and
   `fileName` at 255, which only bounds the request body — the stored name comes
   from the ledger row.
+  **`prepare-cart` deliberately compares no ETags (CNP-96).** It still does no
+  storage I/O, and it does not refuse a row inspected before `inspected_etag`
+  existed. A HEAD per key would add a storage round trip and a Class B
+  operation to an anonymous checkout route without closing anything: the
+  upload URL is still live after `prepare-cart`, so a swap can land between it
+  and `order.placed`, and promotion's conditional copy is the check that holds
+  either way. Refusing null-ETag rows would only catch swaps made before the
+  deploy, whose URLs expire within one TTL of it, at the cost of every cart
+  already carrying such an upload.
   **The preset case is why the variant query asks for its option values.** The
   payload names a variant, not the option values under it, so a preset size's
   inches are reachable only through `variant.options[].metadata`. It asks for
@@ -745,25 +887,113 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
 - **`GET /admin/artwork/:id` returns a signed URL where the label route streams
   bytes.** That divergence is deliberate — a print-resolution file is far larger
   than a label PDF and there is no reason to move it through Medusa. Do not
-  "unify" the two routes.
+  "unify" the two routes. **Its id is a claim id**, one per order line: the
+  list route returns one entry per claim and the widget downloads by that id.
+  The CNP-97 migration gave every claim it backfilled its asset's id, so a
+  link built before it still resolves. A claim not yet filed answers 404, and
+  the message follows `purge_reason` through `artworkLineState` in
+  `@craftynp/types` — never filed (`staging_expired`) and replaced after it was
+  checked (`changed_after_inspect`) are not deleted after retention
+  (`delivered` / `undelivered`). `order-customization.tsx` renders
+  each line from the same function, which is why a line still waiting for its
+  copy shows "Still being filed" rather than a Download that cannot work.
+  **A failed list request is checked before that function.** It reads a line
+  with no entry as unclaimed, so an admin API outage would otherwise tell the
+  owner to ask for files that are already filed.
 - **Promotion must never throw.** It runs on `order.placed`, after payment, and
   the repo rule that nothing after payment rolls back a paid order applies. It
   swallows every failure, which means the event bus never sees one to retry —
   so `promote-pending-artwork` (every 15 minutes) is the only retry there is.
-  The row is claimed onto the order _before_ the copy so a failure still leaves
-  the sweeper something to find, and a failed staging delete is not a failed
-  promotion: the R2 lifecycle rule reaps the leftover, and treating it as a
-  failure would send the sweeper back to re-copy an object already in place.
+  Every line is claimed _before_ any copy so a failure part-way through still
+  leaves the sweeper a claim for each line, and a failed staging delete is not
+  a failed promotion: the R2 lifecycle rule reaps the leftover, and treating it
+  as a failure would send the sweeper back to re-copy an object already in
+  place.
 - **`STAGING_WINDOW_DAYS` must equal the bucket's `staging/` lifecycle rule.**
-  Past it the staging object is gone, so the sweeper gives up once — marking
-  the row `staging_expired` and logging `[artwork:promote-abandoned]` — rather
-  than emitting a warn every 15 minutes forever on a tag that is an alerting
-  target. The same cutoff retires upload rows that never reached an order
-  (`never_ordered`); those rows are otherwise immortal, since a shopper who
+  Past it the staging object is gone, so a claim with no filed sibling to copy
+  from either is given up on once — the sweeper marks that claim
+  `staging_expired` and logs `[artwork:promote-abandoned]` — rather than
+  emitting a warn every 15 minutes forever on a tag that is an alerting target.
+  The same cutoff retires upload rows no order ever claimed (`never_ordered`,
+  on `artwork_asset`); those rows are otherwise immortal, since a shopper who
   abandons a cart leaves one behind.
-- **One upload can belong to two line items** — the same logo on two variants —
-  so the subscriber claims an asset only when it is unclaimed. Re-claiming
-  would repoint `line_item_id` at an item the stored key does not match.
+- **One upload can belong to many order lines, so every line has its own
+  claim** (CNP-97). `artwork_asset` stays one row per upload — what was
+  uploaded, measured and inspected — and `artwork_claim` holds one row per line
+  that carries it: `order_id`, a unique `line_item_id`, and that line's own
+  `storage_key`, `promoted_at`, `purged_at` and `purge_reason`. The same logo on
+  two variants, or a second order placed on an upload before the first order's
+  claim was written, is filed for every line under its own key. A copied asset
+  row per line was rejected because the upload's facts could drift between the
+  copies and `upload_id` would stop being unique; one object shared by many
+  lines was rejected because it breaks key-to-order traceability and needs
+  purge ref-counting across two orders' delivery clocks.
+  **Claimed is derived from the claims, never stored on the asset.**
+  `ArtworkAssetRow.claimed` is computed from the `claims` relation, which every
+  asset read in the service loads; a stored copy is the drift CNP-98 removed.
+  `listAbandonedUploads` asks for "no claims" in the query (`$none`), not in
+  JS. `claimLine` inserts first and re-reads by `line_item_id` on a failure
+  (the `recordWebhookEvent` pattern), so a redelivered `order.placed` or two
+  handlers at once make one claim per line — the unique index is the
+  idempotency key, not a read before the write.
+  **Staging is deleted only once no claim on the upload is pending.** Every
+  claim copies from staging first, and one whose copy answers `NoSuchKey` —
+  staging already deleted by another order's promotion, or reaped — copies from
+  a filed, unpurged sibling claim's object instead. There is no HEAD first: a
+  conditional copy reports a missing source as `NoSuchKey` before it evaluates
+  its condition (verified on MinIO), so a HEAD would add a request and a race
+  and nothing else; a store that answered 412 for a missing source would still
+  reach a filed sibling, through the changed-after-inspect path below. Only
+  `isMissingObject` (`NotFound`, `NoSuchKey` or a 404) and that 412 fall back;
+  any other storage failure is retried. A second order on an already-claimed
+  upload is promoted too, and logged
+  `[artwork:promote-shared] asset= order= other_orders=` so the owner can spot
+  a possible duplicate purchase: `prepare-cart` already accepted that order,
+  and the key is never shown to anyone but the admin. With
+  `ARTWORK_RETENTION_DAYS=0` a sibling can be purged before a later claim copies
+  from it; that claim then has no source and is given up on at the staging
+  window.
+  **Known gap:** a line whose subscriber failed before its claim was written —
+  the order query or `findByStagingKey` threw — has no claim, so the sweeper
+  cannot see it. It is logged `[artwork:promote-failed] order=`, and the widget
+  shows it as not picked up for filing, which, unlike a pending claim, nothing
+  retries. A deploy that changes the artwork tables is a certain trigger:
+  between medusa-server's pre-deploy `db:migrate` and medusa-worker running the
+  matching code, `findByStagingKey` throws on whichever side does not match the
+  schema, so an artwork order paid in that window has no claim. To recover one,
+  run a temporary `medusa exec` script that calls the default export of
+  `src/subscribers/promote-artwork.ts` with
+  `{ event: { name: "order.placed", data: { id } }, container }` for the order.
+  That is safe to repeat, because `claimLine` is insert-first and
+  `promoteArtworkClaim` returns early for a filed claim.
+- **Promotion files only the bytes the inspect route measured (CNP-96).** The
+  staging copy is a `CopyObject` with `x-amz-copy-source-if-match` set to the
+  upload's `inspected_etag`, an atomic compare-and-copy with no HEAD-then-copy
+  window for a PUT to land in. `copyArtwork` turns any 412 into
+  `ArtworkChangedAfterInspectError`: MinIO names it `PreconditionFailed` and the
+  SDK has no modelled class for it, so it is matched by name or status, never
+  by `instanceof`. Promotion then logs
+  `[artwork:changed-after-inspect] claim= asset= order= resolution= …` and
+  looks for a filed, unpurged sibling claim on the same upload. That object was
+  copied under the check, so its bytes are the inspected ones: the line is
+  copied from it and marked promoted (`resolution=sibling`). Only when there is
+  no such sibling does promotion file nothing (`resolution=retired`) and mark
+  every still-pending claim on that upload `changed_after_inspect`, so the
+  sweeper stops retrying a copy that can never succeed and the widget shows
+  those lines as replaced after they were checked. Either way the staging
+  object is left to the lifecycle rule. If that marking fails it logs
+  `[artwork:promote-failed] … outcome=changed_not_retired` and the sweeper
+  meets the same 412 on its next run. A copy from a filed sibling carries no
+  condition, because that object was itself copied under the check; a row
+  inspected before `inspected_etag` existed copies unconditionally and is
+  logged `[artwork:promote] … etag=unbound`.
+  **The binding is MD5-strength.** For a single-part PUT the ETag on S3, R2 and
+  MinIO is the object's MD5, and same-length MD5 collisions between valid
+  images are a published technique, so a deliberate collision is the one way
+  past it; the presign's Content-Length is what forces that collision to be
+  the same length. A ranged `GetObject` returning the whole object's ETag, and
+  a stale condition answering 412 on both `CopyObject` and `GetObject`, were
+  verified against the local MinIO, which is not evidence for R2.
 - **`requestChecksumCalculation: "WHEN_REQUIRED"` on the S3 client is
   load-bearing.** Without it the SDK bakes `x-amz-checksum-crc32=AAAAAA==` —
   the CRC32 of an empty body, because presigning sees no body — into the signed
@@ -786,9 +1016,11 @@ ACLs. The `artwork` module is the ledger; the bytes are never in Postgres.
   history entry, because the owner can move an order to delivered by hand and
   that leaves the shipment column null. The cross-module join lives in the purge
   job — neither module reaches into the other.
-- **The purge job writes `artwork_asset` and nothing else.** That is what makes
+- **The purge job writes `artwork_claim` and nothing else.** That is what makes
   "deleting artwork does not touch the order" structural rather than a promise.
-  Keep it that way.
+  Keep it that way. It works one claim at a time, deleting that line's own
+  object on its own order's delivery clock, so one order's retention never
+  removes another order's copy of a shared upload.
 - **Both `@aws-sdk` packages move together.** A version split between
   `client-s3` and `s3-request-presigner` puts two copies of `@smithy/types` in
   the tree and `getSignedUrl` stops accepting the `S3Client`, with a type error
@@ -871,10 +1103,29 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   fallback path with anything that has a variable — it is the broken one.
 - **A notification _provider_, not a bespoke service.** `INotificationProvider`
   is already the swappable seam, and the module's `notification` table records
-  `status`, `external_id` and `idempotency_key` per send — the send log and the
-  retry ledger without a migration of our own. It talks to Resend over raw
-  `fetch`, like `shipstation`, so the mock-at-the-module-boundary testing rule
-  applies unchanged.
+  `status`, `external_id` and `idempotency_key` per send — the send log without
+  a migration of our own. It talks to Resend over raw `fetch`, like
+  `shipstation`, so the mock-at-the-module-boundary testing rule applies
+  unchanged.
+- **That table stores no email body, so both subscribers store their own copy
+  in `provider_data.replay_content`** (`replayableEmail` in
+  `src/lib/notification-replay.ts`), beside the `content` they send. Medusa's
+  `notification` model has no content column, and rebuilding the body later
+  cannot work: the order link's token is signed with `Date.now()`, so a rebuilt
+  email never matches the first attempt, and Resend answers a changed payload
+  under the same key with `409 invalid_idempotent_request`. **It goes in
+  `provider_data`, never `data`** — `GET /admin/notifications` returns `data` by
+  default and not `provider_data`, and the body holds the shipping address and a
+  90-day bearer order link. Default fields are not access control: any admin
+  credential — a session or a secret API key — gets the stored body back by
+  asking for `fields=+provider_data`, so what keeps it private is that the copy
+  is short-lived. The retry job writes
+  `replay_content: null` once a row is sent, refused, or past the retry window
+  — whether it failed there or was left `pending` by a send that never recorded
+  an outcome — so a sent email's copy normally goes within 15 minutes and any
+  other's within 24 hours and one run. The job looks back only seven days, so a
+  worker down for longer leaves those copies in place, and account deletion
+  (`purgeCustomerIdentity`) never touches this table.
 - **`order-email-render.ts` still truncates a long order to a "+N more items"
   row**, now purely to keep one email a sane size — the original reason
   (Resend's 2,000-character template-variable cap) no longer applies, since
@@ -901,10 +1152,54 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   that fails is caught and swallowed by the subscriber (see below), so the bus
   never sees a failure to retry. Without `REDIS_URL` the bus is in-memory and
   does not retry at all, which is the local and CI case. Either way the job is
-  the only retry there is. It replays a failure under its original
-  `idempotency_key` — which the module reprocesses only while the row is
-  `FAILURE` — inside Resend's own 24-hour idempotency window. Retrying past
-  that window would start duplicating rather than resuming.
+  the only retry there is — **and it retries only a send that reached
+  `createNotifications`.** A subscriber that fails earlier, loading the order
+  or the site content, logs `[email:order-failed]` and leaves no row behind.
+- **How the job replays.** Every 15 minutes it lists `failure` rows created in
+  the last 24 hours and calls `createNotifications` again with the row's own
+  `id`, its original `idempotency_key` and the stored `replay_content`
+  verbatim. The module reprocesses a key only while its row is `FAILURE`, and
+  the `id` is what lands that reprocess on the original row (see
+  [Medusa runtime traps](#medusa-runtime-traps)). The body must be
+  byte-identical to the first attempt: if that attempt reached Resend, the same
+  key with the same payload returns the original response instead of sending
+  twice. The 24 hours are Resend's own key retention, and `created_at` precedes
+  the first send, so the job's window always closes first — retrying past it
+  would start duplicating rather than resuming. A reprocess returns nothing, so
+  the outcome is read back with `retrieveNotification`. A second pass over the
+  last seven days then nulls `replay_content` on sent rows, and retires any row
+  past the window that is still `failure` or `pending`.
+- **`[email:retry-exhausted]` is logged once per row, with a `reason`, and the
+  row is never replayed after it:** `no_idempotency_key`; `no_stored_content`,
+  a row from before the body was stored, which needs a manual resend;
+  `rejected status=<n>`, Resend refusing the send itself with a 4xx other than
+  401 or 403; `window_expired`, a failure still undelivered after 24 hours; and
+  `stuck_pending`, a row still `pending` after 24 hours. That is a send that
+  never recorded an outcome — the worker died mid-send, or Medusa's status write
+  after it failed — so it may or may not have reached the customer and needs
+  checking in Resend. A `pending`
+  row inside the window is left alone, since it may still be in flight. "Once"
+  is recorded on the row as `provider_data.replay_exhausted` rather than in a
+  column, so it needed no migration. Until one of those happens,
+  `[email:retry] outcome=still_failing` repeats every run and carries Resend's
+  own error.
+- **The provider decides what is permanent, and the job reads it from the
+  message.** A 5xx, a plain 429, a network error and a 409
+  `concurrent_idempotent_requests` (another request holding the key is still
+  in flight) are retried in-process and then left for the next run, and so is
+  a daily-quota 429. A 401 or 403 — a deleted or deactivated API key, or a
+  sending domain that lost verification — is logged under `[email:send-failed]`
+  and not retried in-process, but carries no marker, so the job replays it
+  every run (`[email:retry] outcome=still_failing`) until it is sent or reaches
+  `window_expired`: fixing the key or the domain within 24 hours delivers it.
+  Every other 4xx throws `ResendRejectedError`, logs `[email:send-failed]`, and
+  ends the replay — including a 409 `invalid_idempotent_request`, which means
+  the payload changed under the key, normally because `RESEND_FROM_EMAIL` or
+  `RESEND_REPLY_TO` changed between attempts. Medusa rethrows a provider error
+  as a new one that keeps only its message, so `permanentRejectionStatus` in
+  `notification-resend/lib.ts` parses the `(<status>, will not retry)` marker
+  `ResendRejectedError` writes. The two sit side by side and must change
+  together.
 - **A send failure never rolls back a paid order.** Both subscribers log and
   swallow, like the tax subscriber.
 - **Monitoring here means stable warn-level log tags**, because nothing is
@@ -912,8 +1207,11 @@ provider in `src/modules/notification-resend`, fired by subscribers on
   `[email:send-failed]`, `[email:quota]`, `[email:quota-low]`,
   `[email:quota-daily]`, `[email:retry]`, `[email:retry-exhausted]`,
   `[email:order-failed]`, `[artwork:purge]`, `[artwork:purge-failed]`,
-  `[artwork:promote]` and `[artwork:promote-failed]` rather than inventing an
-  alerting system now.
+  `[artwork:promote]`, `[artwork:promote-failed]`,
+  `[artwork:promote-abandoned]`, `[artwork:promote-shared]`,
+  `[artwork:changed-after-inspect]`, `[artwork:inspect-failed]`,
+  `[artwork:download-failed]` and `[artwork:upload-url-failed]` rather than
+  inventing an alerting system now.
 - **`STOREFRONT_URL` is what builds the tokenized order link.** `order-email.ts`
   constructs `/checkout/confirmation?order=&number=&token=` independently of the
   storefront's own `checkoutConfirmationHref()`; the two drifting is the
@@ -952,14 +1250,45 @@ against a real container, schema, or workflow.
   (`Omit<StripeTaxOptions, "cacheTtlSeconds">`) with its own validator.** Do not
   merge the two option shapes — the provider is never given `cacheTtlSeconds`,
   so full-shape validation throws the first time a cart needs tax lines.
-- **`calculatePrice` must re-query variant and product dimensions itself**
-  rather than trusting `context.items[].variant`. Medusa's cart-refresh context
-  never fetches product-level length/width/height, so a variant relying on them
-  always looks incomplete.
+- **Anything that needs a product's weight or size must re-query variant and
+  product dimensions itself** rather than trusting `context.items[].variant`.
+  Medusa's cart-refresh context never fetches product-level
+  length/width/height, so a variant relying on them always looks incomplete.
 - **`createShippingOptionsWorkflow` validates a fulfillment provider against the
   stock locations actually linked to the service zone's fulfillment set**, not
   against `medusa-config.ts` — `link.create` the provider onto the stock
   location first.
+- **`update<Model>s({ selector, data })` is not a compare-and-set.**
+  `MedusaInternalService.update` runs `list(selector)` inside its transaction
+  without a lock, and the repository assigns and persists each row it found,
+  so MikroORM flushes `UPDATE ... WHERE id = ?`
+  (`ChangeSetPersister.updateEntity` conditions only on the primary key when a
+  model has no version or concurrency-check property). Under Postgres' default
+  READ COMMITTED, two overlapping calls both see the old row and both writes
+  land. Anything that must have one winner — a claim, money — needs a unique
+  index and insert-first (the `claimLine` / `recordWebhookEvent` pattern), not
+  a narrowed selector.
+- **Replaying a notification must pass the row's own `id` to
+  `createNotifications`.** Medusa 2.18's `createNotifications_`
+  (`@medusajs/notification`, `dist/services/notification-module-service.js`)
+  re-admits an `idempotency_key` whose row is `FAILURE`, builds
+  `{ id: generateEntityId(), ...entry }`, skips the insert because the key
+  exists, calls the provider, and then updates by that id in a `finally`.
+  Without an `id` in the entry that update targets a row that was never
+  written, and `MedusaInternalService.update` throws
+  `Notification with id "noti_…" not found` — from `finally`, so it replaces
+  both a successful send and the provider's real error, and the `FAILURE` row
+  is never touched. A different id on every run is the tell. Passing `id` works
+  only because the spread follows the generated id;
+  `retry-failed-notifications.test.ts` runs the real module class over an
+  in-memory table whose `update` copies that NOT_FOUND branch, so an upgrade
+  that reorders the spread fails there — one that changes
+  `MedusaInternalService.update` itself would not. A reprocess also returns no
+  row, since only inserted rows are returned.
+- **A module service's generated `update` merges a jsonb column instead of
+  replacing it** (`manager.assign(…, { mergeObjectProperties: true })`), so a
+  key left out of the update survives. To drop one, write it as `null`, which
+  is what `withoutReplayContent` does for `provider_data.replay_content`.
 
 Verify provider, seed, and checkout-route changes with `pnpm run db:migrate` and
 a real `pnpm run dev` checkout, not `tsc`/`jest` alone.
@@ -1002,10 +1331,13 @@ CNP-79.
   `updateProductsWorkflow`, not route middleware — a status-only publish,
   `/admin/products/batch`, CSV import, and custom workflows all bypass HTTP.
   Add any similar guard to `src/workflows/hooks/validate-products.ts`, which is
-  where the shipping-dimension and customization guards both run. **It has to be
-  that one file:** Medusa throws on a second handler for a hook it has already
-  registered, so a new guard is a call added inside the existing handler, never
-  a new hook file.
+  where the customization and Custom-option guards run. There is no longer a
+  weight-and-size guard: checkout is flat-rate, and the fulfilment workspace
+  asks for the parcel when a product has none saved. The hook's `products` payload carries no reliable options, so the
+  Custom-option guard queries `product_options` for those products through
+  the handler's `{ container }`. **It has to be that one file:** Medusa throws
+  on a second handler for a hook it has already registered, so a new guard is
+  a call added inside the existing handler, never a new hook file.
 - **That hook rejects the save but cannot undo it, which is why
   `src/api/admin/products/middlewares.ts` exists as well.** The only hooks
   core exposes are `productsCreated` / `productsUpdated`, both of which run
@@ -1017,20 +1349,30 @@ CNP-79.
   a product then wedged: the stored value failed the guard on every later save,
   so it could not be corrected from the UI. Verified against a real container
   in both shapes; the batch shape does roll back.
-  The middleware therefore re-runs **the same two `assert*` functions** on the
-  incoming update merged over the stored product, before the route reaches the
-  workflow. **It duplicates no rules** — the rules stay in `@craftynp/types`
-  and the `src/lib` guards — and it must keep merging rather than validating
-  the body alone, because Medusa merges product metadata (a patch of one key
-  leaves the rest in place). Deleting it does not fail a test that mocks the
+  The middleware therefore re-runs **the same two `assert*` functions** on
+  the incoming update merged over the stored product, before the route reaches
+  the workflow. It loads the stored product with its `product_options`
+  (`PRODUCT_OPTION_FIELDS`, shared with the hook) and the merge carries them
+  through untouched. The body's `option_ids` can relink the product's options,
+  but it is not a guarded key and the middleware does not resolve a new option
+  set from it, so such a save is checked only by the hook, after
+  `updateProductsStep` (see the Custom-option bullet in
+  [Layout and config](#layout-and-config)). Both the middleware and hook
+  queries must stay unpaginated: with `skip` or `cursor`, `query.graph` calls
+  `listAndCountProducts`, which, like `retrieveProduct`, strips
+  `product_options`, and the publish check then refuses the product as having
+  no such option. **It duplicates no rules** — the rules stay in
+  `@craftynp/types` and the `src/lib` guards — and it must keep merging rather
+  than validating the body alone, because Medusa merges product metadata (a
+  patch of one key leaves the rest in place). Deleting it does not fail a test that mocks the
   workflow; it fails only against a real save, which is how this was found.
   The hook stays as the catch-all for every path that never touches HTTP.
 - **A malformed customization declaration is rejected at any status; an
   incomplete one only on publish.** A contradictory record — the flag off with
   an input still on — or a value outside the registry's vocabulary is wrong
   whatever the status. A product that is customizable but asks for nothing is a
-  draft mid-setup, and is refused only when it is published, the same line the
-  shipping-dimension guard draws.
+  draft mid-setup, and is refused only when it is published. A custom size whose Custom option is unnamed,
+  or named but not on the product, is incomplete in the same way.
 
 ## Testing
 

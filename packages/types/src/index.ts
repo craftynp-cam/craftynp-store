@@ -1,5 +1,11 @@
 export { areaUnitPrice } from "./area-price.js";
 export {
+  CUSTOM_QUOTE_FIELD_LIMITS,
+  customQuoteFieldErrors,
+  customQuoteRequestSchema,
+} from "./custom-quote.js";
+export type { CustomQuoteField, CustomQuoteRequest } from "./custom-quote.js";
+export {
   ARTWORK_ACCEPT,
   ARTWORK_ACCEPTED_LABEL,
   ARTWORK_EXTENSIONS,
@@ -13,6 +19,7 @@ export {
   artworkExtension,
   artworkInspectResponseSchema,
   artworkKindSchema,
+  artworkLineState,
   artworkMimeTypeSchema,
   artworkUploadRequestSchema,
   artworkUploadResponseSchema,
@@ -69,6 +76,7 @@ export {
   resolveProductCustomization,
   unmeasuredOptionValues,
   validateCategoryArtwork,
+  validateCustomSizeOption,
   validateProductCustomization,
 } from "./product-customization.js";
 export { SITE_NAME, SITE_TAGLINE } from "./site.js";
@@ -76,6 +84,8 @@ export {
   SITE_CONTENT_FIELDS,
   SITE_CONTENT_KEYS,
   resolveSiteContent,
+  siteContentDefault,
+  flatShippingAmount,
   siteContentEntrySchema,
   siteContentKeySchema,
   siteContentUpdateSchema,
@@ -98,6 +108,7 @@ export {
   priceQuoteResponseSchema,
 } from "./price-quote.js";
 export {
+  CHECKOUT_LINE_REFUSAL_REASONS,
   checkoutAddressSchema,
   checkoutCompleteRequestSchema,
   checkoutCompleteResponseSchema,
@@ -106,6 +117,9 @@ export {
   checkoutPrepareRequestSchema,
   checkoutPrepareResponseSchema,
   checkoutTotalsSchema,
+  formatCheckoutLineRefusals,
+  isCheckoutLineRefusal,
+  parseCheckoutLineRefusals,
 } from "./checkout.js";
 export {
   orderAddressSchema,
@@ -120,6 +134,7 @@ export {
   TRACKING_STATUSES,
   allowedTransitions,
   canTransition,
+  carrierDisplayName,
   carrierTrackingUrl,
   orderStatusActorSchema,
   orderStatusDetailResponseSchema,
@@ -160,6 +175,7 @@ export {
 
 export type {
   ArtworkDownloadResponse,
+  ArtworkLineState,
   ArtworkOrderAsset,
   ArtworkOrderListResponse,
   ArtworkInspectResponse,
@@ -195,6 +211,7 @@ export type {
   CustomizationInputMode,
   ProductCustomization,
   ProductCustomizationProblem,
+  ProductOwnOptionLike,
 } from "./product-customization.js";
 export type {
   SiteContent,
@@ -220,6 +237,9 @@ export type {
   CheckoutCompleteRequest,
   CheckoutCompleteResponse,
   CheckoutLineItem,
+  CheckoutLineRefusal,
+  CheckoutLineRefusalError,
+  CheckoutLineRefusalReason,
   CheckoutLineItemDetail,
   CheckoutPrepareRequest,
   CheckoutPrepareResponse,

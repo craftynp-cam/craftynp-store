@@ -1,5 +1,3 @@
-import type { NormalizedRate } from "../shipstation/lib";
-
 export const SHIPPING_QUOTE_MISMATCH_LOG_TAG = "[shipping-quote:mismatch]";
 
 export type ShippingMethodData = {
@@ -32,11 +30,4 @@ export function withinShippingTolerance(
 ): boolean {
   const tolerance = Math.max(0.5, quotedAmount * 0.05);
   return Math.abs(freshAmount - quotedAmount) <= tolerance;
-}
-
-export function findRateByServiceCode(
-  rates: readonly NormalizedRate[],
-  serviceCode: string,
-): NormalizedRate | undefined {
-  return rates.find((rate) => rate.serviceCode === serviceCode);
 }

@@ -64,15 +64,18 @@ export function ShippingMethodFields({
   const rate = rates[0];
 
   if (rates.length === 1 && rate) {
+    const deliveryWindow = formatDeliveryWindow(rate);
     return (
       <div className="flex items-center justify-between rounded-xl border border-border bg-surface p-4">
         <div className="flex flex-col">
           <span className="font-medium text-foreground">
             {displayLabel(rate)}
           </span>
-          <span className="text-sm text-foreground-muted">
-            {formatDeliveryWindow(rate)}
-          </span>
+          {deliveryWindow ? (
+            <span className="text-sm text-foreground-muted">
+              {deliveryWindow}
+            </span>
+          ) : null}
         </div>
         <span className="font-display text-foreground">
           {formatMoney(rate.amount, rate.currencyCode)}

@@ -116,6 +116,22 @@ const CARRIER_TRACKING_URLS: Record<string, (tracking: string) => string> = {
   dhl_express: (t) => `https://www.dhl.com/en/express/tracking.html?AWB=${t}`,
 };
 
+const CARRIER_DISPLAY_NAMES: Record<string, string> = {
+  usps: "USPS",
+  stamps_com: "USPS",
+  ups: "UPS",
+  fedex: "FedEx",
+  dhl_express: "DHL Express",
+};
+
+export function carrierDisplayName(
+  carrierCode: string | null | undefined,
+): string | null {
+  return (
+    CARRIER_DISPLAY_NAMES[(carrierCode ?? "").trim().toLowerCase()] ?? null
+  );
+}
+
 export function carrierTrackingUrl(
   carrierCode: string | null | undefined,
   trackingNumber: string | null | undefined,

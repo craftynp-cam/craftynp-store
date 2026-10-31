@@ -52,7 +52,7 @@ export function selectedShippingAmount(
   return rates.find((rate) => rate.rateId === rateId)?.amount ?? null;
 }
 
-export function formatDeliveryWindow(rate: ShippingRate): string {
+export function formatDeliveryWindow(rate: ShippingRate): string | null {
   if (rate.deliveryDays === 1) return "Arrives in 1 business day";
   if (rate.deliveryDays != null) {
     return `Arrives in ${rate.deliveryDays} business days`;
@@ -69,5 +69,5 @@ export function formatDeliveryWindow(rate: ShippingRate): string {
     }
   }
 
-  return "Delivery estimate unavailable";
+  return null;
 }

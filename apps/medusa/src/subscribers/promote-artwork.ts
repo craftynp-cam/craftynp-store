@@ -4,8 +4,12 @@ import type { Logger } from "@medusajs/framework/types";
 
 import { ARTWORK_MODULE } from "../modules/artwork";
 import type ArtworkModuleService from "../modules/artwork/service";
-import { ARTWORK_PROMOTE_FAILED_LOG_TAG } from "../lib/artwork-retention";
-import { promoteArtworkAsset } from "../lib/promote-artwork";
+import type { ArtworkClaimRow } from "../modules/artwork/service";
+import {
+  ARTWORK_PROMOTE_FAILED_LOG_TAG,
+  ARTWORK_PROMOTE_SHARED_LOG_TAG,
+} from "../lib/artwork-retention";
+import { promoteArtworkClaim } from "../lib/promote-artwork";
 import { describeError } from "../lib/describe-error";
 
 type LineItem = {
@@ -44,7 +48,10 @@ export default async function promoteArtworkHandler({
     });
 
     const items = (orders[0]?.items ?? []) as LineItem[];
+    const claims: ArtworkClaimRow[] = [];
 
+    // Every line is claimed before any is copied, so a failure part-way
+    // through still leaves the sweeper a claim for each of them.
     for (const item of items) {
       const stagingKey = artworkKeyOnLineItem(item);
       if (!stagingKey) continue;
@@ -59,26 +66,42 @@ export default async function promoteArtworkHandler({
           continue;
         }
 
-        // One upload can be referenced by two line items — the same logo on
-        // two variants. The first claim wins; re-claiming would repoint
-        // line_item_id at an item the stored key does not match.
-        if (asset.order_id != null || asset.line_item_id != null) {
-          continue;
-        }
-
-        // Claimed before the copy, so a failed promotion still leaves the
-        // sweeper a row it can find.
-        await artwork.claimForOrder(asset.id, orderId, item.id);
-        await promoteArtworkAsset(
-          { asset, orderId, lineItemId: item.id },
-          artwork,
-          logger,
+        claims.push(
+          await artwork.claimLine({
+            assetId: asset.id,
+            orderId,
+            lineItemId: item.id,
+          }),
         );
       } catch (error) {
         logger.warn(
           `${ARTWORK_PROMOTE_FAILED_LOG_TAG} order=${orderId} item=${item.id} error=${describeError(error)}`,
         );
       }
+    }
+
+    for (const assetId of new Set(claims.map((claim) => claim.asset_id))) {
+      try {
+        const otherOrders = new Set(
+          (await artwork.listClaimsForAsset(assetId))
+            .map((claim) => claim.order_id)
+            .filter((id) => id !== orderId),
+        );
+
+        if (otherOrders.size > 0) {
+          logger.warn(
+            `${ARTWORK_PROMOTE_SHARED_LOG_TAG} asset=${assetId} order=${orderId} other_orders=${[...otherOrders].join(",")}`,
+          );
+        }
+      } catch (error) {
+        logger.warn(
+          `${ARTWORK_PROMOTE_FAILED_LOG_TAG} order=${orderId} asset=${assetId} outcome=shared_not_checked error=${describeError(error)}`,
+        );
+      }
+    }
+
+    for (const claim of claims) {
+      await promoteArtworkClaim(claim, artwork, logger);
     }
   } catch (error) {
     logger.warn(

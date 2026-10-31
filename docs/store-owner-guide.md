@@ -40,25 +40,20 @@ be set up once by your developer before their first sign-in.
 | **Handle**                        | The web address. `beach-tumbler` becomes `thecraftynp.org/drinkware/beach-tumbler`.      |
 | **Description**                   | Shown on the product page. Write it for the shopper, not for a spec sheet.               |
 | **Media / Thumbnail**             | The thumbnail is the picture on listing pages. Media is the gallery on the product page. |
-| **Weight, Length, Width, Height** | **Required.** These are what price your shipping labels.                                 |
+| **Weight, Length, Width, Height** | Optional. If set, they pre-fill the parcel when you buy a shipping label.                |
 | **Category**                      | Decides where the product lives on the site — see [Categories](#2-categories).           |
 | **Sales channel**                 | Must include the **Default Sales Channel** or the product will not appear on the site.   |
 | **Status**                        | _Draft_ is invisible to shoppers. _Published_ is live.                                   |
 
-### Weight and size are required to publish
+### Weight and size
 
-Enter **weight in grams** and **length, width and height in centimetres**. If
-you try to publish a product without all four, the save is refused with a message
-naming exactly what's missing, for example:
+Shoppers pay one flat shipping rate (see [Site content](#6-site-content)), so a
+product does not need a weight or size to be published — made-to-order pieces
+whose size changes with every order publish fine without them.
 
-> Cannot publish "Beach Tumbler": weight (grams) and length, width (cm) are
-> required.
-
-This is deliberate. Shipping labels are priced from the real parcel, and there is
-no flat-rate fallback — a product with no size would block the order at the point
-of buying a label instead of at the point of adding the product.
-
-Give the **packed** measurements, box included, not the bare item. Round up.
+If you do enter them — **weight in grams**, **length, width and height in
+centimetres**, packed and rounded up — they pre-fill the parcel when you buy a
+shipping label. Without them you type the parcel in at that point instead.
 
 ### Variants and options
 
@@ -364,16 +359,43 @@ Everything on this page follows the same rules:
   line.**
 - Closing band: heading, one line of body copy, and the button label.
 
-**Turnaround and shipping** — two lines shown in the "How your order is made"
-panel on every product page, on the thank-you page, and _inside the confirmation
-email_.
+**Shipping** — _Flat shipping rate_, what every order pays for shipping at
+checkout, in dollars (for example `10.00`). It starts at $10.00. A shopper
+already at checkout keeps the rate they were shown; new checkouts pick up the
+change straight away.
 
-- _Production turnaround_ — how long you take to make an order.
-- _Shipping window_ — how long delivery takes once it's gone.
+**Custom quotes** — _Send quote requests to_, the email address the
+**Request a custom quote** form on the website sends to. It starts as
+info@thecraftynp.org. Each request arrives as an email with the customer's
+name, phone, email, date needed, product and description; press **Reply** and
+your answer goes straight to the customer.
+
+**Turnaround and shipping** — two timing lines.
+
+- _Production turnaround_ — how long you take to make an order. Shown in the
+  "How your order is made" panel on made-to-order product pages, on the
+  thank-you page, and _inside the confirmation email_.
+- _Shipping window_ — how long delivery takes once it's gone. Shown on every
+  product page, on the thank-you page, and in the confirmation email.
 
 Keep these honest and current. They set the expectation that decides whether a
 customer emails you asking where their order is — and on the product page they
 are read before anyone has paid.
+
+**Ready-to-ship product pages** — the panel under the description of a product
+that isn't made to order. It takes the place of "How your order is made", so a
+ready-to-ship piece is never described as something you still have to make.
+
+- _Panel heading_, _First step title_ and _First step body_ — the words that
+  tell a shopper the piece is already made. Leave one empty and the site uses
+  its standard wording for it.
+- _Dispatch time_ — how soon a ready-to-ship piece leaves the workshop. Until you
+  change it, it says "within a few business days", so put your real number in.
+  Leave it empty to hide it.
+
+The shipping window above shows on these pages too. The thank-you page and the
+confirmation email still show your production turnaround, even for a
+ready-to-ship order.
 
 **Get in touch** — your phone number and email address, shown in the footer at
 the bottom of every page.

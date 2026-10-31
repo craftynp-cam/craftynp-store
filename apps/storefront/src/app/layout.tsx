@@ -2,6 +2,7 @@ import { resolveSiteContent } from "@craftynp/types";
 
 import { Footer, Navbar } from "@/components";
 import { fetchNavCategories } from "@/lib/categories";
+import { siteOrigin } from "@/lib/routes";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
 import { toFooterContact } from "@/lib/footer-content";
 import { fetchSiteContent } from "@/lib/site-content";
@@ -32,13 +33,12 @@ const cookie = Cookie({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteOrigin()),
   title: { default: SITE_NAME, template: `%s — ${SITE_NAME}` },
   description: SITE_TAGLINE,
   applicationName: SITE_NAME,
   openGraph: {
     siteName: SITE_NAME,
-    title: SITE_NAME,
-    description: SITE_TAGLINE,
     type: "website",
   },
 };

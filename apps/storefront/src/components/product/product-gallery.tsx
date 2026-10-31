@@ -51,7 +51,7 @@ export function ProductGallery({
             alt={selected.alt}
             fill
             sizes="(min-width: 1536px) 812px, (min-width: 1280px) 710px, (min-width: 1024px) 46vw, 100vw"
-            className="object-cover"
+            className="object-contain"
             priority
           />
         ) : (

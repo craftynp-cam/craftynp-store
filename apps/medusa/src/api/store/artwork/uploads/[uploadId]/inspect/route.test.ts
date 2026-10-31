@@ -30,6 +30,8 @@ const JPEG_WITHOUT_FRAME = new Uint8Array(
   Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(64, 0)]),
 );
 
+const ETAG = '"etag-1"';
+
 const STORAGE_OPTIONS = {
   endpoint: "https://example.test",
   region: "auto",
@@ -39,34 +41,34 @@ const STORAGE_OPTIONS = {
   forcePathStyle: true,
 };
 
+function stored(bytes: Uint8Array | Buffer, etag: string | null = ETAG) {
+  return { bytes: new Uint8Array(bytes), etag };
+}
+
 function asset(overrides: Record<string, unknown> = {}) {
   return {
     id: "asset_1",
     upload_id: "upl_1",
     staging_key: "staging/upl_1.png",
-    storage_key: null,
-    order_id: null,
-    line_item_id: null,
     file_name: "logo.png",
     mime_type: "image/png",
     size_bytes: 1024,
     uploaded_at: new Date(),
-    promoted_at: null,
     purged_at: null,
     purge_reason: null,
     width_px: null,
     height_px: null,
     inspected_at: null,
+    inspected_etag: null,
+    claimed: false,
     ...overrides,
   };
 }
 
 function harness(row: ReturnType<typeof asset> | null) {
-  const recordInspection = jest.fn().mockResolvedValue(undefined);
-  const service = {
-    findByUploadId: jest.fn().mockResolvedValue(row),
-    recordInspection,
-  };
+  const recordInspection = jest.fn().mockResolvedValue(true);
+  const findByUploadId = jest.fn().mockResolvedValue(row);
+  const service = { findByUploadId, recordInspection };
 
   const req = {
     params: { uploadId: "upl_1" },
@@ -81,17 +83,24 @@ function harness(row: ReturnType<typeof asset> | null) {
     status: jest.fn().mockReturnValue({ json }),
   } as unknown as MedusaResponse;
 
-  return { req, res, json, status: res.status as jest.Mock, recordInspection };
+  return {
+    req,
+    res,
+    json,
+    status: res.status as jest.Mock,
+    recordInspection,
+    findByUploadId,
+  };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   readOptions.mockReturnValue(STORAGE_OPTIONS);
-  readHead.mockResolvedValue(new Uint8Array(PNG_7X3));
+  readHead.mockResolvedValue(stored(PNG_7X3));
 });
 
 describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
-  it("measures the stored bytes and records them against the upload", async () => {
+  it("measures the stored bytes and records them against the upload with the ETag they were read under", async () => {
     const { req, res, json, status, recordInspection } = harness(asset());
 
     await POST(req, res);
@@ -107,14 +116,13 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
       widthPx: 7,
       heightPx: 3,
       inspectedAt: expect.any(Date),
+      etag: ETAG,
     });
   });
 
   it("stamps a vector upload as inspected, though it has no pixels to record", async () => {
     readHead.mockResolvedValue(
-      new Uint8Array(
-        Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>', "utf8"),
-      ),
+      stored(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')),
     );
     const { req, res, status, recordInspection } = harness(
       asset({ mime_type: "image/svg+xml", staging_key: "staging/upl_1.svg" }),
@@ -127,6 +135,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
       widthPx: null,
       heightPx: null,
       inspectedAt: expect.any(Date),
+      etag: ETAG,
     });
   });
 
@@ -142,7 +151,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
   it("rejects a file whose bytes contradict the type it was presigned as", async () => {
     // The presigned PUT cannot bind Content-Type, so a shopper could store a
     // text file under a .png key. This is where that is caught.
-    readHead.mockResolvedValue(new Uint8Array(Buffer.from("hello", "utf8")));
+    readHead.mockResolvedValue(stored(Buffer.from("hello", "utf8")));
     const { req, res, json, status, recordInspection } = harness(asset());
 
     await POST(req, res);
@@ -159,8 +168,8 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     // A JPEG's colour profile can push its frame marker past the head we read.
     // Rejecting a good file is the worst way for this gate to fail.
     readHead
-      .mockResolvedValueOnce(JPEG_WITHOUT_FRAME)
-      .mockResolvedValueOnce(new Uint8Array(PNG_7X3));
+      .mockResolvedValueOnce(stored(JPEG_WITHOUT_FRAME))
+      .mockResolvedValueOnce(stored(PNG_7X3));
 
     const { req, res, status, json, recordInspection } = harness(
       asset({ mime_type: "image/jpeg", size_bytes: 400_000 }),
@@ -177,8 +186,28 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
     expect(recordInspection).not.toHaveBeenCalled();
   });
 
+  it("holds the second read to the ETag the first one saw, and records nothing when the object changed in between", async () => {
+    readHead
+      .mockResolvedValueOnce(stored(JPEG_WITHOUT_FRAME))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("PreconditionFailed"), {
+          name: "PreconditionFailed",
+          $metadata: { httpStatusCode: 412 },
+        }),
+      );
+    const { req, res, status, recordInspection } = harness(
+      asset({ mime_type: "image/jpeg", size_bytes: 400_000 }),
+    );
+
+    await POST(req, res);
+
+    expect(readHead.mock.calls[1]?.[3]).toEqual({ ifMatch: ETAG });
+    expect(status).toHaveBeenCalledWith(502);
+    expect(recordInspection).not.toHaveBeenCalled();
+  });
+
   it("re-reads no more than 4 MiB of a 25 MB upload, and a frame marker past that is unreadable", async () => {
-    readHead.mockResolvedValue(JPEG_WITHOUT_FRAME);
+    readHead.mockResolvedValue(stored(JPEG_WITHOUT_FRAME));
     const { req, res, status, json } = harness(
       asset({ mime_type: "image/jpeg", size_bytes: 25 * 1024 * 1024 }),
     );
@@ -192,7 +221,7 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
   });
 
   it("does not re-read when the head already held the whole object", async () => {
-    readHead.mockResolvedValue(new Uint8Array(Buffer.from("hello", "utf8")));
+    readHead.mockResolvedValue(stored(Buffer.from("hello", "utf8")));
     const { req, res } = harness(asset({ size_bytes: 5 }));
 
     await POST(req, res);
@@ -201,12 +230,87 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
   });
 
   it("does not re-read for a wrong signature, which more bytes cannot fix", async () => {
-    readHead.mockResolvedValue(new Uint8Array(Buffer.from("not a picture")));
+    readHead.mockResolvedValue(stored(Buffer.from("not a picture")));
     const { req, res } = harness(asset({ size_bytes: 5_000_000 }));
 
     await POST(req, res);
 
     expect(readHead).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers 502 and records nothing when storage reports no ETag, rather than leaving the upload unbound", async () => {
+    readHead.mockResolvedValue(stored(PNG_7X3, null));
+    const { req, res, status, recordInspection } = harness(asset());
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(502);
+    expect(recordInspection).not.toHaveBeenCalled();
+  });
+
+  it("refuses to re-measure an upload whose bytes changed after it was inspected", async () => {
+    const { req, res, status, json, recordInspection } = harness(
+      asset({
+        width_px: 4000,
+        height_px: 4000,
+        inspected_at: new Date(),
+        inspected_etag: '"etag-0"',
+      }),
+    );
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(409);
+    expect(json.mock.calls[0]?.[0]).toMatchObject({
+      error: "artwork_changed",
+    });
+    expect(recordInspection).not.toHaveBeenCalled();
+  });
+
+  it("answers a repeat inspect of unchanged bytes as before, without rewriting what was recorded", async () => {
+    const { req, res, status, recordInspection } = harness(
+      asset({
+        width_px: 7,
+        height_px: 3,
+        inspected_at: new Date(),
+        inspected_etag: ETAG,
+      }),
+    );
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(200);
+    expect(recordInspection).not.toHaveBeenCalled();
+  });
+
+  it("refuses when another inspect recorded different bytes first", async () => {
+    const row = asset();
+    const { req, res, status, recordInspection, findByUploadId } = harness(row);
+    recordInspection.mockResolvedValue(false);
+    findByUploadId
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, inspected_etag: '"etag-0"' });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(409);
+  });
+
+  it("answers 200 when a rival inspect already recorded these same bytes", async () => {
+    const row = asset();
+    const { req, res, status, recordInspection, findByUploadId } = harness(row);
+    recordInspection.mockResolvedValue(false);
+    findByUploadId.mockResolvedValueOnce(row).mockResolvedValueOnce({
+      ...row,
+      inspected_etag: ETAG,
+      width_px: 7,
+      height_px: 3,
+      inspected_at: new Date(),
+    });
+
+    await POST(req, res);
+
+    expect(status).toHaveBeenCalledWith(200);
   });
 
   it("answers 404 for an upload it has no row for", async () => {
@@ -219,10 +323,9 @@ describe("POST /store/artwork/uploads/:uploadId/inspect", () => {
   });
 
   it.each([
-    ["already promoted onto an order", { promoted_at: new Date() }],
+    ["already claimed by an order, even before it is filed", { claimed: true }],
     ["already purged", { purged_at: new Date() }],
   ])("answers 404 for an upload %s", async (_label, overrides) => {
-    // Either way the staging object is gone, so there is nothing to read.
     const { req, res, status } = harness(asset(overrides));
 
     await POST(req, res);

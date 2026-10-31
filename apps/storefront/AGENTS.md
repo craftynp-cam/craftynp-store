@@ -30,7 +30,7 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   fetch runs before a page's.
 - Catalog URLs are `/products`, `/{category}`, and `/{category}/{product}`.
   Literal top-level segments in `src/app` — `products`, `about`, `account`,
-  `auth`, `checkout`, `design`, `sign-in` — shadow the `/{category}` dynamic
+  `auth`, `checkout`, `custom-quote`, `design`, `sign-in` — shadow the `/{category}` dynamic
   route, so **a Medusa category cannot use one of those handles**, and each new
   top-level route claims one more.
 - Every page's `<main>` must carry `id="main-content"` and `tabIndex={-1}` —
@@ -79,13 +79,19 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   or transitively. It throws at module-eval when the env vars are unset, which
   fails every suite that imports the `@/components` barrel. Keep pure logic in
   medusa-free modules (`saved-address.ts`, `shipping-rates.ts`, `tax-quote.ts`,
-  `payment.ts`, `upstream-error.ts`). `import type` is fine.
+  `payment.ts`, `price-quote.ts`, `checkout-refusal.ts`, `upstream-error.ts`).
+  `import type` is fine.
 - **Medusa fetch helpers degrade for a failed _query_ and throw for a failed
   _backend_.** The split is `isBackendFailure()` in `src/lib/medusa-error.ts`: a
   rejection that is not a `FetchError` (DNS, refused, TLS, timeout), or one
   carrying 401/403 (wrong publishable key), 404 on a core store route, or any
   5xx, is a misconfigured or down backend and is rethrown as
-  `MedusaUnavailableError` so `app/error.tsx` renders a visible error. Anything
+  `MedusaUnavailableError`. The catalogue pages (home, `/products`, `/about`,
+  category, product) catch it and render `<StoreUnavailable />`; the root
+  layout catches its own nav and site-content calls; `app/sitemap.ts` lets it
+  through as a 500. `/checkout`, `/checkout/confirmation` and
+  `/account/addresses` also call a throwing helper but have no catch, and there
+  is no `app/error.tsx`, so they reach Next's default error page. Anything
   else — a rejected filter, a 422 — still degrades to an empty or default value.
   New fetchers follow this split.
   Degrading on everything, which is what this used to say, meant a wrong
@@ -241,16 +247,36 @@ here knows that a product might have a size or a material.
   sticky block taller than the space it sticks in puts its own bottom out of
   reach. Below `lg` it must stay in flow — the gallery is the first thing on the
   page there, so sticking it would pin it over the configurator.
+- **The main gallery image is `object-contain` inside its square frame**, so a
+  portrait or landscape product photo shows whole rather than cropped. The
+  frame stays square so switching images never moves the purchase column;
+  the thumbnails stay `object-cover`.
 - **Everything on the product page stays inside `ProductDetailView`'s grid**,
   `ProcessPanel` included. The grid is what reserves `--cta-bar-height` at its
   foot for the phone CTA bar, so anything rendered after it from the page would
   sit under that fixed bar with nothing clearing it.
-- **`ProcessPanel` takes its timings from site content, never from a constant.**
+- **`ProcessPanel` takes its timings, and its ready-to-ship heading, first step
+  and dispatch note, from site content, never from a constant.**
   `order_turnaround_note` and `order_shipping_window_note` are the same two
-  lines the confirmation page and the confirmation email render, so a hard-coded
-  "3–5 business days" here would contradict the owner the day they edit them.
-  The panel supplies the step's meaning itself and treats the note as the
-  timing, so a blanked note leaves an explanation rather than an empty step.
+  lines the confirmation page and the confirmation email render, so a
+  hard-coded "3–5 business days" here would contradict the owner the day they
+  edit them. The panel supplies the made-to-order step's meaning itself and
+  treats the note as the timing, so a blanked note leaves an explanation rather
+  than an empty step.
+- **`customization.isCustomizable` picks the panel's branch**, the same boolean
+  that picks the Made to order / Ready to ship badge above it, so the two cannot
+  disagree. A ready-made product used to be told its piece was "made to order in
+  the workshop" right under a Ready to ship badge (CNP-99). Made to order keeps
+  "How your order is made", "We make it by hand" and the turnaround note.
+  Ready to ship shows neither. Its heading, first step title and body come from
+  the `ready_to_ship_*` fields, the step's note is `ready_to_ship_dispatch_note`,
+  and the shipping step stays as it is. If the owner blanks the heading, title
+  or body, the panel falls back to that field's default through
+  `siteContentDefault`, so a step is never empty. A blanked dispatch note is just
+  left out, like the other notes. Steps are keyed by position, not by title,
+  because the owner could type "It ships to you" as a title. The confirmation
+  page and email still show the turnaround note on every order; that is a
+  follow-up.
 - **The customization step is built by walking `CUSTOMIZATION_INPUTS`**, through
   `offeredInputLabels`, for the same reason the gate and the admin widget walk
   it: a new input added to the registry without a phrase here is a type error
@@ -298,10 +324,13 @@ the product query cannot answer this, is in
 - **The cart line carries the quote token, and its size only as
   `customization.dimensions`.** There is no top-level copy to disagree with
   it: `prepare-cart` prices and makes the size the customization records
-  (CNP-85). `setCartLineQuantity` **drops the token** when the drawer changes a
-  quantity: the quote was issued for the old quantity and a tier makes that a
-  different unit price, so `prepare-cart` asks for a fresh one rather than
-  charging a stale tier.
+  (CNP-85). **Every write that changes a quoted quantity drops the token** —
+  `setCartLineQuantity`, and the merges in both `addCartLine` and
+  `updateCartLine` — because the quote was issued for the old quantity and a
+  tier makes that a different unit price. Checkout then re-quotes the line
+  before it prepares (see **Checkout**) rather than charging a stale tier.
+  `addCartLine`'s merge kept a token signed for the smaller quantity until
+  CNP-93, so adding the same custom size twice was refused `line_mismatch`.
 - **`taxQuoteKey` and `paymentPrepareKey` include each line's
   `customization.dimensions`**, or a resized line reuses the cached tax, or the
   PaymentIntent, minted for the size it used to be.
@@ -325,8 +354,8 @@ guard that validates them).
 - **`ProductPurchase` owns the configurator draft**, alongside its quantity. The
   draft is deliberately
   storefront-shaped strings, not a `LineItemCustomization` — the shopper's width
-  is `"8"` while they are still typing, and an `ArtworkReference` here has no
-  `dpi` yet, so it cannot become one. Add-to-cart maps it through
+  is `"8"` while they are still typing, so it cannot become one. Add-to-cart
+  maps it through
   `lineItemCustomization`, which narrows the storefront `ArtworkReference` to
   the six fields `artworkReferenceSchema` declares and drops the `uploadId` and
   `kind` the wire has no use for. The result rides the cart line as
@@ -403,7 +432,11 @@ gate, the price quote and the artwork upload.
 - **A `?edit=` naming a line that is gone, or a variant the product no longer
   sells, falls back silently to add-to-cart.** A notice cannot be rendered
   without either flashing during hydration or mismatching it, and checkout
-  already declines to special-case the empty server snapshot.
+  already declines to special-case the empty server snapshot. Checkout's
+  refused-line links land here too, which is why a line refused as no longer
+  available tells the shopper to remove it rather than edit it, and why the
+  payment step gives that line a Remove this item button beside the edit
+  link.
 - **Save and Cancel move focus to `#main-content` before opening the
   drawer.** The keyed remount removes the button that had focus, so the drawer
   would otherwise return focus to `<body>` when it closes. Only an edit does
@@ -676,6 +709,21 @@ in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
   Drag-over is signalled by the hint text changing, not by colour alone — which
   is also the only form jsdom can assert, since it applies no CSS.
 
+## Custom quote
+
+`/custom-quote` is the shop's "Request a custom quote" form, linked from the
+footer. The backend half is in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+
+- **`submitCustomQuote` (`src/lib/custom-quote.ts`) posts straight from the
+  browser to Medusa**, for the same per-IP rate-limit reason as the artwork
+  presign, and is medusa-free so the client form can import it.
+- **The form validates with `customQuoteFieldErrors` from `@craftynp/types`**,
+  the same schema the route validates with, so the two cannot word a field
+  differently. Errors appear only after the first submit, and a refused
+  submit focuses the first invalid field by `name`.
+- **The `company` input is a honeypot**, off-screen and `aria-hidden` with
+  `tabIndex={-1}`. Do not turn it into a real field.
+
 ## Design tokens
 
 Declared once in `src/app/globals.css`, which documents its own three-layer
@@ -752,6 +800,58 @@ customization }` and nothing more.** The cart line's `details` and
   builds the order line's rows and flag itself, from the product and the
   validated customization, and never reads a request's (see
   [apps/medusa/AGENTS.md](../medusa/AGENTS.md)).
+- **Checkout re-quotes a stale area-priced line before it prepares.** A quote
+  token lives 30 minutes and the cart in `localStorage` has no expiry, so
+  `usePaymentSession` checks each line with `needsFreshPriceQuote`
+  (`src/lib/price-quote.ts`). It reads the token's `exp` without the secret,
+  and treats a missing or unreadable token, or one within
+  `PRICE_QUOTE_REFRESH_MARGIN_MS` (two minutes) of expiring, as stale. Stale
+  lines are re-quoted one at a time through `/checkout/price-quote` and written
+  back with `setCartLineQuote`, which refuses if the line's quantity or size
+  moved while the quote was in flight. `/checkout/prepare` is posted only once
+  every re-quote has succeeded, with items built from that refreshed snapshot.
+  **Only a transient re-quote failure is the retryable error** — a rate limit,
+  a network failure or a misconfigured store is not something the shopper can
+  edit. A re-quote Medusa refuses for the line itself (`unknown_variant`,
+  `bad_dimensions`, `unpriced`, `unconfigured`, which the proxy answers as a
+  `400` with that `reason`) is named like a prepare refusal, as
+  `invalid_price_quote` with the same reason. Every stale line is still
+  checked, and nothing is prepared, because Try again would repeat the same
+  refusal. The browser can neither verify a signature nor trust its own clock,
+  so a prepare that still answers `invalid_price_quote` `expired`, `malformed`,
+  `bad_signature` or `line_mismatch` gets **one** forced re-quote of those
+  lines and one retry, never a loop. A forced re-quote Medusa refuses is named
+  alongside that prepare's other refusals.
+- **Keep the token and `unitPrice` out of `paymentPrepareKey` and
+  `taxQuoteKey`.** The write-back re-renders every cart reader, so if either
+  key read them, storing a fresh quote would re-trigger the very prepare it
+  was fetched for.
+- **A refused line is named, not retried.** `/checkout/prepare` passes
+  Medusa's line refusals through as `400 { error, reason, line, lines }`, and
+  `lineProblems` (`src/lib/checkout-refusal.ts`) maps each `line` — an index
+  into the request — back to the cart line **in the snapshot that was sent**,
+  not the live cart. The payment step lists each refused item by its title plus
+  its Size or file name, since every custom size of a product shares one
+  title, with its message and an "Edit this item" link to `?edit=<lineId>`,
+  plus a "Remove this item" button when the line is no longer available, and
+  **shows no Try again**: resending an unchanged cart cannot succeed. The
+  summary's `CartCard` for that line gets the same message and edit link, even
+  when the line is not customizable — a product the owner has since given a
+  required input is exactly that line. The payment step carries the message
+  itself because the summary sits below the Pay button on a phone. **An
+  always-mounted `role="status"` in the Payment section names the refused
+  items**, so they are announced rather than arriving with the list's node,
+  and pressing Pay while a line is refused moves focus to that list's first
+  action instead of returning silently.
+- **The shopper copy is a `satisfies` map over every refusal reason**, so a
+  reason added to `CHECKOUT_LINE_REFUSAL_REASONS` in `@craftynp/types` with no
+  words here is a type error, and it carries no test of its own. Expired or
+  uninspected artwork says to open the item and press **Replace**, because the
+  edit page re-seeds the same dead file reference and a plain Save would be
+  refused again. A variant or price the product no longer has says to
+  **remove** the item, for the `?edit=` fallback reason under Editing a cart
+  line. `lineProblems` sets the Remove action from that same message, so the
+  copy and the control cannot disagree.
 - **Tax is quoted only after a shipping rate has settled**, because shipping
   itself is taxed, and it re-runs when the shopper picks a different rate. Do
   not fire the tax and shipping-rate calls in parallel.
@@ -772,7 +872,19 @@ customization }` and nothing more.** The cart line's `details` and
   reason via `describeUpstreamError`** (`src/lib/upstream-error.ts`) alongside
   their own error code. `sdk.client.fetch` discards every field but the status
   and `message`, so without it a rejected quote, a misconfigured region, and an
-  unreachable Medusa are indistinguishable in the browser.
+  unreachable Medusa are indistinguishable in the browser. `/checkout/prepare`
+  goes one step further through `prepareFailureResponse`: an upstream 400 whose
+  `message` parses as line refusals (`parseCheckoutLineRefusals` in
+  `@craftynp/types`) becomes `400 { error, reason, line, lines }`, and
+  everything else stays `502 checkout_unavailable`. That includes a message with
+  no line, which is what a Medusa deployed before CNP-93 sends, so the two apps
+  can deploy in either order. `/checkout/price-quote` does the same through
+  `priceQuoteFailureResponse`: a line Medusa refuses to price —
+  `invalid_line:unknown_variant` or `bad_dimensions` on a 400,
+  `price_unavailable:unpriced` or `unconfigured` on a 502 — becomes
+  `400 { error: "price_unavailable", reason }`. A rate limit, a misconfigured
+  store, a network failure and an older Medusa's head-less message all stay
+  `502 price_unavailable`.
 - **Keep `<Elements>` keyed on `` `${clientSecret}:${mode}` ``.** Stripe reads
   `options.clientSecret` only on first mount, so an address edit needs a full
   remount against the freshly minted secret.
@@ -924,6 +1036,119 @@ tabs are not built yet — CNP-60 covers them.
   `setState`.** The parent (`addresses-view.tsx`) keys it on the target
   address's id; calling `setState` synchronously inside an effect trips this
   repo's `react-hooks/set-state-in-effect` lint rule.
+
+## Metadata, sitemap and security headers
+
+### Canonical links and social previews
+
+- **`alternates.canonical` and `openGraph.url` are set per page, never in
+  `layout.tsx`.** Every page that does not override a layout value inherits it,
+  so a canonical there would point `/checkout`, `/account` and every 404 at the
+  home page. The home, `/products`, `/about`, category and product pages spread
+  in `pageMetadata(path, image?)` from `src/lib/page-metadata.ts`.
+- **A page's `openGraph` replaces the layout's wholesale** — Next merges
+  metadata one key deep — so `pageMetadata` re-supplies `siteName` and `type`.
+  **Neither it nor the layout sets an og title or description, on purpose.**
+  Next copies each page's own resolved title and description into its og and
+  twitter tags only when `openGraph` has none, so the layout's old
+  `openGraph.title` is what made every product preview read "The Crafty NP"
+  with the tagline. Twitter tags come the same way, and the card is
+  `summary_large_image` only when the page has an image.
+- The home page sets no title, so the layout's default stays un-templated
+  rather than "The Crafty NP — The Crafty NP".
+- **A product's preview image is its first image; a category's is its
+  `image_url` metadata**, carried through `fetchCatalogSidebar`, which is why
+  that query asks for `description,metadata`. A category with no description
+  gets a generated one. No image leaves a `summary` card, not a borrowed one.
+- **`NEXT_PUBLIC_SITE_URL` is the origin of all of it.** `metadataBase`, the
+  JSON-LD offer URLs, the sitemap and robots.txt's Sitemap line go through
+  `siteOrigin()` / `absoluteUrl()` in `src/lib/routes.ts`, which treat a blank
+  or non-absolute value as unset and fall back to `http://localhost:8000`. That
+  fallback is for development and tests only. **`next.config.ts` fails a
+  production build** when the value is blank or not an absolute http(s) URL,
+  because a missing Docker ARG builds green (the Dockerfile sets the ENV to
+  `""`) and would canonicalise the whole site to localhost. It checks
+  `PHASE_PRODUCTION_BUILD`, not `NODE_ENV`, so `next start`, `next dev` and
+  Jest — which loads the config through `next/jest` — never trip it. CI's
+  `.env.example` value passes.
+- The sitemap takes a product's URL from the list query's first category and the
+  canonical from the handle query's; neither orders categories, so a product in
+  several categories could in principle get two different URLs.
+
+### Sitemap
+
+- **`app/sitemap.ts` is `force-dynamic`, and must stay that way.** Metadata
+  routes are prerendered at build, and CI builds with no backend, so a
+  prerendered sitemap throws `MedusaUnavailableError` and fails the build. A
+  `revalidate` export still prerenders.
+- **It lets `MedusaUnavailableError` through as a 500.** A crawler retries a
+  500, whereas a 200 missing the catalogue advertises a shrunken site.
+- Composition is the pure `toSitemapEntries` in `src/lib/sitemap.ts`: the static
+  pages, the top-level categories `fetchNavCategories` returns (the only
+  `/{category}` pages that resolve), and each product's `card.href`. It drops a
+  product with no category (`//handle`) and any route in `DISALLOWED_PATHS`,
+  which `robots.ts` shares. **Both match a reserved route as a whole segment**:
+  `disallowRules()` sends `/design$`, `/design/` and `/design?` rather than the
+  bare `/design` prefix crawlers would otherwise apply, so a category such as
+  `designs` or `accounting-gifts` stays listed and crawlable. Change the two
+  together — a sitemap URL that robots.txt blocks is flagged by Search Console.
+  It inherits the fetchers' limit of 100 with no pagination.
+
+### Security headers
+
+- **They live in `next.config.ts` `headers()`, not a `proxy.ts`.** There is
+  deliberately no middleware (see Routing), and nonces would need one and make
+  every route dynamic — hence `'unsafe-inline'`. The headers are compiled into
+  the build, so every host they read must be a build-time variable, and a
+  change needs a rebuild.
+- **That is why the upload host is `NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN`.**
+  `turbo.json` passes only `NEXT_PUBLIC_*` into the build task, and turbo's
+  strict env mode strips anything else inside the Docker build, while CI stays
+  green because Next reads `.env.local` itself. It is read only in
+  `next.config.ts`, so nothing is inlined into a bundle.
+- **The CSP ships as `Content-Security-Policy-Report-Only`**, with no report
+  endpoint: there is no preview environment to watch it on, and enforcing it is
+  its own follow-up. **`X-Frame-Options: DENY` is therefore the only clickjacking
+  protection** — `frame-ancestors 'none'` enforces nothing while the policy only
+  reports. Do not drop it.
+- What each source is for:
+  - `script-src 'unsafe-inline'` — Next's inline flight scripts,
+    `themeInitScript` (see Design tokens), and the inline snippet Cloudflare's
+    Bot Fight Mode injects (see [docs/dns.md](../../docs/dns.md)).
+    `'unsafe-eval'` and `ws:` are development-only, for React's debugging and
+    HMR.
+  - `https://js.stripe.com https://*.js.stripe.com` as script and frame,
+    `https://hooks.stripe.com` as frame, and `https://api.stripe.com` as
+    connect — Stripe.js and the Payment Element.
+  - `https://link.com https://*.link.com` as frame and connect, and
+    `https://*.link.com` as img — Stripe Link, which the Payment Element shows
+    under Medusa's automatic payment methods whenever the Stripe Dashboard has
+    it on. Nothing in code turns it off. These are the Link section of Stripe's
+    CSP guide (docs.stripe.com/security/guide), on top of the Stripe.js hosts.
+  - `style-src 'unsafe-inline'` — inline style attributes: the layout's
+    `--announcement-height`, React Aria's visually-hidden styles, `next/image`
+    fill.
+  - `img-src` — raster catalogue images go through same-origin `/_next/image`,
+    but `next/image` serves an `.svg` source unoptimized, straight from its
+    host, because `dangerouslyAllowSVG` is off. The Medusa dashboard's product
+    media, the site-content image field and the category image widget can all
+    produce SVG URLs, so the backend and media origins — the same two hosts
+    `images.remotePatterns` allows — are listed. `blob:` is the artwork
+    preview, the one `unoptimized` image.
+  - `connect-src` — the backend origin for the artwork presign and inspect
+    calls, which go straight to Medusa, and the artwork upload origin for the
+    presigned PUT.
+  - No `form-action` yet. The sign-out form's redirect to Auth0 would need
+    `AUTH0_DOMAIN` in the build; add both when the policy is enforced.
+- **A new browser call to another host needs a CSP change in the same pull
+  request**, and so does a Cloudflare feature that injects one (Rocket Loader,
+  Web Analytics, Zaraz).
+- **HSTS is sent from production builds only**, and Cloudflare's edge HSTS is
+  off (see [docs/dns.md](../../docs/dns.md)). HSTS pins a hostname, not a port,
+  so sent from a local HTTPS run it could pin `localhost` for Medusa and MinIO.
+- **`Permissions-Policy` must never restrict `payment`.** Apple Pay and Google
+  Pay run inside Stripe's Payment Element, and `payment=()` drops them without
+  an error. It turns off camera, microphone and geolocation only.
 
 ## Testing
 

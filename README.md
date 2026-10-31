@@ -214,11 +214,11 @@ shared example file. **All of these must be set before the first `db:migrate`**,
 which seeds the USD `United States` region from them (`seed-us-region.ts`), plus
 a flat `Standard Shipping` option priced from
 `SHIPPING_OPTION_DEFAULT_AMOUNT`/`SHIPPING_OPTION_DEFAULT_LABEL` — a Medusa
-catalogue entry, **not** a checkout-time fallback: if ShipStation is
-unreachable or a rate can't be calculated, checkout shows an error and blocks
-Continue rather than quoting a guessed price. A second, live-rate shipping
-option is seeded by `seed-us-stripe-payment-provider.ts` once Stripe payments
-are configured below. Leave `NEXT_PUBLIC_DEFAULT_REGION` at `us` — United States
+catalogue entry, **not** what checkout charges. Checkout charges the flat
+rate set under **Site content → Shipping** in the admin, through a second
+shipping option seeded by `seed-us-stripe-payment-provider.ts` once Stripe
+payments are configured below and renamed to `Flat rate shipping` by
+`update-shipping-option-flat-rate.ts`. Leave `NEXT_PUBLIC_DEFAULT_REGION` at `us` — United States
 is the only region any environment gets. Do not point automated tests at the
 ShipStation sandbox: its 20 requests/minute ceiling causes sporadic failures.
 
@@ -267,8 +267,9 @@ command running while you test checkout — it's what delivers the webhook
 Medusa uses to reconcile an order if the browser closes mid-redirect (AC9).
 `db:migrate` runs `seed-us-stripe-payment-provider.ts`, which attaches Stripe
 to the seeded US region as its payment provider, switches the region's tax
-provider from the system default to Stripe Tax, and adds a live-rate
-shipping option backed by ShipStation — all three providers CNP-53 registers
+provider from the system default to Stripe Tax, and adds the checkout
+shipping option backed by the `shipstation` fulfillment provider (flat-rate
+since launch) — all three providers CNP-53 registers
 in `medusa-config.ts`. Pay with Stripe's test card `4242 4242 4242 4242` (any
 future expiry, any CVC) for a successful charge, or `4000 0000 0000 0002` to
 exercise a decline. Never point automated tests at the Stripe sandbox — same
@@ -626,7 +627,11 @@ Dockerfile.** Next inlines them at build time, and Railway passes a service
 variable into a Docker build only when an `ARG` names it. A missing one still
 builds green and ships `undefined` — and `next.config.ts` reads the backend and
 media URLs at build time to allow image hosts, so missing those 400s every
-product image from the optimizer.
+product image from the optimizer. It also reads the backend and
+`NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN` into the Content-Security-Policy. The one
+that fails loudly is `NEXT_PUBLIC_SITE_URL`: a production build refuses to run
+without an absolute value, because canonical links and the sitemap are built on
+it (CNP-100).
 
 **The admin is not proxied through the storefront in production.** The `/api`
 and `/app` rewrites in `next.config.ts` are development-only: they exist so the
@@ -639,11 +644,12 @@ which is what makes `ADMIN_CORS=https://api.thecraftynp.com` the whole answer.
 **The storefront and API are now cross-origin** (CNP-17), because they sit on
 different domains by design. Production values:
 
-| Variable                                               | Value                         |
-| ------------------------------------------------------ | ----------------------------- |
-| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com` |
-| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`     |
-| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`     |
+| Variable                                               | Value                                                       |
+| ------------------------------------------------------ | ----------------------------------------------------------- |
+| `MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | `https://api.thecraftynp.com`                               |
+| `STOREFRONT_URL`, `NEXT_PUBLIC_SITE_URL`               | `https://thecraftynp.org`                                   |
+| `STORE_CORS`, `AUTH_CORS`                              | `https://thecraftynp.org`                                   |
+| `NEXT_PUBLIC_ARTWORK_UPLOAD_ORIGIN`                    | the origin of `ARTWORK_STORAGE_ENDPOINT` on `medusa-server` |
 
 `ADMIN_CORS` is `https://api.thecraftynp.com` — the origin the admin is actually
 served from, and nothing else. With the `/app` rewrite dev-only and

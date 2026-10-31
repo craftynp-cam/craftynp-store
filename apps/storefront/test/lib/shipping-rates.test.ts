@@ -218,12 +218,12 @@ describe("formatDeliveryWindow", () => {
     expect(result).toMatch(/^Arrives /);
   });
 
-  it("reports an unavailable estimate when nothing is known", () => {
+  it("says nothing when no estimate is known, as for the flat rate", () => {
     expect(
       formatDeliveryWindow(
         makeRate({ deliveryDays: null, estimatedDeliveryDate: null }),
       ),
-    ).toBe("Delivery estimate unavailable");
+    ).toBeNull();
   });
 });
 

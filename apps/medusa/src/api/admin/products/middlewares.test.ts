@@ -15,17 +15,27 @@ const STORED = {
     customization_size: "optional",
     customization_size_min_inches: "2",
     customization_size_max_inches: "48",
+    customization_size_option: "Size",
+    customization_size_option_value: "Custom",
     customization_size_rate_per_sq_inch: "0.055",
     customization_size_price_floor: "4",
   },
-  weight: 900,
-  length: 45,
-  width: 22,
-  height: 4,
+  product_options: [
+    {
+      product_option: { title: "Size" },
+      values: [{ value: "Medium" }, { value: "Custom" }],
+    },
+  ],
 };
 
 function runMiddleware(body: Record<string, unknown>, stored = STORED) {
-  const graph = jest.fn().mockResolvedValue({ data: [stored] });
+  const graph = jest.fn(async ({ fields }: { fields: string[] }) => {
+    const { product_options: _options, ...withoutOptions } = stored;
+    const loadsOptions =
+      fields.includes("product_options.product_option.title") &&
+      fields.includes("product_options.values.value");
+    return { data: [loadsOptions ? stored : withoutOptions] };
+  });
   const req = {
     body,
     params: { id: stored.id },
@@ -47,11 +57,11 @@ describe("touchesGuardedFields", () => {
   it("recognises the fields the guards actually read", () => {
     expect(touchesGuardedFields({ metadata: {} })).toBe(true);
     expect(touchesGuardedFields({ status: "published" })).toBe(true);
-    expect(touchesGuardedFields({ weight: 10 })).toBe(true);
   });
 
   it("ignores an update that cannot change the answer", () => {
     expect(touchesGuardedFields({ subtitle: "A dev fixture" })).toBe(false);
+    expect(touchesGuardedFields({ weight: 10 })).toBe(false);
   });
 });
 
@@ -105,6 +115,37 @@ describe("validateProductUpdate", () => {
 
     expect(error).toBeInstanceOf(MedusaError);
     expect(String(error)).toMatch(/customization_size_rate_per_sq_inch/);
+  });
+
+  it("refuses to publish a custom size whose Custom option was cleared", async () => {
+    const { error } = await runMiddleware({
+      metadata: {
+        customization_size_option: "",
+        customization_size_option_value: "",
+      },
+    });
+
+    expect(error).toBeInstanceOf(MedusaError);
+    expect(String(error)).toMatch(
+      /customization_size_option and customization_size_option_value/,
+    );
+  });
+
+  it("refuses a save while the product's own options lack its named Custom value", async () => {
+    const withoutCustom = {
+      ...STORED,
+      product_options: [
+        { product_option: { title: "Size" }, values: [{ value: "Medium" }] },
+      ],
+    };
+
+    const { error } = await runMiddleware(
+      { metadata: { customization_size_min_inches: "4" } },
+      withoutCustom,
+    );
+
+    expect(error).toBeInstanceOf(MedusaError);
+    expect(String(error)).toMatch(/no value "Custom"/);
   });
 
   it("repairs a product whose stored declaration is already broken", async () => {

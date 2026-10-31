@@ -1,4 +1,4 @@
-import type { LineItemCustomization } from "@craftynp/types";
+import type { CustomDimensions, LineItemCustomization } from "@craftynp/types";
 
 export type CartLineDetail = { label: string; value: string };
 
@@ -189,11 +189,12 @@ export function addCartLine(line: NewCartLine): boolean {
   );
 
   const lines = existing
-    ? current.lines.map((candidate) =>
-        cartLineKey(candidate) === key
-          ? { ...candidate, quantity: candidate.quantity + line.quantity }
-          : candidate,
-      )
+    ? current.lines.map((candidate) => {
+        if (cartLineKey(candidate) !== key) return candidate;
+
+        const { priceQuoteToken: _staleQuote, ...rest } = candidate;
+        return { ...rest, quantity: candidate.quantity + line.quantity };
+      })
     : [...current.lines, { ...line, lineId: newLineId() }];
 
   return writeCart({ lines });
@@ -250,6 +251,32 @@ export function setCartLineQuantity(id: string, quantity: number): void {
       const { priceQuoteToken: _staleQuote, ...rest } = line;
       return { ...rest, quantity: next };
     }),
+  });
+}
+
+export function setCartLineQuote(
+  lineId: string,
+  quoted: { quantity: number; dimensions: CustomDimensions },
+  quote: { priceQuoteToken: string; unitPrice: number },
+): boolean {
+  const current = readCartFromStorage();
+  const line = current.lines.find((candidate) => candidate.lineId === lineId);
+  const dimensions = line?.customization?.dimensions;
+
+  if (
+    !line ||
+    !dimensions ||
+    line.quantity !== quoted.quantity ||
+    dimensions.widthInches !== quoted.dimensions.widthInches ||
+    dimensions.heightInches !== quoted.dimensions.heightInches
+  ) {
+    return false;
+  }
+
+  return writeCart({
+    lines: current.lines.map((candidate) =>
+      candidate.lineId === lineId ? { ...candidate, ...quote } : candidate,
+    ),
   });
 }
 
