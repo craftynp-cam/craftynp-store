@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export type SiteContentFieldType =
-  "text" | "longText" | "boolean" | "image" | "money";
+  "text" | "longText" | "boolean" | "image" | "money" | "email";
 
 export type SiteContentField = {
   key: string;
@@ -377,6 +377,16 @@ export const SITE_CONTENT_FIELDS = [
     defaultValue: "10.00",
     maxLength: 8,
   },
+  {
+    key: "custom_quote_email",
+    type: "email",
+    group: "Custom quotes",
+    label: "Send quote requests to",
+    description:
+      "Where the Request a custom quote form is emailed. Reply to the email to answer the customer directly.",
+    defaultValue: "info@thecraftynp.org",
+    maxLength: 254,
+  },
 ] as const satisfies readonly SiteContentField[];
 
 export type SiteContentKey = (typeof SITE_CONTENT_FIELDS)[number]["key"];
@@ -461,6 +471,16 @@ export function validateSiteContentValue(
     return {
       success: false,
       message: `${key} must be an image URL`,
+    };
+  }
+
+  if (
+    field.type === "email" &&
+    !z.string().email().safeParse(trimmed).success
+  ) {
+    return {
+      success: false,
+      message: `${key} must be an email address`,
     };
   }
 

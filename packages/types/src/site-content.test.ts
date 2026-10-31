@@ -177,3 +177,17 @@ describe("shipping_flat_rate", () => {
     expect(flatShippingAmount("abc")).toBe(10);
   });
 });
+
+describe("custom_quote_email", () => {
+  it("accepts an email address", () => {
+    expect(
+      validateSiteContentValue("custom_quote_email", " info@thecraftynp.org "),
+    ).toEqual({ success: true, value: "info@thecraftynp.org" });
+  });
+
+  it.each(["", "info", "info@"])("rejects %j", (value) => {
+    expect(validateSiteContentValue("custom_quote_email", value).success).toBe(
+      false,
+    );
+  });
+});

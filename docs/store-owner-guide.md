@@ -364,6 +364,12 @@ checkout, in dollars (for example `10.00`). It starts at $10.00. A shopper
 already at checkout keeps the rate they were shown; new checkouts pick up the
 change straight away.
 
+**Custom quotes** — _Send quote requests to_, the email address the
+**Request a custom quote** form on the website sends to. It starts as
+info@thecraftynp.org. Each request arrives as an email with the customer's
+name, phone, email, date needed, product and description; press **Reply** and
+your answer goes straight to the customer.
+
 **Turnaround and shipping** — two timing lines.
 
 - _Production turnaround_ — how long you take to make an order. Shown in the

@@ -30,7 +30,7 @@ conventions are in the root [AGENTS.md](../../AGENTS.md).
   fetch runs before a page's.
 - Catalog URLs are `/products`, `/{category}`, and `/{category}/{product}`.
   Literal top-level segments in `src/app` — `products`, `about`, `account`,
-  `auth`, `checkout`, `design`, `sign-in` — shadow the `/{category}` dynamic
+  `auth`, `checkout`, `custom-quote`, `design`, `sign-in` — shadow the `/{category}` dynamic
   route, so **a Medusa category cannot use one of those handles**, and each new
   top-level route claims one more.
 - Every page's `<main>` must carry `id="main-content"` and `tabIndex={-1}` —
@@ -704,6 +704,21 @@ in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
   boolean flickers off at every internal boundary. `dragDepthRef` is the fix.
   Drag-over is signalled by the hint text changing, not by colour alone — which
   is also the only form jsdom can assert, since it applies no CSS.
+
+## Custom quote
+
+`/custom-quote` is the shop's "Request a custom quote" form, linked from the
+footer. The backend half is in [apps/medusa/AGENTS.md](../medusa/AGENTS.md).
+
+- **`submitCustomQuote` (`src/lib/custom-quote.ts`) posts straight from the
+  browser to Medusa**, for the same per-IP rate-limit reason as the artwork
+  presign, and is medusa-free so the client form can import it.
+- **The form validates with `customQuoteFieldErrors` from `@craftynp/types`**,
+  the same schema the route validates with, so the two cannot word a field
+  differently. Errors appear only after the first submit, and a refused
+  submit focuses the first invalid field by `name`.
+- **The `company` input is a honeypot**, off-screen and `aria-hidden` with
+  `tabIndex={-1}`. Do not turn it into a real field.
 
 ## Design tokens
 

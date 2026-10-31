@@ -312,10 +312,22 @@ TOTP is config-only and opt-in per identity, so do not implement enrolment.
 
 ## Abuse and rate limiting
 
-Seven store routes are reachable with no session at all, and two of them spend
-money on every call: `/store/tax-quote` bills a Stripe Tax calculation and
-`/store/shipping-rates`, which no longer calls ShipStation but still signs a
-quote checkout depends on.
+Eight store routes are reachable with no session at all. `/store/tax-quote`
+bills a Stripe Tax calculation on every call, `/store/custom-quotes` emails the
+owner on every call, and `/store/shipping-rates` no longer calls ShipStation
+but still signs a quote checkout depends on.
+
+- **`/store/custom-quotes` is called straight from the browser**, like the
+  artwork presign, so its limit (`RATE_LIMIT_CUSTOM_QUOTES_PER_MINUTE`,
+  default 3) is per shopper rather than shared by everyone behind the
+  storefront's egress IP. A filled-in `company` field is the honeypot: the
+  route answers `202` and sends nothing. The email goes to the
+  `custom_quote_email` site-content field with `data.reply_to` set to the
+  shopper, which the Resend provider sends as `reply_to` in place of
+  `RESEND_REPLY_TO`. It stores no replay content, so the retry job exhausts a
+  failed one instead of resending it: the route answers `502` and the shopper
+  is told to try again, which would otherwise risk the owner getting it
+  twice.
 
 - **`rateLimit()` from `src/lib/rate-limit.ts` goes on every new anonymous store
   route that costs money or sends mail.** It is wired in the route's
