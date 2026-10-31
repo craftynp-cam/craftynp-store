@@ -19,6 +19,7 @@ import {
   unmeasuredOptionValues,
   validateCategoryArtwork,
   resolveProductCustomization,
+  validateCustomSizeOption,
   validateProductCustomization,
 } from "./product-customization.js";
 
@@ -324,6 +325,57 @@ describe("validateProductCustomization", () => {
     ).toEqual({ ok: true });
   });
 
+  describe.each(["optional", "required"])("with a %s custom size", (mode) => {
+    it.each([
+      [
+        "neither key",
+        { customization_size_option: "", customization_size_option_value: "" },
+      ],
+      ["the option but no value", { customization_size_option_value: "" }],
+      [
+        "names that are only spaces",
+        {
+          customization_size_option: "  ",
+          customization_size_option_value: " ",
+        },
+      ],
+    ])("refuses to publish one naming %s", (_label, override) => {
+      expect(
+        validateProductCustomization(
+          { ...CUSTOM_SIZE, customization_size: mode, ...override },
+          { published: true },
+        ),
+      ).toEqual({
+        ok: false,
+        message: expect.stringContaining(
+          "customization_size_option and customization_size_option_value",
+        ),
+      });
+    });
+  });
+
+  it("accepts a published required custom size that names its Custom option", () => {
+    expect(
+      validateProductCustomization(
+        { ...CUSTOM_SIZE, customization_size: "required" },
+        { published: true },
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it("lets a draft custom size be saved before its Custom option is named", () => {
+    expect(
+      validateProductCustomization(
+        {
+          ...CUSTOM_SIZE,
+          customization_size_option: "",
+          customization_size_option_value: "",
+        },
+        { published: false },
+      ),
+    ).toEqual({ ok: true });
+  });
+
   it.each([
     [
       "a rate that is not a number",
@@ -460,6 +512,93 @@ describe("validateProductCustomization", () => {
     expect(
       validateProductCustomization(
         { customizable: "false" },
+        { published: true },
+      ),
+    ).toEqual({ ok: true });
+  });
+});
+
+describe("validateCustomSizeOption", () => {
+  const PRODUCT_OPTIONS = [
+    {
+      product_option: { title: "Finish" },
+      values: [{ value: "Matte" }, { value: "Gloss" }],
+    },
+    {
+      product_option: { title: "Size" },
+      values: [{ value: "Medium" }, { value: "Custom" }],
+    },
+  ];
+
+  it("accepts a product whose own options carry its named Custom value", () => {
+    expect(
+      validateCustomSizeOption(CUSTOM_SIZE, PRODUCT_OPTIONS, {
+        published: true,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it.each([
+    ["no options at all", []],
+    [
+      "no option with that title",
+      [{ product_option: { title: "Finish" }, values: [{ value: "Custom" }] }],
+    ],
+    [
+      "an option titled in a different case",
+      [{ product_option: { title: "size" }, values: [{ value: "Custom" }] }],
+    ],
+  ])(
+    "refuses to publish a product with %s, naming the option",
+    (_label, productOptions) => {
+      expect(
+        validateCustomSizeOption(CUSTOM_SIZE, productOptions, {
+          published: true,
+        }),
+      ).toEqual({
+        ok: false,
+        message: expect.stringContaining('no option titled "Size"'),
+      });
+    },
+  );
+
+  it.each([
+    [
+      "missing from its option",
+      [{ product_option: { title: "Size" }, values: [{ value: "Medium" }] }],
+    ],
+    [
+      "only on a different option",
+      [
+        { product_option: { title: "Size" }, values: [{ value: "Medium" }] },
+        { product_option: { title: "Finish" }, values: [{ value: "Custom" }] },
+      ],
+    ],
+  ])(
+    "refuses to publish a product whose Custom value is %s, naming it",
+    (_label, productOptions) => {
+      expect(
+        validateCustomSizeOption(CUSTOM_SIZE, productOptions, {
+          published: true,
+        }),
+      ).toEqual({
+        ok: false,
+        message: expect.stringContaining('no value "Custom"'),
+      });
+    },
+  );
+
+  it("lets a draft name a Custom option its product does not carry yet", () => {
+    expect(
+      validateCustomSizeOption(CUSTOM_SIZE, [], { published: false }),
+    ).toEqual({ ok: true });
+  });
+
+  it("does not hold a product with custom size off to its leftover option names", () => {
+    expect(
+      validateCustomSizeOption(
+        { ...CUSTOM_SIZE, customization_size: "off" },
+        [],
         { published: true },
       ),
     ).toEqual({ ok: true });

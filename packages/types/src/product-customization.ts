@@ -391,6 +391,17 @@ function validateCustomSizeConfig(
     };
   }
 
+  if (
+    published &&
+    asksForSize &&
+    (optionTitle === null || optionValue === null)
+  ) {
+    return {
+      ok: false,
+      message: `custom size is on, so ${CUSTOM_SIZE_OPTION_METADATA_KEY} and ${CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY} must both be set to the size option and its Custom value`,
+    };
+  }
+
   const pricing = [
     {
       key: CUSTOM_SIZE_RATE_METADATA_KEY,
@@ -490,6 +501,50 @@ export function validateProductCustomization(
       ok: false,
       message:
         "a customizable product must ask for at least one input — turn one on, or set customizable to false",
+    };
+  }
+
+  return { ok: true };
+}
+
+export type ProductOwnOptionLike = {
+  product_option?: { title?: string | null } | null;
+  values?: readonly ({ value?: string | null } | null)[] | null;
+};
+
+export function validateCustomSizeOption(
+  metadata: Metadata,
+  productOptions: readonly (ProductOwnOptionLike | null)[] | null | undefined,
+  { published }: { published: boolean },
+): ProductCustomizationProblem {
+  if (!published) return { ok: true };
+
+  const { isCustomizable, inputs, size } =
+    resolveProductCustomization(metadata);
+  const { optionTitle, optionValue } = size;
+
+  if (!isCustomizable || inputs.dimensions === "off") return { ok: true };
+  if (optionTitle === null || optionValue === null) return { ok: true };
+
+  const titled = (productOptions ?? []).filter(
+    (productOption) => productOption?.product_option?.title === optionTitle,
+  );
+
+  if (titled.length === 0) {
+    return {
+      ok: false,
+      message: `this product has no option titled "${optionTitle}" (${CUSTOM_SIZE_OPTION_METADATA_KEY})`,
+    };
+  }
+
+  const carriesValue = titled.some((productOption) =>
+    (productOption?.values ?? []).some((value) => value?.value === optionValue),
+  );
+
+  if (!carriesValue) {
+    return {
+      ok: false,
+      message: `the "${optionTitle}" option on this product has no value "${optionValue}" (${CUSTOM_SIZE_OPTION_VALUE_METADATA_KEY})`,
     };
   }
 
