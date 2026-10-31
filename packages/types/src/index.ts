@@ -77,6 +77,7 @@ export {
   SITE_CONTENT_FIELDS,
   SITE_CONTENT_KEYS,
   resolveSiteContent,
+  siteContentDefault,
   siteContentEntrySchema,
   siteContentKeySchema,
   siteContentUpdateSchema,
