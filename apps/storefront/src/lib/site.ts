@@ -4,7 +4,10 @@ export type SocialLink = { label: string; href: string };
 
 export const SOCIAL_LINKS: readonly SocialLink[] = [
   { label: "Instagram", href: "https://www.instagram.com/the_crafty_np_" },
-  { label: "Facebook", href: "https://www.facebook.com/people/The-Crafty-NP" },
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/profile.php?id=61584479459770",
+  },
   { label: "TikTok", href: "https://www.tiktok.com/@thecraftynp89" },
 ];
 
