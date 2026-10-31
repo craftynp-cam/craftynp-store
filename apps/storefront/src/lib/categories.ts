@@ -44,7 +44,10 @@ export const fetchNavCategories = cache(async (): Promise<NavCategory[]> => {
   }
 });
 
-export type ShowcaseCategorySource = NavCategorySource & { id: string };
+export type ShowcaseCategorySource = NavCategorySource & {
+  id: string;
+  description?: string | null;
+};
 
 export type ShowcaseCategory = {
   name: string;
@@ -91,6 +94,8 @@ export type SidebarCategory = {
   handle: string;
   href: string;
   productCount: number;
+  description?: string;
+  image?: { url: string; alt: string };
 };
 
 export type SidebarCatalog = {
@@ -117,13 +122,27 @@ export function toSidebarCategories(
 
   return {
     totalCount: productSources.length,
-    categories: categories.map((category) => ({
-      id: category.id,
-      name: category.name,
-      href: category.href,
-      handle: category.href.slice(1),
-      productCount: counts.get(category.id) ?? 0,
-    })),
+    categories: categories.map((category) => {
+      const description = categorySources
+        .find((source) => source.id === category.id)
+        ?.description?.trim();
+      return {
+        id: category.id,
+        name: category.name,
+        href: category.href,
+        handle: category.href.slice(1),
+        productCount: counts.get(category.id) ?? 0,
+        ...(description ? { description } : {}),
+        ...(category.imageUrl
+          ? {
+              image: {
+                url: category.imageUrl,
+                alt: category.imageAlt || category.name,
+              },
+            }
+          : {}),
+      };
+    }),
   };
 }
 
@@ -131,7 +150,7 @@ export const fetchCatalogSidebar = cache(async (): Promise<SidebarCatalog> => {
   try {
     const [{ product_categories }, { products, count }] = await Promise.all([
       sdk.store.category.list({
-        fields: "id,name,handle,parent_category_id",
+        fields: "id,name,handle,parent_category_id,description,metadata",
         limit: 100,
       }),
       sdk.store.product.list({

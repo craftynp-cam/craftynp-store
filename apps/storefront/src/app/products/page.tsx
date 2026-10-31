@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { CatalogView, Container, StoreUnavailable } from "@/components";
 import { fetchCatalogSidebar } from "@/lib/categories";
 import { MedusaUnavailableError } from "@/lib/medusa-error";
+import { pageMetadata } from "@/lib/page-metadata";
 import { fetchCatalogProducts } from "@/lib/product-list";
 import { fetchRegion } from "@/lib/region";
 import { parseSort } from "@/lib/sort";
@@ -13,6 +14,7 @@ type ProductsPageProps = {
 
 export const metadata: Metadata = {
   title: "All products",
+  ...pageMetadata("/products"),
 };
 
 export default async function ProductsPage({

@@ -44,8 +44,8 @@ describe("toProductJsonLd", () => {
     expect(jsonLd.image).toEqual(["https://example.com/keychain.png"]);
   });
 
-  it("builds one Offer per priced variant", () => {
-    const jsonLd = toProductJsonLd(makeProduct());
+  it("builds one Offer per priced variant, linking the product by its absolute URL", () => {
+    const jsonLd = toProductJsonLd(makeProduct(), "https://thecraftynp.org");
     const offers = jsonLd.offers as Record<string, unknown>[];
 
     expect(offers).toHaveLength(1);
@@ -55,7 +55,7 @@ describe("toProductJsonLd", () => {
       price: "9.00",
       priceCurrency: "USD",
       availability: "https://schema.org/InStock",
-      url: "/keychains/wildflower-acrylic-keychain",
+      url: "https://thecraftynp.org/keychains/wildflower-acrylic-keychain",
     });
   });
 

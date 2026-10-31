@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import {
   CategoryCarousel,
   MakerIntro,
@@ -7,7 +9,10 @@ import {
 import { fetchShowcaseCategories } from "@/lib/categories";
 import { toMakerIntro, toWorkshopGallery } from "@/lib/home-content";
 import { MedusaUnavailableError } from "@/lib/medusa-error";
+import { pageMetadata } from "@/lib/page-metadata";
 import { fetchSiteContent } from "@/lib/site-content";
+
+export const metadata: Metadata = pageMetadata("/");
 
 export const dynamic = "force-dynamic";
 
