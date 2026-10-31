@@ -26,10 +26,6 @@ const STORED = {
       values: [{ value: "Medium" }, { value: "Custom" }],
     },
   ],
-  weight: 900,
-  length: 45,
-  width: 22,
-  height: 4,
 };
 
 function runMiddleware(body: Record<string, unknown>, stored = STORED) {
@@ -61,11 +57,11 @@ describe("touchesGuardedFields", () => {
   it("recognises the fields the guards actually read", () => {
     expect(touchesGuardedFields({ metadata: {} })).toBe(true);
     expect(touchesGuardedFields({ status: "published" })).toBe(true);
-    expect(touchesGuardedFields({ weight: 10 })).toBe(true);
   });
 
   it("ignores an update that cannot change the answer", () => {
     expect(touchesGuardedFields({ subtitle: "A dev fixture" })).toBe(false);
+    expect(touchesGuardedFields({ weight: 10 })).toBe(false);
   });
 });
 

@@ -79,6 +79,7 @@ export {
   SITE_CONTENT_KEYS,
   resolveSiteContent,
   siteContentDefault,
+  flatShippingAmount,
   siteContentEntrySchema,
   siteContentKeySchema,
   siteContentUpdateSchema,

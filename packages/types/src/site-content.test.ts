@@ -4,6 +4,7 @@ import {
   siteContentKeySchema,
   siteContentUpdateSchema,
   validateSiteContentValue,
+  flatShippingAmount,
 } from "./site-content.js";
 
 describe("resolveSiteContent", () => {
@@ -145,5 +146,34 @@ describe("siteContentUpdateSchema", () => {
       entries: [{ key: "not_a_real_field", value: "x" }],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("shipping_flat_rate", () => {
+  it.each(["10", "10.5", "10.00", "0", "0.00"])(
+    "accepts %s as a dollar amount",
+    (value) => {
+      expect(validateSiteContentValue("shipping_flat_rate", value)).toEqual({
+        success: true,
+        value,
+      });
+    },
+  );
+
+  it.each(["", "$10", "-1", "10.001", "ten", "1e3", "10,00"])(
+    "rejects %j",
+    (value) => {
+      expect(
+        validateSiteContentValue("shipping_flat_rate", value).success,
+      ).toBe(false);
+    },
+  );
+
+  it("reads a stored amount as a number", () => {
+    expect(flatShippingAmount(" 12.50 ")).toBe(12.5);
+  });
+
+  it("falls back to the default for a value that was never validated", () => {
+    expect(flatShippingAmount("abc")).toBe(10);
   });
 });

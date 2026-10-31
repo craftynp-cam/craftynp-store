@@ -1,7 +1,4 @@
-import {
-  AbstractFulfillmentProviderService,
-  ContainerRegistrationKeys,
-} from "@medusajs/framework/utils";
+import { AbstractFulfillmentProviderService } from "@medusajs/framework/utils";
 import type { Logger } from "@medusajs/framework/types";
 import type {
   CalculateShippingOptionPriceContext,
@@ -11,29 +8,22 @@ import type {
   FulfillmentOption,
 } from "@medusajs/framework/types";
 
-import { SHIPSTATION_MODULE } from "../shipstation";
-import { packItemsIntoOneBox } from "../shipstation/lib";
-import type ShipStationModuleService from "../shipstation/service";
+import { SITE_CONTENT_MODULE } from "../site-content";
+import type SiteContentModuleService from "../site-content/service";
+import {
+  FLAT_RATE_SERVICE_CODE,
+  loadFlatShippingAmount,
+} from "../../lib/flat-shipping";
 import { cartSignature, verifyShippingQuote } from "../../lib/shipping-quote";
 import {
   SHIPPING_QUOTE_MISMATCH_LOG_TAG,
-  findRateByServiceCode,
   parseShippingMethodData,
   withinShippingTolerance,
 } from "./lib";
 
-type QueryService = {
-  graph: (input: {
-    entity: string;
-    fields: string[];
-    filters: Record<string, unknown>;
-  }) => Promise<{ data: unknown[] }>;
-};
-
 type InjectedDependencies = {
   logger: Logger;
-  [ContainerRegistrationKeys.QUERY]: QueryService;
-  [SHIPSTATION_MODULE]: ShipStationModuleService;
+  [SITE_CONTENT_MODULE]: SiteContentModuleService;
 };
 
 type CartVariant = { id: string };
@@ -53,36 +43,19 @@ type CalculatePriceContext = {
   } | null;
 };
 
-type VariantWithDimensions = {
-  id: string;
-  weight: number | null;
-  length: number | null;
-  width: number | null;
-  height: number | null;
-  product?: {
-    weight: number | null;
-    length: number | null;
-    width: number | null;
-    height: number | null;
-  } | null;
-};
-
 class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderService {
   static override identifier = "shipstation";
 
   protected logger_: Logger;
-  protected query_: QueryService;
-  protected shipstation_: ShipStationModuleService;
+  protected siteContent_: SiteContentModuleService;
 
   constructor({
     logger,
-    [ContainerRegistrationKeys.QUERY]: query,
-    [SHIPSTATION_MODULE]: shipstation,
+    [SITE_CONTENT_MODULE]: siteContent,
   }: InjectedDependencies) {
     super();
     this.logger_ = logger;
-    this.query_ = query;
-    this.shipstation_ = shipstation;
+    this.siteContent_ = siteContent;
   }
 
   override async getFulfillmentOptions(): Promise<FulfillmentOption[]> {
@@ -151,63 +124,10 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
     }
 
     this.logger_.warn(
-      `${SHIPPING_QUOTE_MISMATCH_LOG_TAG} reason=${verified.reason} service=${shippingData.serviceCode} re-estimating`,
+      `${SHIPPING_QUOTE_MISMATCH_LOG_TAG} reason=${verified.reason} service=${shippingData.serviceCode} re-pricing`,
     );
 
-    const variantIds = items.map((item) => item.variantId).filter(Boolean);
-    const { data: variants } = await this.query_.graph({
-      entity: "variant",
-      fields: [
-        "id",
-        "weight",
-        "length",
-        "width",
-        "height",
-        "product.weight",
-        "product.length",
-        "product.width",
-        "product.height",
-      ],
-      filters: { id: variantIds },
-    });
-    const variantsById = new Map(
-      (variants as VariantWithDimensions[]).map((variant) => [
-        variant.id,
-        variant,
-      ]),
-    );
-
-    const packableItems = (context.items ?? []).map((item) => {
-      const variant = variantsById.get(item.variant?.id ?? "");
-      return {
-        variantId: item.variant?.id ?? "",
-        quantity: Number(item.quantity),
-        weight: variant?.weight ?? variant?.product?.weight,
-        length: variant?.length ?? variant?.product?.length,
-        width: variant?.width ?? variant?.product?.width,
-        height: variant?.height ?? variant?.product?.height,
-      };
-    });
-
-    const packed = packItemsIntoOneBox(packableItems);
-    if (!packed.ok) {
-      throw new Error(
-        `Unable to re-estimate shipping: missing dimensions for ${packed.missing.join(",")}.`,
-      );
-    }
-
-    const rates = await this.shipstation_.getUspsRates({
-      destination: {
-        countryCode: address.country_code,
-        postalCode: address.postal_code,
-        city: address.city ?? "",
-        state: address.province ?? "",
-      },
-      parcel: packed.parcel,
-    });
-
-    const freshRate = findRateByServiceCode(rates, shippingData.serviceCode);
-    if (!freshRate) {
+    if (shippingData.serviceCode !== FLAT_RATE_SERVICE_CODE) {
       this.logger_.error(
         `${SHIPPING_QUOTE_MISMATCH_LOG_TAG} reason=no_matching_service service=${shippingData.serviceCode}`,
       );
@@ -216,13 +136,10 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
       );
     }
 
-    const withinTolerance = withinShippingTolerance(
-      shippingData.amount,
-      freshRate.amount,
-    );
-    if (!withinTolerance) {
+    const freshAmount = await loadFlatShippingAmount(this.siteContent_);
+    if (!withinShippingTolerance(shippingData.amount, freshAmount)) {
       this.logger_.error(
-        `${SHIPPING_QUOTE_MISMATCH_LOG_TAG} reason=tolerance_exceeded service=${shippingData.serviceCode} fresh=${freshRate.amount}`,
+        `${SHIPPING_QUOTE_MISMATCH_LOG_TAG} reason=tolerance_exceeded service=${shippingData.serviceCode} fresh=${freshAmount}`,
       );
       throw new Error(
         "The quoted shipping price is no longer available and the fresh price is out of tolerance.",
@@ -230,7 +147,7 @@ class ShipStationFulfillmentProviderService extends AbstractFulfillmentProviderS
     }
 
     return {
-      calculated_amount: freshRate.amount,
+      calculated_amount: freshAmount,
       is_calculated_price_tax_inclusive: false,
     };
   }

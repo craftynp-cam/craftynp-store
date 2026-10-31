@@ -40,25 +40,20 @@ be set up once by your developer before their first sign-in.
 | **Handle**                        | The web address. `beach-tumbler` becomes `thecraftynp.org/drinkware/beach-tumbler`.      |
 | **Description**                   | Shown on the product page. Write it for the shopper, not for a spec sheet.               |
 | **Media / Thumbnail**             | The thumbnail is the picture on listing pages. Media is the gallery on the product page. |
-| **Weight, Length, Width, Height** | **Required.** These are what price your shipping labels.                                 |
+| **Weight, Length, Width, Height** | Optional. If set, they pre-fill the parcel when you buy a shipping label.                |
 | **Category**                      | Decides where the product lives on the site — see [Categories](#2-categories).           |
 | **Sales channel**                 | Must include the **Default Sales Channel** or the product will not appear on the site.   |
 | **Status**                        | _Draft_ is invisible to shoppers. _Published_ is live.                                   |
 
-### Weight and size are required to publish
+### Weight and size
 
-Enter **weight in grams** and **length, width and height in centimetres**. If
-you try to publish a product without all four, the save is refused with a message
-naming exactly what's missing, for example:
+Shoppers pay one flat shipping rate (see [Site content](#6-site-content)), so a
+product does not need a weight or size to be published — made-to-order pieces
+whose size changes with every order publish fine without them.
 
-> Cannot publish "Beach Tumbler": weight (grams) and length, width (cm) are
-> required.
-
-This is deliberate. Shipping labels are priced from the real parcel, and there is
-no flat-rate fallback — a product with no size would block the order at the point
-of buying a label instead of at the point of adding the product.
-
-Give the **packed** measurements, box included, not the bare item. Round up.
+If you do enter them — **weight in grams**, **length, width and height in
+centimetres**, packed and rounded up — they pre-fill the parcel when you buy a
+shipping label. Without them you type the parcel in at that point instead.
 
 ### Variants and options
 
@@ -363,6 +358,11 @@ Everything on this page follows the same rules:
 - Story: a heading and the longer story. **Separate paragraphs with a blank
   line.**
 - Closing band: heading, one line of body copy, and the button label.
+
+**Shipping** — _Flat shipping rate_, what every order pays for shipping at
+checkout, in dollars (for example `10.00`). It starts at $10.00. A shopper
+already at checkout keeps the rate they were shown; new checkouts pick up the
+change straight away.
 
 **Turnaround and shipping** — two timing lines.
 

@@ -22,6 +22,7 @@ import {
   verifyShippingQuote,
 } from "../../../../lib/shipping-quote";
 import { taxSignature, verifyTaxQuote } from "../../../../lib/tax-quote";
+import { FLAT_RATE_SHIPPING_OPTION_NAME } from "../../../../lib/flat-shipping";
 import { describeError } from "../../../../lib/describe-error";
 import { toAmount } from "../../../../lib/money";
 import { priceSignature, verifyPriceQuote } from "../../../../lib/price-quote";
@@ -43,7 +44,6 @@ import {
 } from "../../../../lib/validate-customization";
 
 const STRIPE_PAYMENT_PROVIDER_ID = "pp_stripe_stripe";
-const LIVE_SHIPPING_OPTION_NAME = "Live USPS Rate";
 
 type RegionWithCountries = {
   id: string;
@@ -233,7 +233,7 @@ export async function POST(
   const { data: shippingOptions } = await query.graph({
     entity: "shipping_option",
     fields: ["id"],
-    filters: { name: LIVE_SHIPPING_OPTION_NAME },
+    filters: { name: FLAT_RATE_SHIPPING_OPTION_NAME },
   });
   const shippingOption = shippingOptions[0];
 

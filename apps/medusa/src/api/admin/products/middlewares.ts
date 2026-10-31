@@ -12,23 +12,9 @@ import {
   assertDeclaredCustomization,
   type ProductWithOptionsInput,
 } from "../../../lib/product-customization";
-import {
-  assertPublishableProducts,
-  type ProductShippingDimensionsInput,
-} from "../../../lib/product-shipping-dimensions";
+type ValidatedProduct = ProductWithOptionsInput;
 
-type ValidatedProduct = ProductWithOptionsInput &
-  ProductShippingDimensionsInput;
-
-const GUARDED_KEYS = [
-  "metadata",
-  "status",
-  "title",
-  "weight",
-  "length",
-  "width",
-  "height",
-] as const;
+const GUARDED_KEYS = ["metadata", "status", "title"] as const;
 
 export const PRODUCT_VALIDATION_FIELDS = [
   "id",
@@ -38,17 +24,6 @@ export const PRODUCT_VALIDATION_FIELDS = [
 
 export function touchesGuardedFields(body: Record<string, unknown>): boolean {
   return GUARDED_KEYS.some((key) => key in body);
-}
-
-function pickNumber(
-  body: Record<string, unknown>,
-  key: keyof ValidatedProduct,
-  current: ValidatedProduct,
-): number | null | undefined {
-  const value = body[key];
-  return typeof value === "number" || value === null
-    ? value
-    : (current[key] as number | null | undefined);
 }
 
 export function mergedProductUpdate(
@@ -67,10 +42,6 @@ export function mergedProductUpdate(
           }
         : current.metadata,
     product_options: current.product_options,
-    weight: pickNumber(body, "weight", current),
-    length: pickNumber(body, "length", current),
-    width: pickNumber(body, "width", current),
-    height: pickNumber(body, "height", current),
   };
 }
 
@@ -95,7 +66,6 @@ export function validateProductUpdate() {
       if (!current) return next();
 
       const merged = mergedProductUpdate(current, body);
-      assertPublishableProducts([merged]);
       assertDeclaredCustomization([merged]);
       assertCustomSizeOption([merged]);
 

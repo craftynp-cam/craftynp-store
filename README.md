@@ -214,11 +214,11 @@ shared example file. **All of these must be set before the first `db:migrate`**,
 which seeds the USD `United States` region from them (`seed-us-region.ts`), plus
 a flat `Standard Shipping` option priced from
 `SHIPPING_OPTION_DEFAULT_AMOUNT`/`SHIPPING_OPTION_DEFAULT_LABEL` — a Medusa
-catalogue entry, **not** a checkout-time fallback: if ShipStation is
-unreachable or a rate can't be calculated, checkout shows an error and blocks
-Continue rather than quoting a guessed price. A second, live-rate shipping
-option is seeded by `seed-us-stripe-payment-provider.ts` once Stripe payments
-are configured below. Leave `NEXT_PUBLIC_DEFAULT_REGION` at `us` — United States
+catalogue entry, **not** what checkout charges. Checkout charges the flat
+rate set under **Site content → Shipping** in the admin, through a second
+shipping option seeded by `seed-us-stripe-payment-provider.ts` once Stripe
+payments are configured below and renamed to `Flat rate shipping` by
+`update-shipping-option-flat-rate.ts`. Leave `NEXT_PUBLIC_DEFAULT_REGION` at `us` — United States
 is the only region any environment gets. Do not point automated tests at the
 ShipStation sandbox: its 20 requests/minute ceiling causes sporadic failures.
 
@@ -267,8 +267,9 @@ command running while you test checkout — it's what delivers the webhook
 Medusa uses to reconcile an order if the browser closes mid-redirect (AC9).
 `db:migrate` runs `seed-us-stripe-payment-provider.ts`, which attaches Stripe
 to the seeded US region as its payment provider, switches the region's tax
-provider from the system default to Stripe Tax, and adds a live-rate
-shipping option backed by ShipStation — all three providers CNP-53 registers
+provider from the system default to Stripe Tax, and adds the checkout
+shipping option backed by the `shipstation` fulfillment provider (flat-rate
+since launch) — all three providers CNP-53 registers
 in `medusa-config.ts`. Pay with Stripe's test card `4242 4242 4242 4242` (any
 future expiry, any CVC) for a successful charge, or `4000 0000 0000 0002` to
 exercise a decline. Never point automated tests at the Stripe sandbox — same
