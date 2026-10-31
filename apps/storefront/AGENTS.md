@@ -247,6 +247,10 @@ here knows that a product might have a size or a material.
   sticky block taller than the space it sticks in puts its own bottom out of
   reach. Below `lg` it must stay in flow — the gallery is the first thing on the
   page there, so sticking it would pin it over the configurator.
+- **The main gallery image is `object-contain` inside its square frame**, so a
+  portrait or landscape product photo shows whole rather than cropped. The
+  frame stays square so switching images never moves the purchase column;
+  the thumbnails stay `object-cover`.
 - **Everything on the product page stays inside `ProductDetailView`'s grid**,
   `ProcessPanel` included. The grid is what reserves `--cta-bar-height` at its
   foot for the phone CTA bar, so anything rendered after it from the page would
